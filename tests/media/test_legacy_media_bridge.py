@@ -39,7 +39,7 @@ def _conforms(provider) -> list[str]:
 def test_declared_capabilities_are_backed():
     mistral = MistralProvider({"api_key": "k"})
     zai = ZaiProvider({"api_key": "id.secret"})
-    assert {c.value for c in mistral.media_capabilities()} == {"tts", "asr", "ocr"}
+    assert {c.value for c in mistral.media_capabilities()} == {"tts", "asr", "asr_stream", "ocr"}
     assert {c.value for c in zai.media_capabilities()} == {"tts", "asr", "ocr", "image_generate", "video_generate"}
     assert _conforms(mistral) == [] and _conforms(zai) == []
     assert isinstance(zai, MediaJobPoller)

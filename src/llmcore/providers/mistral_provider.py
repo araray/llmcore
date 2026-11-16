@@ -39,7 +39,8 @@ import logging
 import os
 import re
 import secrets
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, AsyncIterator
+from contextlib import asynccontextmanager
 from typing import Any
 
 try:
@@ -267,7 +268,70 @@ class MistralProvider(LegacyMediaBridge, BaseProvider):
     _REJECTED_PARAMS: dict[str, set[str]] = {}
 
     #: Served through llm.media by the legacy-method bridge (_media_bridge).
-    _MEDIA_CAPABILITIES: frozenset[str] = frozenset({"tts", "asr", "ocr"})
+    _MEDIA_CAPABILITIES: frozenset[str] = frozenset({"tts", "asr", "asr_stream", "ocr"})
+
+    def media_execution(self, capability: Any, model: str | None = None) -> Any:
+        """Realtime transcription streams; the rest answer in one request."""
+        from ..media.models import MediaCapability, MediaExecution
+
+        if capability is MediaCapability.ASR_STREAM:
+            return MediaExecution.STREAM
+        return MediaExecution.REQUEST_RESPONSE
+
+    @asynccontextmanager
+    async def open_transcription_session(
+        self,
+        *,
+        model: str | None = None,
+        language: str | None = None,
+        sample_rate_hz: int | None = None,
+        encoding: str = "pcm_s16le",
+        **kwargs: Any,
+    ) -> "AsyncIterator[MistralTranscriptionStream]":
+        """Realtime transcription (``/v1/audio/transcriptions/realtime``).
+
+        Uses the official SDK's realtime client (``mistralai.extra.realtime``),
+        with the same session surface as the other ``asr_stream`` providers:
+        ``send_audio``, ``finalize()`` (flush), ``end()``, iteration of
+        :class:`TranscriptionStreamEvent`. Options: ``diarize``,
+        ``context_bias``, ``speaker_references``, ``turn_detection``,
+        ``target_streaming_delay_ms``. Default model
+        ``voxtral-mini-transcribe-realtime-3``.
+
+        Raises:
+            ProviderError: When the SDK is missing or the handshake fails
+                (a 429 is the plan's quota: not retryable).
+        """
+        try:
+            from mistralai.client import Mistral
+            from mistralai.client.models import AudioFormat
+        except ImportError as exc:
+            raise ProviderError(self.get_name(), "Realtime transcription needs the 'mistralai' SDK "
+                                "(pip install 'llmcore[mistral]').") from exc
+
+        used = model or "voxtral-mini-transcribe-realtime-3"
+        client = Mistral(api_key=self.api_key, server_url=self.base_url.removesuffix("/v1"))
+        try:
+            connection = await client.audio.realtime.connect(
+                used,
+                audio_format=AudioFormat(encoding=encoding, sample_rate=int(sample_rate_hz or 16000)),
+                language=language,
+                **kwargs,
+            )
+        except Exception as exc:
+            text = str(exc)
+            status = 429 if "429" in text else (401 if "401" in text else None)
+            raise ProviderError(
+                self.get_name(),
+                ("Your Mistral plan has no quota for realtime transcription "
+                 f"('{used}'). " if status == 429 else "") + f"Realtime handshake failed: {text}",
+                model_name=used, status_code=status, retryable=False,
+            ) from exc
+        stream = MistralTranscriptionStream(connection)
+        try:
+            yield stream
+        finally:
+            await stream.close()
 
     def __init__(self, config: dict[str, Any], log_raw_payloads: bool = False):
         super().__init__(config, log_raw_payloads)
@@ -1861,3 +1925,71 @@ class MistralProvider(LegacyMediaBridge, BaseProvider):
         if resp.status_code >= 400:
             await resp.aread()
             self._raise_for_status(resp, model_name)
+
+
+class MistralTranscriptionStream:
+    """Mistral realtime transcription with the shared ``asr_stream`` surface."""
+
+    def __init__(self, connection: Any) -> None:
+        self._conn = connection
+        self._partial = ""
+        self._segments = 0
+
+    async def send_audio(self, chunk: bytes) -> None:
+        """Raw audio in the session's encoding and rate."""
+        await self._conn.send_audio(bytes(chunk))
+
+    async def finalize(self) -> None:
+        """Flush buffered audio so it is transcribed now."""
+        await self._conn.flush_audio()
+
+    commit = finalize
+
+    async def end(self) -> None:
+        """No more audio; the server finishes and sends ``transcription.done``."""
+        await self._conn.end_audio()
+
+    async def keepalive(self) -> None:
+        """No-op: no keepalive message is defined."""
+
+    async def close(self) -> None:
+        """Close the connection (idempotent)."""
+        try:
+            await self._conn.close()
+        except Exception:  # noqa: BLE001
+            pass
+
+    async def __aiter__(self) -> "AsyncIterator[Any]":
+        async for event in self._conn:
+            mapped = self._map(event)
+            if mapped is not None:
+                yield mapped
+
+    def _map(self, event: Any) -> Any:
+        from ..models_multimodal import StreamEventType, TranscriptionStreamEvent
+
+        kind = str(getattr(event, "type", "") or "")
+        raw = event.model_dump(mode="json") if hasattr(event, "model_dump") else {}
+
+        def ev(type_: Any, **fields: Any) -> Any:
+            return TranscriptionStreamEvent(type=type_, provider="mistral", raw=raw, **fields)
+
+        if kind == "transcription.text.delta":
+            self._partial += str(getattr(event, "text", "") or "")
+            return ev(StreamEventType.INTERIM, text=self._partial, is_final=False)
+        if kind == "transcription.segment":
+            self._segments += 1
+            self._partial = ""
+            return ev(StreamEventType.FINAL, text=str(event.text).strip(), is_final=True,
+                      start=getattr(event, "start", None), end=getattr(event, "end", None))
+        if kind == "transcription.done":
+            text = str(getattr(event, "text", "") or "").strip()
+            if self._segments == 0:
+                return ev(StreamEventType.FINAL, text=text, is_final=True, speech_final=True)
+            return ev(StreamEventType.UTTERANCE_END, text=text)
+        if kind == "transcription.language":
+            return ev(StreamEventType.METADATA, text=str(getattr(event, "audio_language", "")))
+        if kind == "error" or "Error" in type(event).__name__:
+            detail = getattr(event, "error", None)
+            return ev(StreamEventType.ERROR, text=str(getattr(detail, "message", None) or detail or event))
+        return None

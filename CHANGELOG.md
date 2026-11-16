@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added — Mistral realtime transcription; cards for live models the bundle lacked
+
+- **Mistral `asr_stream`** via the official SDK's realtime client
+  (`/v1/audio/transcriptions/realtime`, `voxtral-mini-transcribe-realtime-3`),
+  with the shared session surface. Live, this account's plan has no quota for
+  the model (HTTP 429); that rejection now surfaces as a non-retryable
+  `ProviderError`.
+- **`cardctl diff` against every keyed provider** found live models with no
+  card: OpenAI 3, Mistral 8, OpenRouter 322, DeepInfra 17 and gpu.ai 3.
+  - Only new cards were added. Existing cards keep the provenance and
+    cached-input prices that pricewatch writes into them.
+  - OpenRouter's image-output models are typed `multimodal`.
+
 ### Added — Gemini: Gemini 4, Gemma 4, Lyria music, typed decisions; 27 missing cards
 
 - **27 live models had no card.** cardctl's Google adapter kept only
