@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Changed — Poe: effort per bot, live context windows, working native backend, retired bots
+
+Audited against the live API and fastapi_poe 0.0.83 on 2026-11-16. Verified
+live through llmcore: effort on GPT, Gemini and Claude bots, search, a tool
+loop, native history and stream, the 413, and balance.
+
+- **`effort=` follows each bot.** `/v1/models` declares each bot's custom
+  parameters with schemas, and reasoning is spelled differently per bot.
+  Effort now maps onto `reasoning_effort` / `output_effort` /
+  `thinking_level` (nearest enum value), `thinking_budget` (scaled within its
+  range) or `enable_thinking`. Measured: gpt-5.4-nano 0 vs 51 reasoning
+  tokens, gemini-3-flash 0 vs 472. `native_search=True` sets `web_search` on
+  bots that declare it.
+- **Discovery** reads the API's own context windows, max output, tools and
+  reasoning flags, and display names; `created` is converted from
+  milliseconds. Context lookups use them. A failed listing raises; it used to
+  return "no bots". cardctl gets the same fields and types video, image and
+  audio bots (it used to call them all chat with tools).
+- **Native backend**: assistant turns are sent as `bot`. The protocol has no
+  `assistant` role, so any history failed validation outside the fallback.
+  Custom parameters and `stop` are forwarded, and streams are primed so the
+  fallback can engage.
+- A 413 ("Your message is too long") is a `ContextLengthError`. `store`,
+  `metadata` and `prediction` join the stripped parameters.
+  `get_balance_details()` returns the full balance.
+- Default `gpt-5.4-mini` (ids are lowercase now). 216 cards for bots the API
+  no longer serves (they answer 500) are marked retired. `fastapi-poe` joins
+  the `poe` extra.
+
 ### Changed — OpenRouter and OpenAI-compatible vendors: reasoning replay, in-band errors, full catalogue, working SDK backend
 
 Audited against the live API and openrouter SDK 1.3.179 on 2026-11-16. All

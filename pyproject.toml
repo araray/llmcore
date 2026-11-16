@@ -79,9 +79,9 @@ mistral = ["httpx>=0.27.0", "mistralai>=3.7,<4"]
 # REST endpoints (token estimate, balance, file upload) and tiktoken for the
 # local token-count fallback. Moonshot publishes no Python SDK.
 kimi = ["openai>=3.38,<4", "httpx>=0.27.0", "tiktoken>=0.9.0"]
-# Poe: OpenAI-compatible gateway plus httpx; `fastapi-poe` enables the optional
-# native SSE backend (backend = "native").
-poe = ["openai>=3.38,<4", "httpx>=0.27.0"]
+# Poe: OpenAI-compatible gateway plus httpx; the official `fastapi-poe` client
+# backs the optional native SSE backend (backend = "native").
+poe = ["openai>=3.38,<4", "httpx>=0.27.0", "fastapi-poe>=0.0.83"]
 # OpenRouter: OpenAI-compatible gateway plus httpx; the official `openrouter`
 # SDK (1.x) backs the optional native backend (backend = "sdk").
 openrouter = ["openai>=3.38,<4", "httpx>=0.27.0", "openrouter>=1.3,<2"]

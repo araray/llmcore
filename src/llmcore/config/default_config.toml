@@ -1057,11 +1057,12 @@ max_retries = 2
   # api_key = "..."
   api_key_env_var = "POE_API_KEY"
 
-  # Default bot to use.  Bot names are case-sensitive as registered on Poe.
-  # Examples: "Claude-Opus-4.6", "Claude-Sonnet-4.6", "GPT-5.4",
-  #           "Gemini-3.1-Pro", "Grok-4", "DeepSeek-V3.2-Exp",
-  #           "Sora-2", "Veo-3.1" (video), "GPT-Image-1.5" (images)
-  default_model = "GPT-4o-Mini"
+  # Default bot. Bot ids are lowercase since 2026 (matching is
+  # case-insensitive); 302 bots on 2026-11-16, listed with context windows,
+  # reasoning support and their custom parameters by get_models_details().
+  # Examples: "gpt-5.4-mini", "claude-haiku-4.5", "gemini-3-flash",
+  #           "kimi-k3.1-pro", "sora-2" (video), "gpt-image-2" (images)
+  default_model = "gpt-5.4-mini"
 
   # Base URL (normally no need to change).
   # base_url = "https://api.poe.com/v1"
@@ -1071,25 +1072,29 @@ max_retries = 2
   timeout = 120
 
   # --- Backend mode ---
-  # "openai" (default): Uses the `openai` Python SDK with base_url override.
-  #            All standard OpenAI-compatible features supported.
-  #            No extra dependencies beyond `openai`.
-  # "native" : Uses the native `fastapi_poe` SSE client (pip install fastapi-poe).
-  #            Required for:
-  #              - Poe-specific custom bot parameters not in OpenAI schema
-  #              - File attachments via the Attachment protocol
-  #              - Bot-to-bot invocation (when running as a Poe server bot)
-  #            Falls back to "openai" mode if the package is not installed
-  #            or any request error occurs.
+  # "openai" (default): the `openai` SDK with base_url override.
+  # "native" : the `fastapi_poe` SSE client (pip install fastapi-poe), which
+  #            sends custom bot parameters on the protocol message. Falls
+  #            back to "openai" if the package is missing or a request fails.
   backend = "openai"
 
+  # responses_api = "always" routes through Poe's /v1/responses (offered by
+  # the bots whose supported_endpoints list it; default "never").
+
+  # --- Reasoning and search ---
+  # effort= maps onto the reasoning parameter each bot declares:
+  #   reasoning_effort / output_effort / thinking_level (enums, nearest value),
+  #   thinking_budget (scaled within its range), enable_thinking (bool).
+  # native_search=True sets web_search on bots that declare it.
+  #
   # --- Unsupported parameters (Poe silently ignores these) ---
-  # The PoeProvider strips these automatically before forwarding:
-  #   response_format, seed, frequency_penalty, presence_penalty,
-  #   logit_bias, user, service_tier, audio, modalities.
-  # To pass Poe-specific bot parameters (e.g. reasoning_effort,
-  # thinking_budget, aspect ratio for Sora-2), use `extra_body`:
-  #   chat_completion(model="Sora-2", extra_body={"aspect": "1280x720"})
+  # Stripped before forwarding: response_format, seed, frequency_penalty,
+  # presence_penalty, logit_bias, user, service_tier, audio, modalities,
+  # store, metadata, prediction.
+  # Other bot parameters (aspect, duration, resolution, ...) go in extra_body:
+  #   chat_completion(model="sora-2", extra_body={"aspect": "1280x720"})
+  #
+  # provider.get_balance_details() returns points, USD values and grants.
 
   # --- vLLM Provider ---
   # For self-hosted vLLM inference servers (https://github.com/vllm-project/vllm).
