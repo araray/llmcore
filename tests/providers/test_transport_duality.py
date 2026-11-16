@@ -244,6 +244,9 @@ class TestSdkExtrasAreDeclared:
         "higgsfield": "higgsfield-client",
         "typesafe": "typesafe-sdk",
         "mistral": "mistralai",
+        # Command Code publishes no SDK; its docs use OpenAI's and Anthropic's,
+        # which are the `sdk` transport for its two lanes.
+        "commandcode": "anthropic",
     }
 
     @pytest.mark.parametrize(("provider", "package"), sorted(SDK_EXTRAS.items()))

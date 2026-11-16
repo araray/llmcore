@@ -24,6 +24,7 @@ except ImportError:
 
 from ..exceptions import ConfigError, ProviderError
 from .anthropic_provider import AnthropicProvider
+from .commandcode_provider import CommandCodeProvider
 from .base import BaseProvider, ContextPayload
 from .deepgram_provider import DeepgramProvider
 from .deepinfra_provider import DeepInfraProvider
@@ -88,6 +89,11 @@ PROVIDER_MAP: dict[str, type[BaseProvider]] = {
     "higgsfield": HiggsfieldProvider,
     # Deepgram: speech/audio provider (STT/TTS/Voice Agent) — native SDK.
     "deepgram": DeepgramProvider,
+    # Command Code: one key for 98+ models over three wire protocols, routed
+    # per model from the live catalog (see commandcode_provider).
+    "commandcode": CommandCodeProvider,
+    "command_code": CommandCodeProvider,
+    "command-code": CommandCodeProvider,
     # TypeSafe.ai: System One typed-judgment provider (noul/choice/score) —
     # not a chat API; the real surface is TypeSafeProvider.system_one().
     "typesafe": TypeSafeProvider,
@@ -129,6 +135,8 @@ _PROVIDER_INSTANCE_ALIASES: dict[str, str] = {
     "zhipuai": "zai",
     "bigmodel": "zai",
     "jev": "typesafe",
+    "command_code": "commandcode",
+    "command-code": "commandcode",
     "fal_ai": "fal",
     "eleven_labs": "elevenlabs",
     "friendliai": "friendli",
@@ -1061,6 +1069,7 @@ class ProviderManager:
             "deepinfra": ("DEEPINFRA_API_KEY", "DEEPINFRA_TOKEN"),
             "gpuai": ("GPUAI_API_KEY", "GPU_AI_API_KEY"),
             "openrouter": ("OPENROUTER_API_KEY",),
+            "commandcode": ("CMD_API_KEY", "COMMAND_CODE_API_KEY", "COMMANDCODE_API_KEY"),
             "poe": ("POE_API_KEY",),
             "huggingface": ("HF_TOKEN", "HUGGING_FACE_HUB_TOKEN"),
             "deepgram": ("DEEPGRAM_API_KEY",),
