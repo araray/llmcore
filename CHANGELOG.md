@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added — OpenAI: realtime transcription (`asr_stream`)
+
+- `open_transcription_session()` uses the Realtime API in transcription mode
+  (`wss …/v1/realtime?intent=transcription`), with the same session shape
+  as Deepgram and ElevenLabs. Events:
+  - deltas → `interim` (the text so far);
+  - completed → `final`;
+  - VAD → `speech_started` / `utterance_end`.
+
+  Options: `language`, `prompt`, `keywords`, `delay`, `noise_reduction`,
+  `turn_detection`, logprobs.
+- The default `gpt-4o-transcribe` runs with server VAD.
+  `gpt-live-transcribe` rejects turn detection, so it runs on manual
+  commits.
+- Verified live: both models returned the exact sentence.
+
 ### Added — Mistral, Z.ai and Gemini media reachable through `llm.media`
 
 - **Mistral** (TTS, ASR, OCR) and **Z.ai** (TTS, ASR, OCR, images, video)

@@ -267,7 +267,7 @@ Which provider serves what (default configuration, 2026-11-16):
 
 | Provider | Media capabilities |
 |---|---|
-| OpenAI | `image_generate`, `image_edit`, `tts`, `tts_stream`, `asr` |
+| OpenAI | `image_generate`, `image_edit`, `tts`, `tts_stream`, `asr`, `asr_stream` (Realtime) |
 | Gemini | `image_generate`, `tts`; `asr` on the Developer API; `image_edit`, `image_upscale`, `video_generate` on Vertex |
 | Mistral | `tts`, `asr`, `ocr` |
 | Z.ai | `tts`, `asr`, `ocr`, `image_generate`, `video_generate` (job) |

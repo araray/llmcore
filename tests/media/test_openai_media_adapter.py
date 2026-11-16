@@ -88,6 +88,7 @@ class TestConformance:
                 MediaCapability.TTS,
                 MediaCapability.TTS_STREAM,
                 MediaCapability.ASR,
+                MediaCapability.ASR_STREAM,  # Realtime transcription session
             }
         )
 

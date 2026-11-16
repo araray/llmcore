@@ -28,6 +28,7 @@ except ImportError:  # pragma: no cover
     httpx_available = False
     httpx = None  # type: ignore
 from collections.abc import AsyncGenerator, Mapping, Sequence
+from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, Any, ClassVar
 
 try:
@@ -2283,6 +2284,8 @@ class OpenAIProvider(BaseProvider):
             "tts",
             "tts_stream",
             "asr",
+            # Realtime transcription session (wss /v1/realtime?intent=transcription).
+            "asr_stream",
         }
     )
 
@@ -2301,9 +2304,104 @@ class OpenAIProvider(BaseProvider):
         """
         from ..media.models import MediaCapability, MediaExecution
 
-        if capability is MediaCapability.TTS_STREAM:
+        if capability in (MediaCapability.TTS_STREAM, MediaCapability.ASR_STREAM):
             return MediaExecution.STREAM
         return MediaExecution.REQUEST_RESPONSE
+
+    # --- realtime transcription ---
+
+    @asynccontextmanager
+    async def open_transcription_session(
+        self,
+        *,
+        model: str | None = None,
+        language: str | None = None,
+        sample_rate_hz: int | None = None,
+        audio_format: str = "pcm",
+        commit_strategy: str = "vad",
+        **kwargs: Any,
+    ) -> "AsyncIterator[OpenAITranscriptionStream]":
+        """Open a realtime transcription session (``asr_stream``).
+
+        Speaks the Realtime API's transcription mode
+        (``wss .../v1/realtime?intent=transcription``) with the same session
+        shape as Deepgram's and ElevenLabs': ``send_audio`` raw chunks,
+        ``finalize()`` to commit, iterate :class:`TranscriptionStreamEvent`
+        (``interim`` carries the text so far for the item, ``final`` the
+        completed transcript).
+
+        Args:
+            model: Transcription model (default ``gpt-4o-transcribe``, which
+                works with server VAD). ``gpt-live-transcribe`` rejects turn
+                detection ("not supported for this transcription model",
+                live 2026-11-16), so it always runs with manual commits: call
+                ``finalize()`` to get a ``final`` event.
+            language: ISO-639-1 hint.
+            sample_rate_hz: Must be 24000 for ``pcm`` (8000 for G.711).
+            audio_format: ``pcm`` (16-bit 24 kHz mono), ``pcmu`` or ``pcma``.
+            commit_strategy: ``"vad"`` (server VAD commits) or ``"manual"``.
+            **kwargs: ``prompt``, ``keywords``, ``languages``, ``delay``
+                (transcription options); ``noise_reduction``
+                (``near_field``/``far_field``); ``turn_detection`` (a dict
+                overriding the VAD settings); ``include_logprobs``.
+
+        Raises:
+            ProviderError: When the handshake or the session update fails.
+        """
+        try:
+            from websockets.asyncio.client import connect as ws_connect
+        except ImportError as exc:  # pragma: no cover - dependency of the extra
+            raise ProviderError(
+                self.get_name(), "Realtime transcription needs the 'websockets' package."
+            ) from exc
+
+        fmt = {"pcm": "audio/pcm", "pcmu": "audio/pcmu", "pcma": "audio/pcma"}.get(audio_format)
+        if fmt is None:
+            raise ValueError(f"audio_format must be pcm, pcmu or pcma (got {audio_format!r}).")
+        if fmt == "audio/pcm" and sample_rate_hz not in (None, 24000):
+            raise ValueError("Realtime pcm input is 24 kHz; resample before sending.")
+        transcription: dict[str, Any] = {"model": model or "gpt-4o-transcribe"}
+        if transcription["model"].startswith("gpt-live-transcribe") and commit_strategy == "vad":
+            logger.debug("gpt-live-transcribe takes no turn detection; using manual commits.")
+            commit_strategy = "manual"
+        if language:
+            transcription["language"] = language
+        for key in ("prompt", "keywords", "languages", "delay"):
+            if kwargs.get(key) is not None:
+                transcription[key] = kwargs.pop(key)
+        audio_input: dict[str, Any] = {
+            "format": {"type": fmt, **({"rate": 24000} if fmt == "audio/pcm" else {})},
+            "transcription": transcription,
+            "turn_detection": kwargs.pop("turn_detection", None)
+            or ({"type": "server_vad"} if commit_strategy == "vad" else None),
+        }
+        if kwargs.get("noise_reduction"):
+            audio_input["noise_reduction"] = {"type": kwargs.pop("noise_reduction")}
+        session: dict[str, Any] = {"type": "transcription", "audio": {"input": audio_input}}
+        if kwargs.pop("include_logprobs", False):
+            session["include"] = ["item.input_audio_transcription.logprobs"]
+        if kwargs:
+            logger.warning("OpenAI realtime transcription ignores %s.", sorted(kwargs))
+
+        base = str(self.base_url or "https://api.openai.com/v1").rstrip("/")
+        url = base.replace("https://", "wss://").replace("http://", "ws://") + "/realtime?intent=transcription"
+        try:
+            websocket = await ws_connect(url, additional_headers={"Authorization": f"Bearer {self.api_key}"})
+        except Exception as exc:
+            status = getattr(getattr(exc, "response", None), "status_code", None)
+            raise ProviderError(
+                self.get_name(),
+                f"OpenAI realtime transcription handshake failed: {exc}",
+                model_name=transcription["model"],
+                status_code=status,
+                retryable=status is None or status >= 500,
+            ) from exc
+        stream = OpenAITranscriptionStream(websocket)
+        try:
+            await websocket.send(json.dumps({"type": "session.update", "session": session}))
+            yield stream
+        finally:
+            await stream.close()
 
     # --- image ---
 
@@ -2757,3 +2855,85 @@ def _audio_filename_for(ref: "MediaRef") -> str:
         if suffix:
             return f"audio{suffix}"
     return "audio.wav"
+
+
+class OpenAITranscriptionStream:
+    """A live Realtime transcription session: send audio, iterate events.
+
+    Same surface as the Deepgram and ElevenLabs sessions: ``send_audio``,
+    ``finalize()`` (commit the buffer), ``keepalive()``, ``close()`` and
+    ``async for event in stream``.
+    """
+
+    def __init__(self, websocket: Any) -> None:
+        self._ws = websocket
+        self._partial: dict[str, str] = {}
+
+    async def send_audio(self, chunk: bytes) -> None:
+        """Append raw audio (the session's format) to the input buffer."""
+        import base64
+
+        await self._ws.send(json.dumps({
+            "type": "input_audio_buffer.append",
+            "audio": base64.b64encode(bytes(chunk)).decode("ascii"),
+        }))
+
+    async def finalize(self) -> None:
+        """Commit the buffer; with manual commits this triggers transcription."""
+        await self._ws.send(json.dumps({"type": "input_audio_buffer.commit"}))
+
+    commit = finalize
+
+    async def clear(self) -> None:
+        """Discard uncommitted audio."""
+        await self._ws.send(json.dumps({"type": "input_audio_buffer.clear"}))
+
+    async def keepalive(self) -> None:
+        """No-op: the Realtime API needs no keepalive message."""
+
+    async def close(self) -> None:
+        """Close the WebSocket (idempotent)."""
+        try:
+            await self._ws.close()
+        except Exception:  # noqa: BLE001 - closing must never raise
+            pass
+
+    async def __aiter__(self) -> "AsyncIterator[Any]":
+        async for message in self._ws:
+            try:
+                raw = json.loads(message)
+            except (TypeError, ValueError):
+                continue
+            event = self._map(raw)
+            if event is not None:
+                yield event
+
+    def _map(self, raw: dict[str, Any]) -> Any:
+        from ..models_multimodal import StreamEventType, TranscriptionStreamEvent
+
+        kind = str(raw.get("type") or "")
+
+        def event(type_: Any, **fields: Any) -> Any:
+            return TranscriptionStreamEvent(type=type_, provider="openai", raw=raw, **fields)
+
+        item = str(raw.get("item_id") or "")
+        if kind == "conversation.item.input_audio_transcription.delta":
+            self._partial[item] = self._partial.get(item, "") + str(raw.get("delta") or "")
+            return event(StreamEventType.INTERIM, text=self._partial[item], is_final=False)
+        if kind == "conversation.item.input_audio_transcription.completed":
+            self._partial.pop(item, None)
+            return event(StreamEventType.FINAL, text=str(raw.get("transcript") or ""),
+                         is_final=True, speech_final=True)
+        if kind == "input_audio_buffer.speech_started":
+            return event(StreamEventType.SPEECH_STARTED, start=(raw.get("audio_start_ms") or 0) / 1000)
+        if kind == "input_audio_buffer.speech_stopped":
+            return event(StreamEventType.UTTERANCE_END, end=(raw.get("audio_end_ms") or 0) / 1000)
+        if kind in ("error", "conversation.item.input_audio_transcription.failed"):
+            detail = raw.get("error") or {}
+            return event(StreamEventType.ERROR, text=str(detail.get("message") if isinstance(detail, dict) else detail))
+        if kind == "session.created":
+            return event(StreamEventType.OPEN)
+        if kind in ("session.updated", "input_audio_buffer.committed", "conversation.item.added",
+                    "conversation.item.done", "input_audio_buffer.cleared"):
+            return None  # bookkeeping
+        return event(StreamEventType.OTHER)
