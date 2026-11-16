@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Fixed — model cards: one file per model, Ollama windows from the registry
+
+- **Duplicates removed.** 80 Ollama ids and 7 Hugging Face ids each had two
+  card files (cardctl's `a--b-c.json` next to an older `a__b_c.json`), and
+  the registry picked a winner by origin. For Ollama that meant, for example,
+  qwen3:32b reporting 262,144 tokens instead of 40,960. Each pair is now one
+  card at cardctl's filename:
+  - curated fields come from the hand-written copy;
+  - server facts come from the generated copy;
+  - the HF placeholders (128,000) are dropped.
+
+  Two cards filed under the wrong provider directory were removed, including
+  an `openai/` copy of Google's retired `text-embedding-004` that still said
+  active. A test now fails on any same-id duplicate.
+- **Every Ollama context window checked** against the GGUF header of its
+  current registry tag (a range read of the model blob, no download).
+  `qwen3:4b` is 262,144 (the 2507 retag). The `ministral-3-*` cards had ids
+  that cannot be pulled; they are now `ministral-3:{3b,8b,14b}`, with the old
+  ids as aliases and 262,144-token windows.
+
 ### Added — Deepgram: Flux TTS over the WebSocket
 
 - Incremental text into `stream_speech()` and `open_speech_socket()` with a

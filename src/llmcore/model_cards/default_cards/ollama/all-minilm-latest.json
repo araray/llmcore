@@ -1,8 +1,8 @@
 {
   "model_id": "all-minilm:latest",
-  "display_name": "ALL Minilm:latest",
+  "display_name": "All MiniLM L6 v2 22M",
   "provider": "ollama",
-  "model_type": "chat",
+  "model_type": "embedding",
   "architecture": {
     "family": "bert",
     "parameter_count": "23M",
@@ -12,29 +12,33 @@
     "max_input_tokens": 512
   },
   "capabilities": {
-    "streaming": true,
-    "function_calling": false,
-    "tool_use": false,
-    "json_mode": false,
-    "structured_output": false,
-    "vision": false,
-    "audio_input": false,
-    "audio_output": false,
-    "video_input": false,
-    "reasoning": false
+    "streaming": false
   },
   "pricing": null,
   "lifecycle": {
     "status": "active"
   },
-  "license": null,
+  "license": "apache-2.0",
   "open_weights": true,
-  "aliases": [],
-  "description": "Ollama model: all-minilm:latest",
+  "aliases": [
+    "all-minilm",
+    "all-minilm:22m"
+  ],
+  "description": "Sentence Transformers All-MiniLM-L6-v2 — tiny fast embedding model (22M params).",
   "tags": [
-    "local",
     "open-source",
+    "local",
+    "embedding",
+    "tiny",
+    "fast",
     "quant:F16"
   ],
-  "source": "generated"
+  "source": "builtin",
+  "embedding_config": {
+    "dimensions_default": 384,
+    "supports_matryoshka": false,
+    "similarity_metrics": [
+      "cosine"
+    ]
+  }
 }

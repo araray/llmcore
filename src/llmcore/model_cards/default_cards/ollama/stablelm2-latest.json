@@ -1,6 +1,6 @@
 {
   "model_id": "stablelm2:latest",
-  "display_name": "Stablelm2:latest",
+  "display_name": "StableLM 2 1.6B",
   "provider": "ollama",
   "model_type": "chat",
   "architecture": {
@@ -9,7 +9,8 @@
     "architecture_type": "dense"
   },
   "context": {
-    "max_input_tokens": 4096
+    "max_input_tokens": 4096,
+    "max_output_tokens": 4096
   },
   "capabilities": {
     "streaming": true,
@@ -20,21 +21,26 @@
     "vision": false,
     "audio_input": false,
     "audio_output": false,
-    "video_input": false,
     "reasoning": false
   },
   "pricing": null,
   "lifecycle": {
     "status": "active"
   },
-  "license": null,
+  "license": "stability-ai",
   "open_weights": true,
-  "aliases": [],
-  "description": "Ollama model: stablelm2:latest",
+  "aliases": [
+    "stablelm2",
+    "stablelm2:1.6b"
+  ],
+  "description": "Stability AI StableLM 2 1.6B — compact general-purpose model.",
   "tags": [
-    "local",
     "open-source",
+    "local",
+    "compact",
+    "stability",
+    "legacy",
     "quant:Q4_0"
   ],
-  "source": "generated"
+  "source": "builtin"
 }

@@ -1,6 +1,6 @@
 {
   "model_id": "qwen2:0.5b",
-  "display_name": "Qwen2:0.5b",
+  "display_name": "Qwen 2 0.5B",
   "provider": "ollama",
   "model_type": "chat",
   "architecture": {
@@ -9,32 +9,29 @@
     "architecture_type": "dense"
   },
   "context": {
-    "max_input_tokens": 32768
+    "max_input_tokens": 32768,
+    "max_output_tokens": 4096
   },
   "capabilities": {
     "streaming": true,
     "function_calling": true,
-    "tool_use": true,
-    "json_mode": false,
-    "structured_output": false,
-    "vision": false,
-    "audio_input": false,
-    "audio_output": false,
-    "video_input": false,
-    "reasoning": false
+    "tool_use": true
   },
   "pricing": null,
   "lifecycle": {
-    "status": "active"
+    "status": "legacy"
   },
-  "license": null,
+  "license": "apache-2.0",
   "open_weights": true,
   "aliases": [],
-  "description": "Ollama model: qwen2:0.5b",
+  "description": "Alibaba Qwen 2 0.5B — previous-generation tiny model.",
   "tags": [
-    "local",
     "open-source",
+    "local",
+    "tiny",
+    "legacy",
+    "alibaba",
     "quant:Q4_0"
   ],
-  "source": "generated"
+  "source": "builtin"
 }

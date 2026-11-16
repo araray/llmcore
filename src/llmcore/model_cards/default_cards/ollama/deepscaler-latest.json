@@ -1,6 +1,6 @@
 {
   "model_id": "deepscaler:latest",
-  "display_name": "Deepscaler:latest",
+  "display_name": "DeepScaler 1.5B",
   "provider": "ollama",
   "model_type": "chat",
   "architecture": {
@@ -9,7 +9,8 @@
     "architecture_type": "dense"
   },
   "context": {
-    "max_input_tokens": 131072
+    "max_input_tokens": 131072,
+    "max_output_tokens": 8192
   },
   "capabilities": {
     "streaming": true,
@@ -20,21 +21,23 @@
     "vision": false,
     "audio_input": false,
     "audio_output": false,
-    "video_input": false,
-    "reasoning": false
+    "reasoning": true
   },
   "pricing": null,
   "lifecycle": {
     "status": "active"
   },
-  "license": null,
+  "license": "mit",
   "open_weights": true,
-  "aliases": [],
-  "description": "Ollama model: deepscaler:latest",
+  "aliases": [
+    "deepscaler"
+  ],
+  "description": "DeepScaler — reasoning model distilled from DeepSeek R1.",
   "tags": [
-    "local",
     "open-source",
+    "local",
+    "reasoning",
     "quant:F16"
   ],
-  "source": "generated"
+  "source": "builtin"
 }

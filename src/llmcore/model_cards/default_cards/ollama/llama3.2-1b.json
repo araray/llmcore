@@ -1,6 +1,6 @@
 {
   "model_id": "llama3.2:1b",
-  "display_name": "Llama3.2:1b",
+  "display_name": "Llama 3.2 1B",
   "provider": "ollama",
   "model_type": "chat",
   "architecture": {
@@ -9,32 +9,28 @@
     "architecture_type": "dense"
   },
   "context": {
-    "max_input_tokens": 131072
+    "max_input_tokens": 131072,
+    "max_output_tokens": 8192
   },
   "capabilities": {
     "streaming": true,
-    "function_calling": false,
-    "tool_use": false,
-    "json_mode": false,
-    "structured_output": false,
-    "vision": false,
-    "audio_input": false,
-    "audio_output": false,
-    "video_input": false,
-    "reasoning": false
+    "tool_use": true,
+    "structured_output": true
   },
   "pricing": null,
   "lifecycle": {
     "status": "active"
   },
-  "license": null,
+  "license": "llama3.2",
   "open_weights": true,
   "aliases": [],
-  "description": "Ollama model: llama3.2:1b",
+  "description": "Meta Llama 3.2 1B — compact text model with 128K context.",
   "tags": [
-    "local",
     "open-source",
+    "local",
+    "compact",
+    "meta",
     "quant:Q8_0"
   ],
-  "source": "generated"
+  "source": "builtin"
 }

@@ -1,6 +1,6 @@
 {
   "model_id": "qwen3:4b",
-  "display_name": "Qwen3:4b",
+  "display_name": "Qwen 3 4B",
   "provider": "ollama",
   "model_type": "chat",
   "architecture": {
@@ -9,32 +9,31 @@
     "architecture_type": "dense"
   },
   "context": {
-    "max_input_tokens": 40960
+    "max_input_tokens": 262144,
+    "max_output_tokens": 8192
   },
   "capabilities": {
     "streaming": true,
-    "function_calling": true,
+    "reasoning": true,
     "tool_use": true,
-    "json_mode": false,
-    "structured_output": false,
-    "vision": false,
-    "audio_input": false,
-    "audio_output": false,
-    "video_input": false,
-    "reasoning": false
+    "function_calling": true
   },
-  "pricing": null,
   "lifecycle": {
+    "release_date": "2025-08-06",
     "status": "active"
   },
-  "license": null,
+  "provider_qwen": {
+    "thinking_mode": {
+      "supported": true,
+      "enable_param": "enable_thinking"
+    }
+  },
+  "source": "builtin",
   "open_weights": true,
-  "aliases": [],
-  "description": "Ollama model: qwen3:4b",
+  "description": "Ollama model: qwen3:4b The library tag points to Qwen3-4B-2507 (262144-token GGUF context; registry check 2026-11-16).",
   "tags": [
     "local",
     "open-source",
     "quant:Q4_K_M"
-  ],
-  "source": "generated"
+  ]
 }
