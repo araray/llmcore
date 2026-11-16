@@ -33,7 +33,13 @@
     "sfx_generation": false,
     "voice_design": false
   },
-  "pricing": null,
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 2.0,
+      "output": 12.0
+    }
+  },
   "lifecycle": {
     "status": "active"
   },
@@ -42,5 +48,13 @@
   "aliases": [],
   "description": "Gemini 3 Pro Image",
   "tags": [],
-  "source": "generated"
+  "source": "generated",
+  "x_pricewatch": {
+    "feed": "scrape:google",
+    "method": "scrape",
+    "url": "https://ai.google.dev/gemini-api/docs/pricing",
+    "matched_key": "gemini-3-pro-image",
+    "match": "display-name slug match",
+    "fetched_at": "2026-11-16T11:17:04+00:00"
+  }
 }

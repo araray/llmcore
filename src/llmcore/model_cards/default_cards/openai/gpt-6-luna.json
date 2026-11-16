@@ -32,7 +32,15 @@
     "sfx_generation": false,
     "voice_design": false
   },
-  "pricing": null,
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.1,
+      "output": 0.5,
+      "cached_input": 0.01,
+      "cache_write": 0.125
+    }
+  },
   "lifecycle": {
     "status": "active",
     "release_date": "2026-09-14"
@@ -42,5 +50,13 @@
   "aliases": [],
   "description": "Openai model: gpt-6-luna",
   "tags": [],
-  "source": "generated"
+  "source": "generated",
+  "x_pricewatch": {
+    "feed": "scrape:openai",
+    "method": "scrape",
+    "url": "https://platform.openai.com/docs/pricing",
+    "matched_key": "gpt-6-luna",
+    "match": "display-name slug match",
+    "fetched_at": "2026-11-16T11:17:03+00:00"
+  }
 }

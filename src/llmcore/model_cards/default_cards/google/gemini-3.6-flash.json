@@ -33,7 +33,14 @@
     "sfx_generation": false,
     "voice_design": false
   },
-  "pricing": null,
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.75,
+      "output": 3.75,
+      "cached_input": 0.075
+    }
+  },
   "lifecycle": {
     "status": "active"
   },
@@ -42,5 +49,13 @@
   "aliases": [],
   "description": "Gemini 3.6 Flash",
   "tags": [],
-  "source": "generated"
+  "source": "generated",
+  "x_pricewatch": {
+    "feed": "scrape:google",
+    "method": "scrape",
+    "url": "https://ai.google.dev/gemini-api/docs/pricing",
+    "matched_key": "gemini-3.6-flash",
+    "match": "display-name slug match",
+    "fetched_at": "2026-11-16T11:17:04+00:00"
+  }
 }

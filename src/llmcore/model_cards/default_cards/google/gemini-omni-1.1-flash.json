@@ -33,7 +33,13 @@
     "sfx_generation": false,
     "voice_design": false
   },
-  "pricing": null,
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 1.5,
+      "output": 9.0
+    }
+  },
   "lifecycle": {
     "status": "active"
   },
@@ -42,5 +48,13 @@
   "aliases": [],
   "description": "Gemini Omni 1.1 Flash ",
   "tags": [],
-  "source": "generated"
+  "source": "generated",
+  "x_pricewatch": {
+    "feed": "scrape:google",
+    "method": "scrape",
+    "url": "https://ai.google.dev/gemini-api/docs/pricing",
+    "matched_key": "gemini-omni-1.1-flash",
+    "match": "display-name slug match",
+    "fetched_at": "2026-11-16T11:17:04+00:00"
+  }
 }

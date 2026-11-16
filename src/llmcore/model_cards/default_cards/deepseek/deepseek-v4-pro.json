@@ -29,9 +29,9 @@
   "pricing": {
     "currency": "USD",
     "per_million_tokens": {
-      "input": 1.74,
-      "output": 3.48,
-      "cached_input": 0.145
+      "input": 1.32,
+      "output": 3.96,
+      "cached_input": 0.044
     },
     "notes": "75% limited-time discount until 2026-05-05: input $0.435, output $0.87, cached $0.03625"
   },
@@ -74,5 +74,16 @@
       "active_parameters": "49B"
     }
   },
-  "source": "builtin"
+  "source": "builtin",
+  "x_pricewatch": {
+    "feed": "scrape:deepseek",
+    "method": "scrape",
+    "url": "https://api-docs.deepseek.com/quick_start/pricing",
+    "matched_key": "deepseek-v4-pro",
+    "match": "display-name slug match",
+    "fetched_at": "2026-11-16T11:17:06+00:00",
+    "preserved_from_packaged_card": [
+      "notes"
+    ]
+  }
 }

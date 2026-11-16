@@ -30,14 +30,22 @@
   "pricing": {
     "currency": "USD",
     "per_million_tokens": {
-      "input": 0.30,
-      "output": 2.50,
-      "cached_input": 0.0375
+      "input": 0.3,
+      "output": 2.5,
+      "cached_input": 0.03
     },
     "batch_discount_percent": 50,
     "context_tiers": [
-      {"threshold_tokens": 200000, "input_price": 0.30, "output_price": 2.50},
-      {"threshold_tokens": 1048576, "input_price": 0.60, "output_price": 5.00}
+      {
+        "threshold_tokens": 200000,
+        "input_price": 0.3,
+        "output_price": 2.5
+      },
+      {
+        "threshold_tokens": 1048576,
+        "input_price": 0.6,
+        "output_price": 5.0
+      }
     ]
   },
   "lifecycle": {
@@ -48,12 +56,28 @@
   },
   "license": null,
   "open_weights": false,
-  "aliases": ["gemini-2.5-flash-001"],
+  "aliases": [
+    "gemini-2.5-flash-001"
+  ],
   "description": "Gemini 2.5 Flash is Google's production-grade fast model with 1M context window. Supports configurable thinking mode, function calling, code execution, and multimodal inputs. Scheduled for deprecation Oct 2026.",
-  "tags": ["fast", "efficient", "multimodal", "long-context", "production"],
+  "tags": [
+    "fast",
+    "efficient",
+    "multimodal",
+    "long-context",
+    "production"
+  ],
   "provider_google": {
-    "supported_inputs": ["text", "image", "video", "audio", "pdf"],
-    "supported_outputs": ["text"],
+    "supported_inputs": [
+      "text",
+      "image",
+      "video",
+      "audio",
+      "pdf"
+    ],
+    "supported_outputs": [
+      "text"
+    ],
     "grounding": {
       "google_search": true,
       "maps": true
@@ -67,5 +91,17 @@
     "url_context": true,
     "safety_settings": []
   },
-  "source": "builtin"
+  "source": "builtin",
+  "x_pricewatch": {
+    "feed": "scrape:google",
+    "method": "scrape",
+    "url": "https://ai.google.dev/gemini-api/docs/pricing",
+    "matched_key": "gemini-2.5-flash",
+    "match": "display-name slug match",
+    "fetched_at": "2026-11-16T11:17:04+00:00",
+    "preserved_from_packaged_card": [
+      "batch_discount_percent",
+      "context_tiers"
+    ]
+  }
 }
