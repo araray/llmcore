@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added — Gemini: Gemini 4, Gemma 4, Lyria music, typed decisions; 27 missing cards
+
+- **27 live models had no card.** cardctl's Google adapter kept only
+  `gemini-*` ids served on generateContent or embedContent, so it dropped
+  Gemini 4, Gemma 4, Lyria, the Live, decision and deep-research models. It
+  also read streaming from a method the listing no longer names, so every
+  card said no streaming, and it ignored the API's `thinking` flag. The
+  adapter now classifies models from what the API states.
+  - **Types:** Live, image and music models are `multimodal`, since their
+    windows are real token budgets; transcription models are `stt`, TTS
+    models `tts`, and `gemini-decision-1` is `decision`.
+  - **Flags:** streaming follows from `generateContent`, and reasoning from
+    `thinking`.
+- **Enrichment prices** no longer reach variants. Longest-prefix matching
+  gave `gemini-2.5-pro-preview-tts` the chat price ($1.25/$10 instead of the
+  TTS model's $1/$20). Only exact keys and dated or versioned snapshots
+  inherit a price now; this affects every provider.
+- **`max_tokens` / `stop` / `n`** were passed to `GenerateContentConfig`
+  untranslated, and `chat(max_tokens=...)` raised a validation error. They
+  now map to `max_output_tokens` / `stop_sequences` / `candidate_count`.
+- **Music (Lyria 3.5)** via `generate_music_media` on the Developer API.
+- **`create_decision()`** for `gemini-decision-1` (`createDecision`), with
+  `system_one()` as an alias. It uses the same `Noul`/`Choice`/`Score` types
+  and `SystemOneResult` as TypeSafe. Box questions are refused because
+  Gemini has none.
+- **Verified live:**
+  - `gemini-4-hydrogen` and `gemini-4-carbon`: plain and streaming chat;
+    the tool loop with thought-signature replay; effort none/low/high.
+  - Lyria 3.5 music.
+  - A decision with all three question types.
+
 ### Added — Gemini Live: realtime transcription and a voice agent
 
 - `open_transcription_session()` (`asr_stream`, `gemini-3.5-transcribe-live`)

@@ -268,7 +268,7 @@ Which provider serves what (default configuration, 2026-11-16):
 | Provider | Media capabilities |
 |---|---|
 | OpenAI | `image_generate`, `image_edit`, `tts`, `tts_stream`, `asr`, `asr_stream` and `voice_agent` (Realtime) |
-| Gemini | `image_generate`, `tts`; on the Developer API also `asr`, `asr_stream` and `voice_agent` (Live API); on Vertex also `image_edit`, `image_upscale`, `video_generate` |
+| Gemini | `image_generate`, `tts`; on the Developer API also `asr`, `asr_stream` and `voice_agent` (Live API) and `music` (Lyria); on Vertex also `image_edit`, `image_upscale`, `video_generate`. Typed decisions via `create_decision()` / `system_one()` |
 | Mistral | `tts`, `asr`, `ocr` |
 | Z.ai | `tts`, `asr`, `ocr`, `image_generate`, `video_generate` (job) |
 | DeepInfra, Hugging Face | `image_generate`, `tts`, `asr` |
@@ -674,7 +674,7 @@ the provider support matrix.
 |---|---|---|---|
 | **OpenAI** | `gpt-6-sol`, `gpt-6-astra`, `gpt-5.6-terra`, `gpt-5.5-pro`, `gpt-5.4`, `o4-mini` | direct + SDK | Streaming, tools, vision, images, TTS/ASR, embeddings, native search |
 | **Anthropic** | `claude-opus-5-5`, `claude-opus-5`, `claude-sonnet-5-5`, `claude-opus-4-8`, `claude-haiku-4-5-20251001` | SDK + direct | Streaming, tools, vision, extended thinking |
-| **Google Gemini** | `gemini-3.8-flash`, `gemini-3.7-flash`, `gemini-3.1-pro`, `gemini-2.5-pro` | SDK + direct | Tools, vision, Imagen, **Veo video**, native TTS, embeddings |
+| **Google Gemini** | `gemini-4-carbon`, `gemini-4-argon`, `gemini-4-hydrogen`, `gemini-3.8-flash`, Gemma 4 | SDK + direct | Tools, vision, Imagen, **Veo video** (Vertex), native TTS, transcription, Lyria music, Live voice agents, typed decisions, embeddings |
 | **xAI** | `grok-4.1-20251117`, `grok-4-heavy` | direct + SDK | Streaming, tools, Live Search |
 | **DeepSeek** | `deepseek-v4-pro`, `deepseek-flash`, `deepseek-v3.2` (`deepseek-chat`/`-reasoner` retired 2026-07-24) | direct only¹ | Reasoning replay, effort low/high/max, web search, balance, cache usage |
 | **Kimi (Moonshot)** | `kimi-k3.1-pro`, `kimi-k3`, `kimi-k2.7-code`, `kimi-k2.6` | direct only¹ | Reasoning replay, per-family effort, Responses lane, exact tokenizer |

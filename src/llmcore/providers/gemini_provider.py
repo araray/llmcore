@@ -21,7 +21,7 @@ import json
 import logging
 import os
 import uuid
-from collections.abc import AsyncGenerator, AsyncIterator
+from collections.abc import AsyncGenerator, AsyncIterator, Mapping
 from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, Any
 
@@ -484,6 +484,8 @@ class GeminiProvider(BaseProvider):
             "video": config.get("default_video_model"),
             "tts": config.get("default_tts_model"),
             "asr": config.get("default_asr_model"),
+            "music": config.get("default_music_model"),
+            "decision": config.get("default_decision_model"),
             "embed": config.get("default_embedding_model"),
         }
         self._project = config.get("project")
@@ -1246,6 +1248,21 @@ class GeminiProvider(BaseProvider):
                 thinking["include_thoughts"] = display == "summarized"
             kwargs["thinking_config"] = thinking
 
+        # Portable names every other provider accepts. Passed through
+        # untranslated they reached GenerateContentConfig, which rejects
+        # unknown fields: chat(max_tokens=...) raised a pydantic error.
+        for portable, native in (
+            ("max_tokens", "max_output_tokens"),
+            ("max_completion_tokens", "max_output_tokens"),
+            ("stop", "stop_sequences"),
+            ("n", "candidate_count"),
+        ):
+            if portable in kwargs:
+                value = kwargs.pop(portable)
+                if native == "stop_sequences" and isinstance(value, str):
+                    value = [value]
+                kwargs.setdefault(native, value)
+
         supported = self.get_supported_parameters()
         for key, value in kwargs.items():
             if key not in supported:
@@ -1858,7 +1875,8 @@ class GeminiProvider(BaseProvider):
         # Live API (bidiGenerateContent) sessions, verified on the Developer
         # API: gemini-3.5-transcribe-live (asr_stream) and gemini-3.8-live
         # (voice_agent).
-        {"asr", "asr_stream", "voice_agent"}
+        # music: Lyria (generateContent, MP3 out), verified 2026-11-16.
+        {"asr", "asr_stream", "voice_agent", "music"}
     )
 
     #: Default models per media capability, overridable per call and via config.
@@ -1867,6 +1885,7 @@ class GeminiProvider(BaseProvider):
     _DEFAULT_VIDEO_MODEL = "veo-3.1-generate-001"           # Vertex only
     _DEFAULT_TTS_MODEL = "gemini-3.8-flash-tts"
     _DEFAULT_ASR_MODEL = "gemini-3.5-transcribe"
+    _DEFAULT_MUSIC_MODEL = "lyria-3.5"
     _DEFAULT_EMBED_MODEL = "gemini-embedding-2"
 
     def media_capabilities(self) -> "frozenset[MediaCapability]":
@@ -1914,6 +1933,7 @@ class GeminiProvider(BaseProvider):
             "video": self._DEFAULT_VIDEO_MODEL,
             "tts": self._DEFAULT_TTS_MODEL,
             "asr": self._DEFAULT_ASR_MODEL,
+            "music": self._DEFAULT_MUSIC_MODEL,
             "embed": self._DEFAULT_EMBED_MODEL,
         }[capability]
 
@@ -2371,6 +2391,129 @@ class GeminiProvider(BaseProvider):
                 provider=self.get_name(),
                 model=transcript.model,
                 basis="per_token",
+                input_tokens=getattr(usage, "prompt_token_count", None),
+                output_tokens=getattr(usage, "candidates_token_count", None),
+            ),
+        )
+
+    # --- decisions (gemini-decision-1) ---
+
+    async def create_decision(
+        self,
+        input: Any,  # noqa: A002 - the API's field name
+        questions: Mapping[str, Any],
+        *,
+        model: str | None = None,
+    ) -> Any:
+        """Calibrated typed judgments via ``models/gemini-decision-1:createDecision``.
+
+        The same primitives as TypeSafe's Jev: ``noul`` (yes/no probability),
+        ``choice`` (one option, per-option probabilities) and ``score``
+        (rubric level). Questions are the TypeSafe builders
+        (:class:`~llmcore.providers.typesafe_provider.Noul`, ``Choice``,
+        ``Score``) or equivalent dicts; the result is the same
+        :class:`~llmcore.providers.typesafe_provider.SystemOneResult`, so code
+        written against one decision provider works with the other. Gemini
+        has no ``box`` question. Output tokens are not billed (0).
+
+        Raises:
+            ValueError: For invalid or ``box`` questions (before any request).
+            ProviderError: On API errors.
+        """
+        from .typesafe_provider import SystemOneResult, normalize_questions
+
+        wire = normalize_questions(questions)
+        for name, question in wire.items():
+            if question.get("type") == "box":
+                raise ValueError(f"Question {name!r}: Gemini decisions have no 'box' type.")
+            if question.get("type") == "choice":
+                question["criteria"] = {k: ("" if v is None else v) for k, v in question["criteria"].items()}
+        used = model or self._media_model_config.get("decision") or "gemini-decision-1"
+        try:
+            response = await self._client.aio.decisions.create(model=used, input=input, questions=wire)
+        except Exception as e:
+            self._raise_media_error(e, used, "decision")
+        data = response.model_dump(mode="json", exclude_none=True) if hasattr(response, "model_dump") else dict(response)
+        answers = {
+            k: v for k, v in (data.get("answers") or {}).items()
+            if isinstance(v, dict) and v.get("type") in ("noul", "choice", "score")
+        }
+        usage = data.get("usage") or {}
+        return SystemOneResult.model_validate({
+            "model": used,
+            "answers": answers,
+            "usage": {"input_tokens": usage.get("total_input_tokens"),
+                      "output_tokens": usage.get("total_output_tokens")},
+            "raw": data,
+        })
+
+    #: Parity with TypeSafeProvider / CommandCodeProvider.system_one.
+    async def system_one(self, state: Any, questions: Mapping[str, Any], *, model: str | None = None) -> Any:
+        """Alias of :meth:`create_decision` (``state`` is the shared input)."""
+        return await self.create_decision(state, questions, model=model)
+
+    # --- music (Lyria) ---
+
+    async def generate_music_media(
+        self,
+        prompt: str,
+        *,
+        model: str | None = None,
+        duration_seconds: float | None = None,
+        **kwargs: Any,
+    ) -> "MediaResult":
+        """Generate music with Lyria (``generateContent``).
+
+        Lyria answers with MP3 audio inline plus a text part carrying the
+        lyrics (``<instrumental>`` for instrumentals), kept in
+        ``provider_metadata["lyrics"]``. It takes no duration parameter, so
+        ``duration_seconds`` is added to the prompt as a hint.
+        """
+        import hashlib
+
+        from google.genai import types as genai_types
+
+        from ..media.models import MediaArtifact, MediaCapability, MediaKind, MediaResult, MediaUsage
+
+        music_model = self._media_model("music", model)
+        text = prompt if duration_seconds is None else f"{prompt} (about {int(duration_seconds)} seconds)"
+        try:
+            response = await self._client.aio.models.generate_content(
+                model=music_model,
+                contents=text,
+                config=genai_types.GenerateContentConfig(**kwargs) if kwargs else None,
+            )
+        except Exception as e:
+            self._raise_media_error(e, music_model, "music generation")
+
+        artifacts: list[Any] = []
+        lyrics: list[str] = []
+        for candidate in getattr(response, "candidates", None) or []:
+            for part in getattr(getattr(candidate, "content", None), "parts", None) or []:
+                inline = getattr(part, "inline_data", None)
+                if inline is not None and getattr(inline, "data", None):
+                    artifacts.append(MediaArtifact(
+                        kind=MediaKind.AUDIO,
+                        data=inline.data,
+                        mime_type=getattr(inline, "mime_type", None) or "audio/mpeg",
+                        checksum_sha256=hashlib.sha256(inline.data).hexdigest(),
+                    ))
+                elif getattr(part, "text", None):
+                    lyrics.append(part.text)
+        if lyrics:
+            artifacts = [
+                MediaArtifact(**{**{f: getattr(a, f) for f in a.__slots__},
+                                 "provider_metadata": {"lyrics": "\n".join(lyrics)}})
+                for a in artifacts
+            ]
+        usage = getattr(response, "usage_metadata", None)
+        return MediaResult(
+            capability=MediaCapability.MUSIC,
+            provider=self.get_name(),
+            model=music_model,
+            artifacts=tuple(artifacts),
+            usage=MediaUsage(
+                provider=self.get_name(), model=music_model, basis="per_token",
                 input_tokens=getattr(usage, "prompt_token_count", None),
                 output_tokens=getattr(usage, "candidates_token_count", None),
             ),

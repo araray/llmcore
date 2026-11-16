@@ -165,3 +165,23 @@ class TestEffortUsageEmbeddings:
     def test_developer_api_client_uses_v1beta(self):
         p = GeminiProvider({"api_key": "k"})
         assert p._client._api_client._http_options.api_version == "v1beta"
+
+
+async def test_portable_generation_names_are_translated():
+    """max_tokens / stop / n reached GenerateContentConfig untranslated and
+    raised a pydantic error (live, 2026-11-16)."""
+    from unittest.mock import AsyncMock, MagicMock
+
+    from llmcore.models import Message, Role
+    from llmcore.providers.gemini_provider import GeminiProvider
+
+    p = GeminiProvider({"api_key": "k"})
+    p._client = MagicMock()
+    p._client.aio.models.generate_content = AsyncMock(return_value=MagicMock(candidates=[], usage_metadata=None))
+    try:
+        await p.chat_completion([Message(role=Role.USER, content="hi")], model="gemini-4-hydrogen",
+                                max_tokens=50, stop="END", n=1)
+    except Exception:
+        pass  # response normalisation is irrelevant here
+    config = p._client.aio.models.generate_content.await_args.kwargs["config"]
+    assert config.max_output_tokens == 50 and config.stop_sequences == ["END"] and config.candidate_count == 1
