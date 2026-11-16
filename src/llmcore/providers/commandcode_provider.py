@@ -1470,6 +1470,9 @@ class CommandCodeProvider(BaseProvider):
                     "backend": self.transport,
                     "default_headers": headers,
                     "_context_lookup": self._context_for,
+                    # The gateway's /models carries no capabilities; the
+                    # Anthropic provider's measured snapshot covers Claude.
+                    "capability_lookup": False,
                 },
                 self.log_raw_payloads_enabled,
             )

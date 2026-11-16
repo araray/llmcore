@@ -28,7 +28,7 @@ class AnthropicAdapter(BaseAdapter):
 
         headers = {
             "x-api-key": api_key,
-            "anthropic-version": "2023-06-01",
+            "anthropic-version": "2026-10-21",
             "content-type": "application/json",
         }
 
@@ -56,6 +56,16 @@ class AnthropicAdapter(BaseAdapter):
         return result
 
     def _parse_model(self, m: dict[str, Any]) -> NormalizedModel | None:
+        """One Models API entry, read with the keys the API actually uses.
+
+        The old version read ``tool_use``, ``vision``, ``json_output`` and
+        ``extended_thinking``, none of which exist, so every Anthropic card
+        claimed no tools, no vision, no structured output and no reasoning.
+        The real keys are ``image_input``, ``pdf_input``,
+        ``structured_outputs``, ``thinking{types}``, ``effort{levels}``,
+        ``batch``, ``citations``, ``code_execution``, ``context_management``
+        and ``server_tools``.
+        """
         model_id = m.get("id", "")
         if not model_id:
             return None
@@ -66,18 +76,38 @@ class AnthropicAdapter(BaseAdapter):
             cap = caps.get(cap_name, {})
             return cap.get("supported", False) if isinstance(cap, dict) else bool(cap)
 
+        thinking = caps.get("thinking") or {}
+        thinking_types = sorted(
+            name
+            for name, flag in (thinking.get("types") or {}).items()
+            if isinstance(flag, dict) and flag.get("supported")
+        )
+        efforts = [
+            name
+            for name in ("low", "medium", "high", "xhigh", "max")
+            if isinstance((caps.get("effort") or {}).get(name), dict)
+            and caps["effort"][name].get("supported")
+        ]
+        lifecycle = m.get("lifecycle")
+
         normalized = NormalizedModel(
             model_id=model_id,
             provider="anthropic",
             display_name=m.get("display_name"),
             description=m.get("description"),
             created_timestamp=None,  # Anthropic uses ISO date string
+            context_length=m.get("max_input_tokens") or None,
+            max_output_tokens=m.get("max_tokens") or None,
+            # Every Claude model on the Messages API takes tools; the Models
+            # API has no flag for it because there is no model that does not.
             supports_streaming=True,
-            supports_tools=_cap_supported("tool_use"),
-            supports_vision=_cap_supported("vision"),
-            supports_json_mode=_cap_supported("json_output"),
-            supports_structured_output=_cap_supported("json_output"),
-            supports_reasoning=_cap_supported("extended_thinking"),
+            supports_tools=True,
+            supports_vision=_cap_supported("image_input"),
+            supports_json_mode=_cap_supported("structured_outputs"),
+            supports_structured_output=_cap_supported("structured_outputs"),
+            supports_reasoning=bool(thinking_types and thinking_types != ["disabled"]),
+            is_deprecated=lifecycle == "deprecated",
+            deprecation_date=(m.get("retires_at") or "")[:10] or None,
             architecture_family="claude",
             architecture_type="transformer",
             raw_api_data=m,
@@ -95,18 +125,23 @@ class AnthropicAdapter(BaseAdapter):
 
         # Extension fields
         ext: dict[str, Any] = {}
-        if _cap_supported("extended_thinking"):
-            ext["extended_thinking"] = True
-        if _cap_supported("prompt_caching"):
-            ext["prompt_caching"] = True
-        if _cap_supported("batch"):
-            ext["batch_api"] = True
-        if _cap_supported("citations"):
-            ext["citations"] = True
-        if _cap_supported("computer_use"):
-            ext["computer_use"] = True
-        if _cap_supported("pdf_input"):
-            ext["pdf_input"] = True
+        if thinking_types:
+            ext["thinking_types"] = thinking_types
+        if efforts:
+            ext["effort_levels"] = efforts
+        for key, name in (("batch", "batch_api"), ("citations", "citations"),
+                          ("pdf_input", "pdf_input"), ("code_execution", "code_execution"),
+                          ("context_management", "context_management")):
+            if _cap_supported(key):
+                ext[name] = True
+        server_tools = [
+            name for name, flag in (caps.get("server_tools") or {}).items()
+            if isinstance(flag, dict) and flag.get("supported")
+        ]
+        if server_tools:
+            ext["server_tools"] = sorted(server_tools)
+        if lifecycle:
+            ext["lifecycle"] = lifecycle
         if ext:
             normalized.raw_api_data["_extension"] = ext
 

@@ -7,6 +7,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Changed — Anthropic: SDK 2.x / API 2026-10-21, per-model rules, thinking round trip
+
+Audited against the live API and `anthropic` 2.8 (2026-11-16):
+
+- **SDK 2.x and API version 2026-10-21** (`anthropic>=2.8,<3`). That version
+  removes `temperature`, `top_p` and `top_k`, which Claude 5.x already
+  rejected. They are dropped with a one-time warning; on SDK 1.x they used to
+  crash the SDK path with a `TypeError`.
+- **"No thinking" is per model, not per generation.** llmcore sent
+  `between_tools` to every 4.7+ model, which is a 400 everywhere except Sonnet
+  5.5. Per-model capabilities are now read from the Models API once per
+  process, with a measured snapshot as fallback. `effort="none"` becomes
+  `disabled` (Haiku 5.5, Opus 4.7/4.8, Sonnet 5, 4.6), `between_tools` (Sonnet
+  5.5) or the lowest effort (Opus 5.5 and Fable, which have no off switch).
+  `xhigh` is kept on models that have it instead of being folded to `high`.
+- **Forced `tool_choice`** (`any` or a tool name) on Opus 5.5, Sonnet 5.5 and
+  Fable is sent as `auto` with a warning instead of failing.
+- **Thinking round trip.** Thinking blocks (with signatures), redacted
+  thinking and server-tool blocks come back as `message["anthropic_content"]`
+  (streamed calls: on the final chunk) and are replayed verbatim.
+  `assistant_replay_metadata(response)` is a new `BaseProvider` method that
+  returns what to attach to the next assistant message, for any provider.
+- `native_search=True` adds the web-search server tool, and `extra_tools=[...]`
+  passes raw server tools. `thinking_display="summarized"` returns readable
+  thinking.
+- API 2026-10-21 rules are applied: documents are dropped from assistant
+  turns, and citations are stripped from user text.
+- `ContextLengthError` only for "prompt is too long". Any 400 mentioning
+  tokens used to qualify. `model_context_window_exceeded` stops are reported as
+  `length`. SDK-path errors carry status codes and the original exception.
+- Default model `claude-sonnet-5-5` (`claude-sonnet-4-5-20250929` retires
+  2026-11-30). Context windows come from the Models API: 1M for every current
+  model, 200K for the 4.5 line.
+- Fixed: `_model_generation` read `claude-sonnet-4-20250514` as generation
+  (4, 20250514), and `supports_thinking` was true for every model.
+- cardctl: the adapter read capability keys that do not exist (`tool_use`,
+  `vision`, `extended_thinking`), so every Anthropic card claimed no tools,
+  vision or reasoning. It now reads `image_input`, `structured_outputs`,
+  `thinking.types` and `effort`, plus windows and lifecycle. 13 cards were
+  repaired in place, and cards were added for `claude-haiku-5-5` (with its
+  >100K context tier) and `claude-fable-5-2`. The enrichment prices were 2024
+  family prefixes (`claude-opus-4` = $15/$75 would have priced Opus 4.8 at
+  three times its $5/$25 on regeneration); they are rebuilt from the
+  vendor-scraped cards.
+
 ### Fixed — xAI, Groq, Together: retired search, retired defaults, vendor profiles
 
 No keys were available for these three, so this follows their API docs and

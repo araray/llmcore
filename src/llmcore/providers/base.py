@@ -103,6 +103,19 @@ class BaseProvider(abc.ABC):
         """
         pass
 
+    def assistant_replay_metadata(self, response: dict[str, Any]) -> dict[str, Any]:
+        """Metadata to attach to the next assistant ``Message`` built from ``response``.
+
+        Several providers need more than the text and tool calls to continue a
+        tool loop correctly. Anthropic needs its thinking blocks with their
+        signatures, OpenAI's Responses API its encrypted reasoning items, and
+        DeepSeek/Kimi their ``reasoning_content``. Put what this returns into
+        that assistant message's ``metadata`` and the provider replays the turn
+        faithfully on the next request. The default is ``{}``: nothing beyond
+        text and tool calls is needed.
+        """
+        return {}
+
     async def warm_up(self) -> None:
         """Optionally prepare provider resources before the first real request.
 

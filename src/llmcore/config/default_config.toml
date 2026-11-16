@@ -397,43 +397,63 @@ max_retries = 2
   # Environment Variable: LLMCORE_PROVIDERS__ANTHROPIC__API_KEY or ANTHROPIC_API_KEY
   # api_key = "sk-ant-..."
 
-  # Default model for this provider instance.
-  # Use the dash format (canonical API model IDs), not dot format.
-  # Current models (April 2026):
-  #   claude-opus-4-6, claude-sonnet-4-6          (Claude 4.6 family)
-  #   claude-opus-4-5, claude-sonnet-4-5           (Claude 4.5 family)
-  #   claude-haiku-4-5, claude-haiku-4-5-20251001  (Claude 4.5 Haiku)
-  #   claude-opus-4-1, claude-opus-4-0, claude-sonnet-4-0
-  # Dated variants (e.g., claude-sonnet-4-5-20250929) are also accepted.
-  default_model = "claude-sonnet-4-6"
+  # Default model for this provider instance (exact API ids, dash format).
+  # Current models (Models API, 2026-11-16), all 1M context / 128K output
+  # unless noted:
+  #   claude-opus-5-5, claude-sonnet-5-5, claude-haiku-5-5   (Claude 5.5)
+  #   claude-fable-5-2, claude-fable-5-1, claude-fable-5     (Fable)
+  #   claude-opus-5, claude-sonnet-5, claude-opus-4-8, claude-opus-4-7,
+  #   claude-opus-4-6, claude-sonnet-4-6
+  #   claude-opus-4-5-20251101, claude-haiku-4-5-20251001     (200K / 64K)
+  # claude-sonnet-4-5-20250929 is deprecated and retires 2026-11-30.
+  default_model = "claude-sonnet-5-5"
 
   # Request timeout in seconds.
-  # Extended thinking responses can take 30-90s; 120s accommodates this.
+  # Thinking responses can take minutes on hard tasks.
   timeout = 120
 
   # Default max_tokens for responses (Anthropic requires this parameter).
   # Override per-request via chat_completion(max_tokens=...).
   # max_tokens = 4096
 
-  # --- Extended Thinking ---
-  # Claude 4.x models support extended thinking for step-by-step reasoning.
-  # Configure via chat_completion(thinking={...}) per-request, or set a default:
-  # thinking_type = "adaptive"    # "enabled", "adaptive", or "disabled"
-  # thinking_budget_tokens = 8192 # Only for type="enabled"; must be >= 1024
+  # Transport: "sdk" (official anthropic SDK, default) or "httpx" (direct).
+  # Both speak API version 2026-10-21.
+  # backend = "sdk"
+
+  # --- Thinking and effort ---
+  # Pass effort= (none | minimal | low | medium | high | xhigh | max). It is
+  # sent in the form each model accepts, read from the Models API
+  # (capability_lookup, on by default): "none" becomes thinking disabled,
+  # between_tools (Sonnet 5.5), or the lowest effort on models with no off
+  # switch (Opus 5.5, Fable). xhigh is kept where the model has it.
+  # thinking_display = "summarized" returns readable thinking (Claude 4.7+
+  # and 5.x omit the text by default).
+  # capability_lookup = true
+  #
+  # temperature / top_p / top_k are dropped with a warning: API version
+  # 2026-10-21 rejects them on every model.
+
+  # --- Tools ---
+  # A forced tool_choice ("any" or a tool name) is sent as "auto" on models
+  # that reject it (Opus 5.5, Sonnet 5.5, Fable), with a warning.
+  # native_search = True adds the web-search server tool:
+  # native_search_tool = { type = "web_search_20250305", name = "web_search" }
+  # Raw server tools (web_fetch, code_execution, ...) via extra_tools=[...].
+  #
+  # Tool loops: put provider.assistant_replay_metadata(response) into the
+  # next assistant Message's metadata. It carries the thinking blocks (with
+  # signatures) and server-tool blocks that must be sent back unchanged.
 
   # --- Prompt Caching ---
-  # Anthropic supports prompt caching to reduce costs on repeated context.
-  # Applied via Message.metadata["cache_control"] = {"type": "ephemeral"}
-  # on system prompts and content blocks. No config-level setting needed.
+  # Message.metadata["cache_control"] = {"type": "ephemeral"} (or with
+  # "ttl": "1h") on system prompts and content blocks.
 
   # --- Vision / Multimodal ---
-  # Claude supports image input (JPEG, PNG, GIF, WebP) and PDF documents.
-  # Pass via Message.metadata["inline_images"] or metadata["inline_documents"].
-  # No config-level setting needed.
+  # Message.metadata["inline_images"] / metadata["inline_documents"].
+  # Documents are accepted in user turns only (API 2026-10-21).
 
   # --- Structured Output ---
-  # JSON schema output via chat_completion(output_config={"format": {"type": "json_schema", "schema": {...}}})
-  # Reasoning effort via chat_completion(output_config={"effort": "high"})
+  # chat_completion(output_config={"format": {"type": "json_schema", "schema": {...}}})
 
   # --- DeepSeek Provider ---
   # Native provider for DeepSeek V4 models with thinking mode support.

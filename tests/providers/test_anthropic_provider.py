@@ -193,7 +193,8 @@ class TestInitialization:
 
     def test_default_model_is_current(self):
         """Default model should be a current model, not deprecated."""
-        assert DEFAULT_MODEL == "claude-sonnet-4-5-20250929"
+        # claude-sonnet-4-5-20250929 retires 2026-11-30.
+        assert DEFAULT_MODEL == "claude-sonnet-5-5"
         assert "claude-3-haiku" not in DEFAULT_MODEL
 
     def test_default_token_limits_has_modern_models(self):
@@ -1111,7 +1112,8 @@ class TestModelDiscovery:
         assert provider.get_max_context_length("claude-sonnet-4-5-20250929") == 200000
 
     def test_context_length_unknown_model(self, provider: AnthropicProvider):
-        """Unknown model with no registry hit gets 200000 fallback."""
+        """Unknown model with no registry hit: 1M for 4.6+ (every current Claude
+        model), 200K for the 4.5 line and older."""
         with patch(
             "llmcore.providers.anthropic_provider.AnthropicProvider.get_max_context_length",
             wraps=provider.get_max_context_length,
@@ -1119,7 +1121,8 @@ class TestModelDiscovery:
             # Mock registry to return None for unknown model
             with patch("llmcore.model_cards.get_model_card_registry") as mock_reg:
                 mock_reg.return_value.get_context_length.return_value = None
-                assert provider.get_max_context_length("claude-future-model") == 200000
+                assert provider.get_max_context_length("claude-future-model") == 1_000_000
+                assert provider.get_max_context_length("claude-sonnet-4-1-20250805") == 200_000
 
 
 # ====================================================================

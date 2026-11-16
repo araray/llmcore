@@ -39,7 +39,8 @@
   "lifecycle": {
     "release_date": "2025-09-29",
     "knowledge_cutoff": "2025-04",
-    "status": "active"
+    "status": "deprecated",
+    "deprecation_date": "2026-11-30"
   },
   "license": null,
   "open_weights": false,
@@ -70,7 +71,21 @@
     },
     "beta_features": [
       "context-1m-2025-08-07"
-    ]
+    ],
+    "thinking_types": [
+      "disabled",
+      "enabled"
+    ],
+    "batch_api": true,
+    "citations": true,
+    "pdf_input": true,
+    "code_execution": true,
+    "context_management": true,
+    "server_tools": [
+      "code_execution",
+      "web_search"
+    ],
+    "lifecycle": "deprecated"
   },
   "source": "builtin",
   "x_pricewatch": {
