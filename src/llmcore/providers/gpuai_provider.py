@@ -19,7 +19,11 @@ actually gpu.ai-specific:
   model cards;
 * filtering that catalogue by ``modality``, because two thirds of it is
   image and video models this provider cannot serve;
-* ``/v1/embeddings``, which the parent does not implement.
+* ``/v1/embeddings``, which the parent does not implement;
+* what the chat endpoint refuses (live, 2026-11-16): ``tools``,
+  ``response_format`` and array message content are 400s ("not supported in
+  v1.1"), and there is no ``/v1/responses``. Tools and multimodal content
+  raise before the request; text content parts are joined into a string.
 
 Two behaviours worth knowing before relying on cost numbers, both found by
 calling the API rather than reading about it:
@@ -46,7 +50,7 @@ import logging
 import os
 from typing import Any
 
-from ..exceptions import ConfigError, ProviderError
+from ..exceptions import ProviderError
 from ..models import ModelDetails
 from .openai_provider import OpenAIProvider
 
@@ -56,8 +60,12 @@ logger = logging.getLogger(__name__)
 #: chat and embedding endpoints all sit directly beneath it.
 DEFAULT_GPUAI_BASE_URL = "https://api.gpu.ai/v1"
 
-#: Cheapest chat model at the time of integration (15 cents/Mtok in).
+#: Cheapest chat output in the catalogue (17 / 52 cents per Mtok in / out,
+#: 1M context; 2026-11-16).
 DEFAULT_GPUAI_MODEL = "gpuai/qwen3.8-flash"
+
+#: Default embedding model (4096 dimensions, Matryoshka ``dimensions``).
+DEFAULT_GPUAI_EMBEDDING_MODEL = "gpuai/qwen3-embedding-8b"
 
 #: Used only when neither the catalogue nor a card states a window.
 DEFAULT_GPUAI_CONTEXT_LENGTH = 32_768
@@ -113,6 +121,9 @@ class GpuAiProvider(OpenAIProvider):
             if resolved:
                 cfg["api_key"] = resolved
 
+        if str(cfg.get("responses_api", "never")).lower() != "never":
+            logger.warning("gpu.ai has no /v1/responses (404); responses_api forced to 'never'.")
+        cfg["responses_api"] = "never"
         super().__init__(cfg, log_raw_payloads=log_raw_payloads)
 
         try:
@@ -191,19 +202,23 @@ class GpuAiProvider(OpenAIProvider):
                     self._catalogue_context[str(alias)] = window
 
             params = set(item.get("supported_parameters") or [])
+            if item.get("status") and str(item["status"]).lower() not in ("active",):
+                # coming_soon / deprecated: listed, but not something to route to.
+                continue
             models.append(
                 ModelDetails(
                     id=str(model_id),
                     provider_name=self.get_name(),
                     display_name=item.get("name") or str(model_id),
                     context_length=window or self._default_context_length,
-                    # The catalogue enumerates *accepted parameters*, so a
-                    # missing `stream` means streaming is not accepted --
-                    # a real negative, unlike the capability stubs on
-                    # generated cards. Tools and vision are not described
-                    # by that list at all, so they are left to the card
-                    # rather than guessed from it.
-                    supports_streaming="stream" in params,
+                    # 12 of 15 chat models list no parameters (null or [])
+                    # yet stream (live 2026-11-16), so only a non-empty list
+                    # without "stream" counts as a negative.
+                    supports_streaming=("stream" in params) or not params,
+                    # Rejected by the endpoint: "tools" and array content
+                    # are 400s ("not supported in v1.1").
+                    supports_tools=False,
+                    supports_vision=False,
                     model_type="embedding" if modality in EMBEDDING_MODALITIES else "chat",
                     metadata={
                         "source": "gpuai_catalogue",
@@ -241,33 +256,69 @@ class GpuAiProvider(OpenAIProvider):
     # Embeddings
     # ------------------------------------------------------------------
 
+    def get_supported_parameters(self, model: str | None = None) -> dict[str, Any]:
+        """OpenAI's set minus what gpu.ai answers 400 to."""
+        params = super().get_supported_parameters(model)
+        for name in ("response_format", "tools", "tool_choice", "parallel_tool_calls"):
+            params.pop(name, None)
+        return params
+
+    async def chat_completion(  # type: ignore[override]
+        self, context: Any, model: str | None = None, stream: bool = False,
+        tools: Any = None, tool_choice: Any = None, **kwargs: Any,
+    ) -> Any:
+        """Chat, refusing up front what the endpoint would 400."""
+        if tools:
+            raise ProviderError(
+                self.get_name(),
+                'gpu.ai does not support tool calling ("Parameter \"tools\" is not '
+                'supported in v1.1").',
+                model_name=model or self.default_model,
+                retryable=False,
+            )
+        return await super().chat_completion(context, model, stream, None, None, **kwargs)
+
+    def _build_message_payload(self, msg: Any, model_name: str) -> dict[str, Any]:
+        """Messages as plain strings: gpu.ai's ``content`` is a string field."""
+        payload = super()._build_message_payload(msg, model_name)
+        content = payload.get("content")
+        if isinstance(content, list):
+            if any(isinstance(p, dict) and p.get("type") not in (None, "text") for p in content):
+                raise ProviderError(
+                    self.get_name(),
+                    "gpu.ai chat takes text only (message content must be a string).",
+                    model_name=model_name,
+                    retryable=False,
+                )
+            payload["content"] = "".join(
+                str(p.get("text", "")) if isinstance(p, dict) else str(p) for p in content
+            )
+        return payload
+
+    # ------------------------------------------------------------------
+    # Embeddings
+    # ------------------------------------------------------------------
+
     async def create_embeddings(
         self,
-        texts: list[str],
+        input_texts: str | list[str],
+        *,
         model: str | None = None,
         **kwargs: Any,
-    ) -> list[list[float]]:
-        """Embed *texts* via gpu.ai's OpenAI-compatible endpoint.
+    ) -> dict[str, Any]:
+        """Embed via gpu.ai's OpenAI-compatible ``/v1/embeddings``.
 
-        The parent does not implement this, and gpu.ai's ``/v1/embeddings``
-        is OpenAI-shaped (verified: 4096 dimensions for
-        ``gpuai/qwen3-embedding-8b``).
-
-        Deliberately uses the direct HTTP path regardless of the configured
-        transport, because the OpenAI SDK injects ``encoding_format`` and
-        gpu.ai rejects it outright::
-
-            Parameter "encoding_format" is not supported in v1.1
-
-        Not a value it dislikes -- the parameter itself. The SDK gives no
-        clean way to suppress it, so the payload is built here instead,
-        which is the only way to send exactly the fields gpu.ai accepts.
+        Follows the base contract (``input_texts``, an OpenAI-shaped response
+        dict). Sent over the direct transport with exactly the caller's
+        fields: ``encoding_format`` and ``dimensions`` are accepted now (64
+        dims returned for ``dimensions=64``, live 2026-11-16) but nothing is
+        added on the caller's behalf.
         """
+        texts = [input_texts] if isinstance(input_texts, str) else list(input_texts)
+        target = model or DEFAULT_GPUAI_EMBEDDING_MODEL
         if not texts:
-            return []
-        target = model or "gpuai/qwen3-embedding-8b"
+            return {"object": "list", "data": [], "model": target}
         payload: dict[str, Any] = {"model": target, "input": texts}
-        # Only pass through what the caller asked for; nothing is added.
         payload.update({k: v for k, v in kwargs.items() if v is not None})
         try:
             response = await self._get_http().post("/embeddings", json=payload)
@@ -275,8 +326,7 @@ class GpuAiProvider(OpenAIProvider):
                 self._raise_direct_status(
                     response.status_code, response.text, "embeddings"
                 )
-            data = response.json().get("data") or []
-            return [list(item["embedding"]) for item in data]
+            return dict(response.json())
         except ProviderError:
             raise
         except Exception as exc:

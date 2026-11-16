@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Fixed — gpu.ai: streaming flags, refused parameters, embeddings contract
+
+Audited against the live API on 2026-11-16 (verified on both transports).
+
+- 12 of 15 chat models list no `supported_parameters` (null or empty) yet
+  stream; they were all reported as non-streaming. Only a non-empty list
+  without `stream` counts as a negative now, in the provider and in cardctl.
+- The endpoint answers 400 to `tools`, `response_format` and array content.
+  Tools now raise a clear error before the request, text content parts are
+  joined into a string, images raise, models report no tools or vision, and
+  `responses_api` is forced to "never" (`/v1/responses` returns 404).
+- `create_embeddings` follows the base contract (`input_texts`, an
+  OpenAI-shaped dict); it took `texts` and returned bare lists. `dimensions`
+  works (64 → 64).
+- Discovery skips models whose `status` is not active. cardctl prefers the
+  exact microcents prices over rounded cents for cached input.
+
 ### Fixed — DeepInfra: dead STT default, model types, schema-2.4 cards, effort levels, dimensions
 
 Audited against the live API on 2026-11-16. Verified live through llmcore:

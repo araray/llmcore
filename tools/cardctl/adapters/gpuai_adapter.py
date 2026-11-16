@@ -159,6 +159,10 @@ class GpuAiAdapter(BaseAdapter):
             for param in params:
                 for flag in PARAM_CAPABILITIES.get(str(param), ()):
                     setattr(model, flag, True)
+        if model_type == "chat" and not params:
+            # 12 of 15 chat models list no parameters at all (null or []) yet
+            # stream fine (live 2026-11-16): an empty list says nothing.
+            model.supports_streaming = True
         model.extra_aliases = [str(a) for a in (row.get("aliases") or []) if a]
 
         self._attach_pricing(model, row.get("pricing"))
@@ -179,6 +183,11 @@ class GpuAiAdapter(BaseAdapter):
             ("cached_input_per_1m_tokens_cents", "cached_input"),
         ):
             rate = _cents_per_million(pricing.get(key))
+            # Whole cents are rounded (4 cents vs 4,400,000 microcents for a
+            # cached input): the microcents figure wins when it is given.
+            exact = _microcents(pricing.get(key.replace("_cents", "_microcents")))
+            if exact is not None:
+                rate = exact
             if rate is not None:
                 token_rates[field] = rate
         if token_rates:
