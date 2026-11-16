@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Fixed — FriendliAI: SDK 0.16 streaming, per-model effort, reasoning replay, retired models
+
+Audited against friendli 0.16.6 (released 2026-11-04) and the live catalogue
+on 2026-11-16. The team account has no credits (inference returns 403), so
+streaming was verified with the real SDK over a mocked transport.
+
+- **friendli 0.16 removed `chat.stream`.** Streaming is now
+  `chat.complete(stream=True)`, so `backend = "sdk"` streaming raised
+  `AttributeError`; the extra's open pin allowed 0.16. Both are handled now.
+  The pin is `friendli>=0.16.6,<0.17` (pre-1.0 SDKs break across minor
+  versions).
+- **effort= follows each model's catalogue `reasoning_options`**: GLM-5.3
+  low/high/max, GLM-5.2 toggle plus high/max, GLM-5.1 and gemma-4 toggle
+  only. "none" turns the toggle off.
+- **Reasoning replay**: `assistant_replay_metadata()` returns
+  `reasoning_content`. GLM-5.3 on Friendli preserves thinking by default, so
+  it has to come back. Streams accumulate it on the direct and openai
+  backends; the SDK's models drop it.
+- DeepSeek-V3.2 and MiniMax-M2.5 (deprecated 2026-10) are gone from the
+  tables and docs, and their cards are marked deprecated.
+
 ### Fixed — Z.ai: streaming on the default backend, GLM-5.3 rules, preserved thinking
 
 Audited on 2026-11-16 against docs.z.ai and the real zai-sdk 0.2.3

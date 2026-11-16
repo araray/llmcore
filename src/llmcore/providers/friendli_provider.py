@@ -5,8 +5,9 @@ FriendliAI provider implementation for the LLMCore library.
 Handles interactions with all three FriendliAI inference surfaces:
 
 - **Model APIs** (``serverless``) — the hosted, pay-per-token catalog
-  (``zai-org/GLM-5.3``, ``deepseek-ai/DeepSeek-V3.2``, ``google/gemma-4-31B-it``,
-  ``MiniMaxAI/MiniMax-M2.5``, …) at ``https://api.friendli.ai/serverless/v1``.
+  (``zai-org/GLM-5.3``, ``zai-org/GLM-5.3-Flash``, ``zai-org/GLM-5.2``,
+  ``zai-org/GLM-5.1``, ``google/gemma-4-31B-it`` on 2026-11-16) at
+  ``https://api.friendli.ai/serverless/v1``.
 - **Dedicated Endpoints** (``dedicated``) — your own GPU deployments at
   ``https://api.friendli.ai/dedicated/v1``; the ``model`` field is the
   *endpoint ID* (optionally ``ENDPOINT_ID:ADAPTER_ROUTE`` for Multi-LoRA).
@@ -151,6 +152,7 @@ from ..models_multimodal import (
 )
 from ..tokens import EstimateCounter as _EstimateCounter
 from .base import BaseProvider, ContextPayload
+from .openai_provider import nearest_effort
 
 logger = logging.getLogger(__name__)
 
@@ -192,8 +194,6 @@ _CONTEXT_LENGTHS: dict[str, int] = {
     "zai-org/GLM-5.2": 1_048_576,
     "zai-org/GLM-5.1": 202_752,
     "google/gemma-4-31B-it": 262_144,
-    "deepseek-ai/DeepSeek-V3.2": 163_840,
-    "MiniMaxAI/MiniMax-M2.5": 196_608,
 }
 
 #: Conservative context length when nothing else is known.
@@ -618,6 +618,35 @@ class FriendliProvider(BaseProvider):
         except Exception as e:
             logger.warning("Friendli catalog warm-up failed: %s", e)
 
+    def _map_effort(self, model_name: str, kwargs: dict[str, Any]) -> dict[str, Any]:
+        """Fit ``effort`` / ``reasoning_effort`` to the model's catalogue entry.
+
+        Each model lists its ``reasoning_options`` (live 2026-11-16): GLM-5.3
+        effort low/high/max, GLM-5.2 a toggle plus high/max, GLM-5.1 and
+        gemma-4 a toggle only. A value outside the list moves to the nearest;
+        "none" turns the toggle off where there is one. Without the catalogue
+        (not fetched yet) values pass through.
+        """
+        effort = kwargs.pop("effort", None)
+        if effort is not None and "reasoning_effort" not in kwargs:
+            effort = str(effort).strip().lower()
+            if effort == "none":
+                kwargs.setdefault("enable_thinking", False)
+            else:
+                kwargs["reasoning_effort"] = effort
+        entry = (self._catalog or {}).get(model_name) if getattr(self, "_catalog", None) else None
+        requested = kwargs.get("reasoning_effort")
+        if entry is None or requested is None:
+            return kwargs
+        options = entry.get("reasoning_options") or []
+        levels = next((o.get("values") for o in options if o.get("type") == "effort"), None)
+        if not levels:
+            logger.debug("Friendli model %s takes no effort level; reasoning_effort dropped.", model_name)
+            kwargs.pop("reasoning_effort")
+        elif str(requested).lower() not in levels:
+            kwargs["reasoning_effort"] = nearest_effort(str(requested).lower(), levels) or levels[-1]
+        return kwargs
+
     async def _fetch_catalog(self, force: bool = False) -> dict[str, dict[str, Any]]:
         """Fetch and cache the Model APIs catalog, keyed by model ID.
 
@@ -758,6 +787,8 @@ class FriendliProvider(BaseProvider):
             "xtc_probability": {"type": "number", "minimum": 0.0, "maximum": 1.0},
             # --- Reasoning controls ---
             "reasoning_effort": {"type": "string", "enum": sorted(_VALID_EFFORTS)},
+            # llmcore's cross-provider knob, mapped per model (_map_effort).
+            "effort": {"type": "string", "enum": ["none", *sorted(_VALID_EFFORTS)]},
             "reasoning_budget": {"type": "integer"},
             "parse_reasoning": {"type": "boolean"},
             "include_reasoning": {"type": "boolean"},
@@ -1046,7 +1077,7 @@ class FriendliProvider(BaseProvider):
         if tools:
             tools_payload = [{"type": "function", "function": t.model_dump()} for t in tools]
 
-        native, extras = self._resolve_request_params(dict(kwargs))
+        native, extras = self._resolve_request_params(self._map_effort(model_name, dict(kwargs)))
         self._apply_mutual_exclusions(native, extras, has_tools=bool(tools_payload))
 
         if tool_choice:
@@ -1075,21 +1106,65 @@ class FriendliProvider(BaseProvider):
 
         try:
             if self._backend == "openai":
-                return await self._chat_via_openai(
+                result = await self._chat_via_openai(
                     model_name, messages_payload, stream, tools_payload, native, extras
                 )
-            if self._backend == "sdk":
-                return await self._chat_via_sdk(
+            elif self._backend == "sdk":
+                result = await self._chat_via_sdk(
                     model_name, messages_payload, stream, tools_payload, native, extras
                 )
-            return await self._chat_via_httpx(
-                model_name, messages_payload, stream, tools_payload, native, extras
-            )
+            else:
+                result = await self._chat_via_httpx(
+                    model_name, messages_payload, stream, tools_payload, native, extras
+                )
         except (ProviderError, ContextLengthError, ValueError):
             raise
         except Exception as e:
             self._raise_error(e, model_name)
             raise  # pragma: no cover - _raise_error always raises
+        if stream:
+            return self._replayable_stream(result, model_name)  # type: ignore[arg-type]
+        return result  # type: ignore[return-value]
+
+    async def _replayable_stream(
+        self, stream: AsyncGenerator[dict[str, Any], None], model_name: str
+    ) -> AsyncGenerator[dict[str, Any], None]:
+        """The finish chunk also carries the turn's whole reasoning (as
+        ``replay_reasoning_content``) for :meth:`assistant_replay_metadata`."""
+        reasoning: list[str] = []
+        try:
+            async for chunk in stream:
+                for choice in chunk.get("choices") or []:
+                    if choice.get("index", 0) != 0:
+                        continue
+                    delta = choice.setdefault("delta", {})
+                    piece = delta.get("reasoning_content") or delta.get("reasoning")
+                    if isinstance(piece, str) and piece:
+                        reasoning.append(piece)
+                    if choice.get("finish_reason") and reasoning:
+                        delta["replay_reasoning_content"] = "".join(reasoning)
+                yield chunk
+        except (ProviderError, ContextLengthError):
+            raise
+        except Exception as e:
+            self._raise_error(e, model_name)
+
+    def assistant_replay_metadata(self, response: dict[str, Any]) -> dict[str, Any]:
+        """The reasoning to send back with the next assistant turn.
+
+        Friendli's catalogue marks its reasoning models
+        ``interleaved: "reasoning_content"``, and GLM-5.3 there preserves
+        thinking by default (``clear_thinking`` false): earlier turns' reasoning
+        has to come back. For a stream, pass the chunk with the finish reason.
+        """
+        try:
+            choice = (response.get("choices") or [{}])[0]
+        except (AttributeError, IndexError, TypeError):
+            return {}
+        message = choice.get("message") or {}
+        delta = choice.get("delta") or {}
+        text = message.get("reasoning_content") or message.get("reasoning") or delta.get("replay_reasoning_content")
+        return {"reasoning_content": text} if isinstance(text, str) and text else {}
 
     async def _chat_via_openai(
         self,
@@ -1210,13 +1285,21 @@ class FriendliProvider(BaseProvider):
         if self._endpoint_type == "container":
             call_kwargs["server_url"] = self._base_url
 
-        method = chat.stream if stream else chat.complete
+        # friendli 0.16 removed chat.stream: streaming is complete(stream=True),
+        # which returns an event stream (0.15 still has chat.stream).
+        legacy_stream = stream and hasattr(chat, "stream")
+        method = chat.stream if legacy_stream else chat.complete
         call_kwargs = self._filter_sdk_kwargs(method, call_kwargs)
 
         if stream:
-            event_stream = await self._run_sdk(
-                lambda: chat.stream(model=model_name, messages=messages, **call_kwargs)
-            )
+            if legacy_stream:
+                event_stream = await self._run_sdk(
+                    lambda: chat.stream(model=model_name, messages=messages, **call_kwargs)
+                )
+            else:
+                event_stream = await self._run_sdk(
+                    lambda: chat.complete(model=model_name, messages=messages, stream=True, **call_kwargs)
+                )
             return self._bridge_sdk_stream(event_stream)
 
         resp = await self._run_sdk(
@@ -1258,7 +1341,10 @@ class FriendliProvider(BaseProvider):
     async def _bridge_sdk_stream(self, event_stream: Any) -> AsyncGenerator[dict[str, Any], None]:
         """Yield normalized chunk dicts from an SDK ``EventStreamAsync``."""
         try:
-            async for chunk in event_stream:
+            async for event in event_stream:
+                # Server-sent events may wrap the chunk in `.data`.
+                data = getattr(event, "data", None)
+                chunk = data if data is not None and hasattr(data, "model_dump") else event
                 chunk_dict = self._normalize_obj(chunk)
                 if self.log_raw_payloads_enabled and logger.isEnabledFor(logging.DEBUG):
                     logger.debug(

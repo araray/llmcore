@@ -631,8 +631,8 @@ max_retries = 2
   # --- FriendliAI Provider ---
   # Native provider for FriendliAI's three inference surfaces:
   #   "serverless" — Friendli Model APIs, the hosted pay-per-token catalog
-  #                  (zai-org/GLM-5.3, deepseek-ai/DeepSeek-V3.2,
-  #                  google/gemma-4-31B-it, MiniMaxAI/MiniMax-M2.5, ...)
+  #                  (zai-org/GLM-5.3, GLM-5.3-Flash, GLM-5.2, GLM-5.1,
+  #                  google/gemma-4-31B-it on 2026-11-16)
   #   "dedicated"  — your own GPU deployments; `model` is the ENDPOINT ID
   #                  (or "ENDPOINT_ID:ADAPTER_ROUTE" for Multi-LoRA)
   #   "container"  — a self-hosted Friendli Engine; `base_url` is required
@@ -689,8 +689,12 @@ max_retries = 2
   #   zai-org/GLM-5.2         — 1M context, reasoning toggle
   #   zai-org/GLM-5.1         — 198K context
   #   google/gemma-4-31B-it   — 256K context, text/image in
-  #   deepseek-ai/DeepSeek-V3.2 — 160K context
-  #   MiniMaxAI/MiniMax-M2.5  — 192K context
+  #   (DeepSeek-V3.2 and MiniMax-M2.5 were deprecated in 2026-10.)
+  # effort= is fitted to each model's catalogue reasoning_options: GLM-5.3
+  # low/high/max; GLM-5.2 a toggle + high/max; GLM-5.1 and gemma-4 a toggle
+  # ("none" turns it off). GLM-5.3 preserves thinking by default
+  # (clear_thinking false): put provider.assistant_replay_metadata() into each
+  # assistant Message's metadata so its reasoning_content goes back.
   default_model = "zai-org/GLM-5.3"
 
   # Request timeout in seconds.  1M-context reasoning responses can be slow.
