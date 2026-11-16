@@ -1,8 +1,8 @@
 {
-  "model_id": "fal-ai/kokoro",
-  "display_name": "Kokoro TTS (fal)",
+  "model_id": "fal-ai/minimax/hailuo-2.3/standard/image-to-video",
+  "display_name": "MiniMax Hailuo 2.3 Standard, image-to-video (fal)",
   "provider": "fal",
-  "model_type": "tts",
+  "model_type": "video-generation",
   "architecture": null,
   "context": null,
   "capabilities": {
@@ -19,9 +19,9 @@
     "image_generation": false,
     "image_edit": false,
     "image_upscale": false,
-    "video_generation": false,
+    "video_generation": true,
     "video_interpolation": false,
-    "speech_synthesis": true,
+    "speech_synthesis": false,
     "transcription": false,
     "music_generation": false,
     "sfx_generation": false,
@@ -34,10 +34,10 @@
   "license": null,
   "open_weights": false,
   "aliases": [],
-  "description": "Text-to-speech.",
+  "description": "Image-to-video from a first frame. llmcore routes a first_frame request here when the default video endpoint is in use.",
   "tags": [
-    "audio",
-    "tts",
+    "video",
+    "image-to-video",
     "curated"
   ],
   "source": "generated"

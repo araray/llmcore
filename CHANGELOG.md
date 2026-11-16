@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Fixed — fal: retired default endpoints, image size, SDK backend parity
+
+Audited against fal's Platform API, the per-endpoint OpenAPI schemas and
+fal-client 1.0.3 (the latest) on 2026-11-16. Image, TTS, text-to-SFX and
+error paths were verified live.
+
+- **Default video endpoint** `fal-ai/minimax-video` was gone (404). It is
+  now `fal-ai/minimax/hailuo-2.3/standard/text-to-video`. A `first_frame`
+  goes to the image-to-video sibling, and `duration_seconds` maps onto
+  Hailuo's `"6"`/`"10"` enum.
+- **SFX**: `fal-ai/mmaudio-v2` requires a video, so a text-only request now
+  goes to `fal-ai/mmaudio-v2/text-to-audio`.
+- **TTS** defaults to `fal-ai/kokoro/american-english`; the bare id has no
+  schema.
+- **Image size**: `size="1024x768"` is sent as `image_size={"width",
+  "height"}`. The raw string used to be sent, which FLUX does not accept.
+  Presets still pass through.
+- **SDK backend**:
+  - The per-job webhook URL is forwarded.
+  - A `Completed` status that carries an error fails the job.
+  - `FalClientHTTPError` maps to `ProviderError` with fal's status, so a
+    422 is non-retryable, as on the direct backend.
+- **Cards**: the minimax-video and bare kokoro cards were removed. Hailuo
+  2.3 (t2v/i2v), MMAudio text-to-audio and Kokoro American English were
+  added.
+
 ### Added — TypeSafe: Jev 1.14, Box questions, image assets, long context
 
 Audited against typesafe-sdk 0.7.5 and the live API on 2026-11-16. Text,

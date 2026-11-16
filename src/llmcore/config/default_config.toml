@@ -803,11 +803,11 @@ max_retries = 2
   # image_generate = "fal-ai/flux/schnell"
   # image_edit = "fal-ai/flux-pro/kontext"
   # image_upscale = "fal-ai/clarity-upscaler"
-  # video_generate = "fal-ai/minimax-video"
+  # video_generate = "fal-ai/minimax/hailuo-2.3/standard/text-to-video"  # first_frame -> .../image-to-video
   # video_interpolate = "fal-ai/film"
   # sfx = "fal-ai/mmaudio-v2"
   # music = "fal-ai/stable-audio"
-  # tts = "fal-ai/kokoro"
+  # tts = "fal-ai/kokoro/american-english"
   # asr = "fal-ai/whisper"
 
   # --- Ollama Provider ---

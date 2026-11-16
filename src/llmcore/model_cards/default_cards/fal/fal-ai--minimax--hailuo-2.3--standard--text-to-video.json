@@ -1,6 +1,6 @@
 {
-  "model_id": "fal-ai/minimax-video",
-  "display_name": "MiniMax Video (fal)",
+  "model_id": "fal-ai/minimax/hailuo-2.3/standard/text-to-video",
+  "display_name": "MiniMax Hailuo 2.3 Standard, text-to-video (fal)",
   "provider": "fal",
   "model_type": "video-generation",
   "architecture": null,
@@ -34,7 +34,7 @@
   "license": null,
   "open_weights": false,
   "aliases": [],
-  "description": "Text-to-video generation.",
+  "description": "Text-to-video. Duration is \"6\" or \"10\" seconds (a string enum; llmcore rounds duration_seconds onto it).",
   "tags": [
     "video",
     "curated"

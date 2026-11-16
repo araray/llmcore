@@ -34,7 +34,7 @@
   "license": null,
   "open_weights": false,
   "aliases": [],
-  "description": "Sound effects, optionally conditioned on video (foley).",
+  "description": "Foley: sound effects conditioned on a video (video_url is required).",
   "tags": [
     "audio",
     "sfx",

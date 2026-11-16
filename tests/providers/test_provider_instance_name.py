@@ -28,7 +28,7 @@ import pytest
 def _make_openai_provider(config: dict):
     """Construct an OpenAIProvider with tiktoken and AsyncOpenAI mocked."""
     with (
-        patch("llmcore.providers.openai_provider.AsyncOpenAI") as mock_client,
+        patch("llmcore.providers.openai_provider.AsyncOpenAI"),
         patch("llmcore.providers.openai_provider.tiktoken") as mock_tiktoken,
     ):
         mock_tiktoken.encoding_for_model.return_value = MagicMock()
@@ -43,6 +43,9 @@ def _make_gemini_provider(config: dict):
     with (
         patch("llmcore.providers.gemini_provider.google_genai_available", True),
         patch("llmcore.providers.gemini_provider.genai") as mock_genai,
+        # The availability flag short-circuits the lazy import, so ``types``
+        # (used for the v1beta HttpOptions) must be provided as well.
+        patch("llmcore.providers.gemini_provider.types", MagicMock()),
     ):
         mock_genai.Client.return_value = MagicMock()
         from llmcore.providers.gemini_provider import GeminiProvider
@@ -269,7 +272,7 @@ class TestRoleValueSafety:
         """chat_completion builds correct payload when msg.role is a string."""
         from llmcore.models import Message, Role
 
-        provider = _make_openai_provider(
+        _make_openai_provider(
             {
                 "api_key": "sk-test",
                 "default_model": "test-model",
