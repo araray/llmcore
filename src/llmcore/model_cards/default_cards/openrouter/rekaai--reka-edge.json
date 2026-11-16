@@ -22,7 +22,7 @@
     "video_input": true,
     "image_generation": false,
     "web_search": false,
-    "reasoning": false,
+    "reasoning": true,
     "file_processing": false
   },
   "lifecycle": {

@@ -504,4 +504,5 @@ class TestSubclassInheritance:
             {"api_key": "k", "_instance_name": "openrouter",
              "app_url": "https://ex.com", "app_title": "llmcore", "transport": "httpx"}
         )
-        assert p._direct_headers == {"HTTP-Referer": "https://ex.com", "X-Title": "llmcore"}
+        assert p._direct_headers == {"HTTP-Referer": "https://ex.com", "X-Title": "llmcore",
+                                     "X-OpenRouter-Title": "llmcore"}

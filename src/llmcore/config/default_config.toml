@@ -992,27 +992,48 @@ max_retries = 2
   # api_key = "sk-or-..."
   api_key_env_var = "OPENROUTER_API_KEY"
 
-  # Default model.  OpenRouter uses "provider/model" format.
-  # Examples: "openai/gpt-4o-mini", "anthropic/claude-sonnet-4.6",
-  #           "google/gemini-3-flash-preview", "deepseek/deepseek-chat"
-  default_model = "openai/gpt-4o-mini"
+  # Default model.  OpenRouter uses "provider/model" format (724 models on
+  # 2026-11-16, every modality; provider.get_models_details() lists them).
+  # Examples: "openai/gpt-5.4-mini", "google/gemini-3-flash-preview",
+  #           "openai/gpt-oss-120b", "anthropic/claude-sonnet-4.6"
+  default_model = "openai/gpt-5.4-mini"
 
-  # Base URL (normally no need to change).
+  # Base URL (normally no need to change). Business/Enterprise regional
+  # endpoints: https://eu.openrouter.ai/api/v1, https://us.openrouter.ai/api/v1
   # base_url = "https://openrouter.ai/api/v1"
 
   timeout = 240
 
   # --- App identification for OpenRouter rankings & dashboard ---
-  # Your app's URL (sent as HTTP-Referer header).
-  # app_url = "https://myapp.example.com"
-  # Your app's display name (sent as X-Title header).
-  # app_title = "My App"
+  # app_url = "https://myapp.example.com"     # HTTP-Referer
+  # app_title = "My App"                      # X-OpenRouter-Title (+ X-Title)
+  # app_categories = "cli-agent"              # X-OpenRouter-Categories
+
+  # --- Routing preferences merged into every request's `provider` ---
+  # (a per-call provider={...} wins key by key)
+  # provider_preferences = { zdr = true, data_collection = "deny" }
+
+  # --- Extensions (kwargs to chat_completion) ---
+  # provider, models (fallbacks), reasoning, plugins, transforms, session_id,
+  # cache_control, prompt_cache_options, top_k, min_p, top_a,
+  # repetition_penalty, verbosity, trace, image_config, modalities, ...
+  # native_search=True adds the "web" plugin. effort= is clamped to the
+  # model's supported efforts once the listing is loaded.
+  #
+  # Tool loops: put provider.assistant_replay_metadata(response) into the next
+  # assistant Message's metadata. It carries reasoning_details (Gemini 3 and
+  # Claude send encrypted reasoning only; OpenRouter requires it back
+  # unmodified and in order); for a stream use the chunk with the finish
+  # reason. Usage includes OpenRouter's cost / cost_details / is_byok.
+  #
+  # responses_api = "always" routes through OpenRouter's stateless
+  # /responses instead of /chat/completions (default "never").
 
   # --- Backend mode ---
-  # "openai"  (default): Uses the `openai` Python SDK with base_url override.
-  #           No extra dependencies beyond `openai`.
-  # "sdk"   : Uses the native `openrouter` Python SDK (pip install openrouter).
-  #           Falls back to "openai" mode if the package is not installed.
+  # "openai"  (default): the `openai` SDK with base_url override
+  #           (transport = "httpx" for direct HTTP).
+  # "sdk"   : the native `openrouter` SDK (pip install openrouter), sending
+  #           the same request body. Falls back to "openai" if not installed.
   backend = "openai"
 
   # --- Poe Provider ---

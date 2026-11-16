@@ -31,13 +31,29 @@ class OpenRouterAdapter(BaseAdapter):
         if api_key:
             headers["Authorization"] = f"Bearer {api_key}"
 
-        async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
-            resp = await client.get(url, headers=headers)
-            resp.raise_for_status()
-            data = resp.json()
+        # The listing is paginated (limit <= 1000, offset, total_count) and shows
+        # only text-output models unless asked for every modality (468 of 724
+        # models on 2026-11-16).
+        listed: list[dict[str, Any]] = []
+        async with httpx.AsyncClient(timeout=60, follow_redirects=True) as client:
+            offset = 0
+            while True:
+                resp = await client.get(
+                    url,
+                    headers=headers,
+                    params={"output_modalities": "all", "limit": 1000, "offset": offset},
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                page = data.get("data", []) or []
+                listed.extend(page)
+                offset += len(page)
+                total = data.get("total_count")
+                if not page or total is None or offset >= int(total):
+                    break
 
         result: list[NormalizedModel] = []
-        for m in data.get("data", []):
+        for m in listed:
             normalized = self._parse_model(m)
             if normalized:
                 result.append(normalized)
@@ -60,17 +76,36 @@ class OpenRouterAdapter(BaseAdapter):
         input_price = _parse_price(pricing.get("prompt", "0"))
         output_price = _parse_price(pricing.get("completion", "0"))
 
+        params = m.get("supported_parameters", []) or []
+        architecture = m.get("architecture", {}) or {}
+        inputs = architecture.get("input_modalities", []) or []
+        outputs = architecture.get("output_modalities", []) or []
+        model_type = "chat"
+        if "text" not in outputs:
+            if "image" in outputs:
+                model_type = "image-generation"
+            elif "audio" in outputs:
+                model_type = "tts"
+            elif "video" in outputs:
+                model_type = "video-generation"
+            elif outputs == ["embeddings"] or "embeddings" in outputs:
+                model_type = "embedding"
         normalized = NormalizedModel(
             model_id=model_id,
             provider="openrouter",
             display_name=m.get("name"),
             description=m.get("description"),
-            model_type="chat",
+            model_type=model_type,
             context_length=ctx,
             max_output_tokens=m.get("top_provider", {}).get("max_completion_tokens"),
             supports_streaming=True,
-            supports_tools="tool_use" in (m.get("supported_parameters", []) or []),
-            supports_json_mode="response_format" in (m.get("supported_parameters", []) or []),
+            # The parameter is "tools"; "tool_use" (checked before) appears on
+            # none of the 724 live models, so every card said "no tools".
+            supports_tools="tools" in params,
+            supports_json_mode="response_format" in params,
+            supports_structured_output="structured_outputs" in params,
+            supports_reasoning=bool(m.get("reasoning")) or "reasoning" in params,
+            supports_vision="image" in inputs,
             created_timestamp=m.get("created"),
             raw_api_data=m,
         )

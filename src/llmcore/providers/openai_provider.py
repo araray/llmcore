@@ -295,6 +295,12 @@ class _VendorProfile:
     search_route: str | None = None  # "chat" | "responses"
     #: When set, native search exists only for models matching this pattern.
     search_models: str | None = None
+    #: Body fields that turn search on (merged; ``plugins`` lists extend).
+    search_body: Mapping[str, Any] = field(default_factory=dict)
+    #: The assistant-message field that carries replayed reasoning text.
+    replay_field: str = "reasoning_content"
+    #: The vendor reports some failures inside an HTTP 200 (OpenRouter).
+    in_band_errors: bool = False
 
 
 #: Vendor profiles, from each vendor's API docs (2026-11-16). No keys were
@@ -326,6 +332,23 @@ _VENDOR_PROFILES: dict[str, _VendorProfile] = {
         search_route="chat",
         search_models=r"gpt-oss",
     ),
+    # OpenRouter: routing, plugins and caching extensions; reasoning_details
+    # must be replayed in order (Gemini 3 / Claude send encrypted items only);
+    # failures can arrive inside a 200 (stream chunk or body with "error").
+    # Search is the "web" plugin. Verified live 2026-11-16.
+    "openrouter": _VendorProfile(
+        hosts=("openrouter.ai",),
+        extra_params=frozenset(
+            {"provider", "models", "reasoning", "plugins", "transforms", "session_id",
+             "cache_control", "top_k", "min_p", "top_a", "repetition_penalty",
+             "prompt_cache_options", "trace", "verbosity", "stop_server_tools_when",
+             "debug", "image_config", "modalities", "deferred_tools", "usage"}
+        ),
+        search_body={"plugins": [{"id": "web"}]},
+        search_route="chat",
+        replay_field="reasoning",
+        in_band_errors=True,
+    ),
     # Together: hybrid-reasoning and sampling extensions. Its media endpoints
     # differ from OpenAI's, so none are declared until verified.
     "together": _VendorProfile(
@@ -346,6 +369,26 @@ def _vendor_profile(name: str, base_url: str) -> _VendorProfile | None:
         if any(host in base_url for host in profile.hosts):
             return profile
     return None
+
+
+def _merge_reasoning_detail(details: list[dict[str, Any]], item: Any) -> None:
+    """Fold one streamed ``reasoning_details`` item into the turn's list.
+
+    Items with the same ``index`` and ``type`` are pieces of one item: their
+    text-like fields concatenate and the rest (id, format, signature) update.
+    """
+    if not isinstance(item, Mapping):
+        return
+    index = item.get("index")
+    for existing in details:
+        if index is not None and existing.get("index") == index and existing.get("type") == item.get("type"):
+            for key, value in item.items():
+                if key in ("text", "summary", "data") and isinstance(value, str):
+                    existing[key] = (existing.get(key) or "") + value
+                elif value is not None:
+                    existing[key] = value
+            return
+    details.append(dict(item))
 
 
 def nearest_effort(requested: str, supported: Sequence[str]) -> str | None:
@@ -630,7 +673,8 @@ class OpenAIProvider(BaseProvider):
             )
         if status in (400, 404) and any(
             phrase in lowered
-            for phrase in ("model not exist", "does not exist", "model_not_found", "invalid model")
+            for phrase in ("model not exist", "does not exist", "model_not_found", "invalid model",
+                           "not a valid model id")
         ):
             raise ProviderError(
                 self.get_name(),
@@ -734,6 +778,9 @@ class OpenAIProvider(BaseProvider):
         if not tiktoken:
             self._encoding = None
             return
+        # Gateways prefix the vendor ("openai/gpt-5.4-mini"); tiktoken knows
+        # the bare name.
+        model_name = model_name.rsplit("/", 1)[-1]
         try:
             self._encoding = tiktoken.encoding_for_model(model_name)
         except KeyError:
@@ -778,7 +825,7 @@ class OpenAIProvider(BaseProvider):
         if self._is_openai_itself():
             return True
         vendor = self._profile()
-        if vendor is None or not vendor.search_tools:
+        if vendor is None or not (vendor.search_tools or vendor.search_body):
             return False
         if vendor.search_models and model and not re.search(vendor.search_models, model):
             return False
@@ -795,9 +842,18 @@ class OpenAIProvider(BaseProvider):
         if vendor is not None and vendor.search_route == "chat":
             if vendor.search_models and model and not re.search(vendor.search_models, model):
                 return  # e.g. Groq's browser_search exists only on gpt-oss
-            tools = list(api_kwargs.get("tools") or [])
-            tools.extend(dict(t) for t in vendor.search_tools)
-            api_kwargs["tools"] = tools
+            if vendor.search_tools:
+                tools = list(api_kwargs.get("tools") or [])
+                tools.extend(dict(t) for t in vendor.search_tools)
+                api_kwargs["tools"] = tools
+            for key, value in vendor.search_body.items():
+                if key == "plugins":
+                    present = list(api_kwargs.get("plugins") or [])
+                    ids = {p.get("id") for p in present if isinstance(p, Mapping)}
+                    present.extend(dict(p) for p in value if p.get("id") not in ids)
+                    api_kwargs["plugins"] = present
+                else:
+                    api_kwargs.setdefault(key, value)
         elif self._is_openai_itself():
             # Reached for *-search-api models (others go to /responses) and
             # when responses_api = "never".
@@ -1013,6 +1069,19 @@ class OpenAIProvider(BaseProvider):
         if role_str == "assistant" and "audio" in metadata:
             msg_dict["audio"] = metadata["audio"]
 
+        # OpenAI-compatible vendors carry reasoning across turns in the
+        # assistant message (DeepInfra/Groq: reasoning_content, vLLM and
+        # OpenRouter: reasoning, OpenRouter: reasoning_details, which must go
+        # back unmodified and in order). OpenAI itself uses reasoning items on
+        # /responses instead and rejects unknown message fields.
+        if role_str == "assistant" and not self._is_openai_itself():
+            if metadata.get("reasoning_details"):
+                msg_dict["reasoning_details"] = list(metadata["reasoning_details"])
+            text = metadata.get("reasoning_content") or metadata.get("reasoning")
+            if text:
+                profile = self._profile()
+                msg_dict[profile.replay_field if profile else "reasoning_content"] = text
+
         name = metadata.get("name")
         if name:
             msg_dict["name"] = name
@@ -1085,6 +1154,11 @@ class OpenAIProvider(BaseProvider):
                     result = await self._chat_completions_once(
                         context, model_name, stream, tools, tool_choice, native_search, **call_kwargs
                     )
+                if not use_responses and not self._is_openai_itself():
+                    if stream:
+                        result = self._compat_stream(result, model_name)  # type: ignore[arg-type]
+                    else:
+                        self._raise_in_band(result, model_name)  # type: ignore[arg-type]
                 if stream and self._transport == "httpx":
                     # The direct stream is lazy: pull its first chunk now so a
                     # rejected request fails here, where it can be adapted.
@@ -1248,6 +1322,68 @@ class OpenAIProvider(BaseProvider):
                 yield chunk
 
         return replay()
+
+    def _in_band_error(self, error: Any, model_name: str) -> ProviderError:
+        body = error if isinstance(error, Mapping) else {"message": str(error)}
+        metadata = body.get("metadata") if isinstance(body.get("metadata"), Mapping) else {}
+        code = body.get("code")
+        status = code if isinstance(code, int) else None
+        detail = metadata.get("error_type") or metadata.get("provider_name") or ""
+        return ProviderError(
+            self.get_name(),
+            f"Upstream error{f' ({detail})' if detail else ''}: {body.get('message') or body}",
+            model_name=model_name,
+            status_code=status,
+            retryable=None if status is None else status in (408, 429, 500, 502, 503),
+        )
+
+    def _raise_in_band(self, response: Mapping[str, Any], model_name: str) -> None:
+        """Raise for a failure reported inside an HTTP 200 body."""
+        profile = self._profile()
+        if profile is None or not profile.in_band_errors or not isinstance(response, Mapping):
+            return
+        if response.get("error") and not response.get("choices"):
+            raise self._in_band_error(response["error"], model_name)
+        for choice in response.get("choices") or []:
+            if choice.get("finish_reason") == "error":
+                raise self._in_band_error(choice.get("error") or response.get("error") or {}, model_name)
+
+    async def _compat_stream(
+        self, stream: AsyncGenerator[dict[str, Any], None], model_name: str
+    ) -> AsyncGenerator[dict[str, Any], None]:
+        """An OpenAI-compatible vendor's stream, made replayable and honest.
+
+        The reasoning of the turn arrives in pieces (``reasoning`` /
+        ``reasoning_content`` text, ``reasoning_details`` items); the chunk with
+        the finish reason also carries the whole of it as
+        ``replay_reasoning_content`` / ``replay_reasoning_details`` for
+        :meth:`assistant_replay_metadata`. In-band errors raise.
+        """
+        profile = self._profile()
+        check_errors = bool(profile and profile.in_band_errors)
+        text: list[str] = []
+        details: list[dict[str, Any]] = []
+        async for chunk in stream:
+            if check_errors and chunk.get("error"):
+                raise self._in_band_error(chunk["error"], model_name)
+            for choice in chunk.get("choices") or []:
+                if choice.get("index", 0) != 0:
+                    continue
+                delta = choice.get("delta") or {}
+                piece = delta.get("reasoning_content") or delta.get("reasoning")
+                if isinstance(piece, str) and piece:
+                    text.append(piece)
+                for item in delta.get("reasoning_details") or []:
+                    _merge_reasoning_detail(details, item)
+                if check_errors and choice.get("finish_reason") == "error":
+                    raise self._in_band_error(choice.get("error") or {}, model_name)
+                if choice.get("finish_reason") and (text or details):
+                    delta = choice.setdefault("delta", delta)
+                    if text:
+                        delta["replay_reasoning_content"] = "".join(text)
+                    if details:
+                        delta["replay_reasoning_details"] = [dict(d) for d in details]
+            yield chunk
 
     # ------------------------------------------------------------------
     # Responses API
@@ -1583,7 +1719,8 @@ class OpenAIProvider(BaseProvider):
                 status in (400, 404)
                 and any(
                     phrase in msg.lower()
-                    for phrase in ("model not exist", "does not exist", "model_not_found", "invalid model")
+                    for phrase in ("model not exist", "does not exist", "model_not_found", "invalid model",
+                                   "not a valid model id")
                 )
             ):
                 raise ProviderError(
@@ -1732,6 +1869,10 @@ class OpenAIProvider(BaseProvider):
         elif usage.get("cached_tokens") is not None:
             # Some OpenAI-compatible servers (Together) report it top-level.
             result["cached_tokens"] = usage.get("cached_tokens")
+        # Vendor-reported cost (OpenRouter: always; others: some).
+        for key in ("cost", "cost_details", "is_byok", "estimated_cost"):
+            if usage.get(key) is not None:
+                result[key] = usage[key]
         return result
 
     def extract_reasoning_content(self, response: dict[str, Any]) -> str | None:
@@ -1771,14 +1912,37 @@ class OpenAIProvider(BaseProvider):
         return list(items) if items else None
 
     def assistant_replay_metadata(self, response: dict[str, Any]) -> dict[str, Any]:
-        """Reasoning items to send back with the next assistant turn.
+        """The reasoning to send back with the next assistant turn.
 
-        On the Responses route with ``store: false``, the model's reasoning
-        survives a tool loop only if its encrypted items are replayed. For a
-        stream, pass the last chunk.
+        Responses route (``store: false``): the encrypted reasoning items.
+        OpenAI-compatible vendors on Chat Completions: ``reasoning_details``
+        (OpenRouter; replayed unmodified, in order) and/or the reasoning text
+        (``reasoning_content`` / ``reasoning``). For a stream, pass the chunk
+        with the finish reason.
         """
         items = self.extract_reasoning_items(response)
-        return {"reasoning_items": items} if items else {}
+        if items:
+            return {"reasoning_items": items}
+        if self._is_openai_itself():
+            return {}
+        try:
+            choice = (response.get("choices") or [{}])[0]
+        except (AttributeError, IndexError, TypeError):
+            return {}
+        message = choice.get("message") or {}
+        delta = choice.get("delta") or {}
+        out: dict[str, Any] = {}
+        details = message.get("reasoning_details") or delta.get("replay_reasoning_details")
+        if details:
+            out["reasoning_details"] = list(details)
+        text = (
+            message.get("reasoning_content")
+            or message.get("reasoning")
+            or delta.get("replay_reasoning_content")
+        )
+        if isinstance(text, str) and text:
+            out["reasoning_content"] = text
+        return out
 
     async def count_tokens(self, text: str, model: str | None = None) -> int:
         if not text:

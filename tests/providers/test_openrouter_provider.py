@@ -15,31 +15,23 @@ Validates:
 All tests use mocking — no live API calls.
 """
 
-import json
-import sys
-from types import SimpleNamespace
-from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-# Mock openai before import
-mock_openai = MagicMock()
-mock_tiktoken = MagicMock()
-mock_tiktoken.encoding_for_model.return_value = MagicMock()
+# Plain imports. These used to happen inside patch.dict(sys.modules), which
+# drops every module imported in the block when it exits: the provider modules
+# were then re-imported as fresh copies, so patches here targeted a different
+# OpenAIProvider than the one OpenRouterProvider inherits from, and the tests
+# passed or failed depending on what another file had imported first.
+pytest.importorskip("openai")
+from llmcore.providers.openrouter_provider import (  # noqa: E402
+    DEFAULT_OPENROUTER_MODEL,
+    OPENROUTER_BASE_URL,
+    OpenRouterProvider,
+)
 
-with patch.dict(sys.modules, {
-    "openai": mock_openai,
-    "tiktoken": mock_tiktoken,
-}):
-    mock_openai.AsyncOpenAI = MagicMock
-    from llmcore.providers.openrouter_provider import (
-        OpenRouterProvider,
-        OPENROUTER_BASE_URL,
-        DEFAULT_OPENROUTER_MODEL,
-    )
-
-from llmcore.models import Message, ModelDetails
+from llmcore.models import Message
 from llmcore.models import Role as LLMCoreRole
 
 
@@ -90,7 +82,7 @@ class TestProviderIdentity:
         assert provider.get_name() == "my-router"
 
     def test_default_model(self):
-        assert DEFAULT_OPENROUTER_MODEL == "openai/gpt-4o-mini"
+        assert DEFAULT_OPENROUTER_MODEL == "openai/gpt-5.4-mini"
 
     def test_base_url(self):
         assert OPENROUTER_BASE_URL == "https://openrouter.ai/api/v1"
@@ -199,11 +191,10 @@ class TestOpenRouterKwargs:
                 temperature=0.5,
             )
 
-            # Verify parent was called with extra_body containing provider prefs
+            # Passed through; the OpenRouter vendor profile moves it into the
+            # body (extra_body on the SDK transport).
             call_kwargs = mock_parent.call_args
-            assert "extra_body" in call_kwargs.kwargs
-            extra = call_kwargs.kwargs["extra_body"]
-            assert extra["provider"]["order"] == ["Anthropic"]
+            assert call_kwargs.kwargs["provider"]["order"] == ["Anthropic"]
 
     @pytest.mark.asyncio
     async def test_multi_model_routing(self, provider):
@@ -221,8 +212,7 @@ class TestOpenRouterKwargs:
             )
 
             call_kwargs = mock_parent.call_args
-            assert "extra_body" in call_kwargs.kwargs
-            assert "models" in call_kwargs.kwargs["extra_body"]
+            assert call_kwargs.kwargs["models"] == ["openai/gpt-4o", "anthropic/claude-sonnet-4.6"]
 
 
 # ---------------------------------------------------------------------------

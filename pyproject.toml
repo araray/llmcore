@@ -82,9 +82,9 @@ kimi = ["openai>=3.38,<4", "httpx>=0.27.0", "tiktoken>=0.9.0"]
 # Poe: OpenAI-compatible gateway plus httpx; `fastapi-poe` enables the optional
 # native SSE backend (backend = "native").
 poe = ["openai>=3.38,<4", "httpx>=0.27.0"]
-# OpenRouter: OpenAI-compatible gateway plus httpx; the `openrouter` SDK
-# enables the optional native backend (backend = "sdk").
-openrouter = ["openai>=3.38,<4", "httpx>=0.27.0"]
+# OpenRouter: OpenAI-compatible gateway plus httpx; the official `openrouter`
+# SDK (1.x) backs the optional native backend (backend = "sdk").
+openrouter = ["openai>=3.38,<4", "httpx>=0.27.0", "openrouter>=1.3,<2"]
 # vLLM (self-hosted server): OpenAI-compatible surface plus httpx for
 # /v1/models discovery of max_model_len. The `vllm` server itself is not a
 # client dependency.

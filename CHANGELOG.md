@@ -7,6 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Changed — OpenRouter and OpenAI-compatible vendors: reasoning replay, in-band errors, full catalogue, working SDK backend
+
+Audited against the live API and openrouter SDK 1.3.179 on 2026-11-16. All
+of it was verified live on the openai, httpx and openrouter-SDK backends.
+
+- **Reasoning replay for every OpenAI-compatible vendor** (OpenAIProvider):
+  `assistant_replay_metadata()` returns `reasoning_details` and the reasoning
+  text, and the next assistant turn sends them back. The text goes under the
+  vendor's field: `reasoning` for OpenRouter and vLLM, `reasoning_content`
+  elsewhere. Streams accumulate both onto the finish chunk. Gemini 3 through
+  OpenRouter returns its reasoning only as an encrypted `reasoning_details`
+  item, which OpenRouter requires to be sent back unmodified and in order.
+  OpenAI itself is unaffected.
+- **In-band errors**: an OpenRouter failure inside an HTTP 200 (an `error`
+  body, or a stream chunk with `finish_reason: "error"`) now raises
+  `ProviderError`. It used to come back as empty content.
+- **OpenRouter vendor profile**: provider routing, `models` fallbacks,
+  plugins, `session_id`, caching and sampling extensions are accepted
+  parameters. `native_search=True` adds the `web` plugin, and
+  `provider_preferences` in config are merged into every request (e.g.
+  `zdr`, `data_collection`). Usage includes `cost`, `cost_details` and
+  `is_byok`.
+- **Catalogue**: `/models` is paginated and lists only text-output models
+  unless asked; discovery now loads all 724 models (not 468), raises on
+  failure, and clamps `effort=` to each model's `supported_efforts`. In
+  cardctl, `supports_tools` checked `"tool_use"`, which no live model reports;
+  it now checks `"tools"` (405 models). It also maps reasoning, vision and
+  non-chat model types.
+- **SDK backend** (`backend = "sdk"`): it used to drop tool calls, images and
+  names from history, yield text-only stream chunks, ignore `base_url` and
+  `timeout`, and fall back by raising `ValueError` on routing kwargs. It now
+  sends the same body as the default path and returns the same shapes.
+  `openrouter>=1.3,<2` is part of the `openrouter` extra.
+- Default `openai/gpt-5.4-mini`. `X-OpenRouter-Title` and
+  `X-OpenRouter-Categories` headers. "not a valid model ID" is recognised as
+  model-not-found. tiktoken is looked up without the `vendor/` prefix.
+
 ### Changed — Kimi: K3 family, reasoning replay, learned fixed values, dynamic tools, Responses
 
 Audited against the live Moonshot API on 2026-11-16 (funded account; every
