@@ -45,12 +45,22 @@ with patch.dict(
     # We need a fresh import
     from llmcore.providers import gemini_provider as gp
 
-    gp.google_genai_available = True
-    gp.genai = mock_genai
-    gp.types = mock_types
-    gp.APIError = Exception
-    gp.PermissionDenied = PermissionError
-    gp.InvalidArgument = ValueError
+    pass
+
+
+@pytest.fixture(autouse=True)
+def _mocked_sdk_module(monkeypatch):
+    """Swap the SDK for mocks for each test, and restore it afterwards.
+
+    These globals used to be assigned at import time and were never restored,
+    so every Gemini test collected after this file ran against a MagicMock SDK.
+    """
+    monkeypatch.setattr(gp, "google_genai_available", True)
+    monkeypatch.setattr(gp, "genai", mock_genai)
+    monkeypatch.setattr(gp, "types", mock_types, raising=False)
+    monkeypatch.setattr(gp, "APIError", Exception, raising=False)
+    monkeypatch.setattr(gp, "PermissionDenied", PermissionError, raising=False)
+    monkeypatch.setattr(gp, "InvalidArgument", ValueError, raising=False)
 
 from llmcore.models import Message  # noqa: E402
 from llmcore.models import Role as LLMCoreRole  # noqa: E402
