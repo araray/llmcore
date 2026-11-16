@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Fixed — Replicate: SDK backend, Cancel-After, enum-aware inputs, Hailuo 2.3
+
+Audited against the HTTP API reference and replicate 1.0.7 (the latest) on
+2026-11-16. Every default model was checked live. Kokoro on the SDK backend,
+FLUX on the direct backend with `Cancel-After`, and the 422 and 429 mappings
+were verified live.
+
+- **SDK backend**:
+  - It always ran by `model=`, so community models (whisper, kokoro,
+    musicgen) got a 404. It now runs by the resolved version, like the
+    direct path.
+  - It forwards `webhook_events_filter`.
+  - `ReplicateError` maps to `ProviderError` with its status: a 402 is
+    explained and a 422 is non-retryable.
+- **`cancel_after`** (config or per call) sends the documented
+  `Cancel-After` header, so a stuck prediction stops billing. It only works
+  on the direct backend; the SDK takes no headers.
+- **Enum-aware inputs**: Cog enums behind `allOf`/`$ref` are resolved, and
+  portable numeric arguments snap to the nearest allowed value. Hailuo's
+  `duration` is `[6, 10]`, so 8.5 becomes 10.
+- **Default video model**: `minimax/hailuo-2.3` (official, text- or
+  image-to-video) replaces `minimax/video-01`. The card, cardctl, config and
+  docs are updated to match.
+
 ### Fixed — fal: retired default endpoints, image size, SDK backend parity
 
 Audited against fal's Platform API, the per-endpoint OpenAPI schemas and

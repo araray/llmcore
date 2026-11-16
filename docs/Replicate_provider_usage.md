@@ -12,7 +12,7 @@ per model. It works for models llmcore has never heard of.
 | `image_generate` | `black-forest-labs/flux-schnell` | `llm.media.images.generate(...)` |
 | `image_edit` | `black-forest-labs/flux-kontext-pro` | `llm.media.images.edit(...)` |
 | `image_upscale` | `nightmareai/real-esrgan` | `llm.media.images.upscale(...)` |
-| `video_generate` | `minimax/video-01` | `llm.media.video.generate(...)` |
+| `video_generate` | `minimax/hailuo-2.3` | `llm.media.video.generate(...)` |
 | `asr` | `openai/whisper` | `llm.media.audio.transcribe(...)` |
 | `tts` | `jaaari/kokoro-82m` | `llm.media.audio.speak(...)` |
 | `music` | `meta/musicgen` | `llm.media.audio.music(...)` |
@@ -31,13 +31,26 @@ pip install "llmcore[replicate]"
 timeout = 300
 backend = "auto"       # "auto" | "httpx" | "sdk"
 use_schema = true      # see §2 — this is the whole design
+cancel_after = "10m"   # optional: Cancel-After header, a stuck prediction stops billing
 
 [providers.replicate.models]
 image_generate = "black-forest-labs/flux-dev"
-video_generate = "minimax/video-01"
+video_generate = "minimax/hailuo-2.3"
 ```
 
-Model references are `owner/name` or `owner/name:version`.
+Model references are `owner/name` or `owner/name:version`. Community models
+(whisper, kokoro, musicgen) run by version on both backends; the version is
+resolved from the same schema lookup.
+
+`cancel_after` takes `"30s"`, `"5m"`, `"1h30m"` or plain seconds, with a
+minimum of 5 s. Pass it per call as `cancel_after=...`. It only works on the
+direct (`httpx`) backend: the SDK accepts no per-request headers, so on the
+`sdk` backend the setting is ignored and a warning is logged.
+
+When a model publishes an enum for a portable numeric argument, the argument
+is snapped to the nearest allowed value. For example, Hailuo 2.3's `duration`
+takes `6` or `10`, so `duration_seconds=8.5` sends `10`. Explicit keyword
+arguments are sent exactly as given.
 
 ---
 

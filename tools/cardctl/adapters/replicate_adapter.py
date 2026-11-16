@@ -63,10 +63,14 @@ class ReplicateAdapter(CuratedAdapter):
             tags=("image", "upscale"),
         ),
         CuratedModel(
-            model_id="minimax/video-01",
+            model_id="minimax/hailuo-2.3",
             model_type="video-generation",
             capability="video_generate",
-            display_name="MiniMax video-01 (Replicate)",
+            display_name="MiniMax Hailuo 2.3 (Replicate)",
+            description=(
+                "Text- or image-to-video (first_frame_image); duration 6 or 10 s, "
+                "768p or 1080p. Supersedes video-01 as llmcore's default."
+            ),
             caps=("video_generation",),
             tags=("video",),
             owned_by="minimax",

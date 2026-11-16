@@ -82,7 +82,9 @@ _DEFAULT_MODELS: dict[str, str] = {
     "image_generate": "black-forest-labs/flux-schnell",
     "image_edit": "black-forest-labs/flux-kontext-pro",
     "image_upscale": "nightmareai/real-esrgan",
-    "video_generate": "minimax/video-01",
+    # Hailuo 2.3 (official) supersedes video-01; duration is an int enum [6, 10]
+    # that _snap_to_enum fits duration_seconds onto.
+    "video_generate": "minimax/hailuo-2.3",
     "asr": "openai/whisper",
     "tts": "jaaari/kokoro-82m",
     "music": "meta/musicgen",
@@ -136,6 +138,9 @@ class ReplicateProvider(BaseProvider):
       ``owner/name:version``).
     - ``use_schema`` — resolve input field names from each model's published
       schema (default ``True``). Disable only to force literal field names.
+    - ``cancel_after`` — maximum runtime per prediction (``"5m"``, ``"1h30m"``,
+      or seconds; minimum 5 s), sent as the ``Cancel-After`` header so a stuck
+      prediction stops billing. Per call: ``cancel_after=...``.
     """
 
     _MEDIA_CAPABILITIES: frozenset[str] = frozenset(_DEFAULT_MODELS)
@@ -177,6 +182,9 @@ class ReplicateProvider(BaseProvider):
         self._base_url = str(config.get("base_url", _BASE_URL)).rstrip("/")
         self._timeout = float(config.get("timeout", 300))
         self._use_schema = bool(config.get("use_schema", True))
+        self._cancel_after: str | None = (
+            str(config["cancel_after"]) if config.get("cancel_after") else None
+        )
         self._models: dict[str, str] = {
             **_DEFAULT_MODELS,
             **{str(k): str(v) for k, v in (config.get("models") or {}).items()},
@@ -233,6 +241,25 @@ class ReplicateProvider(BaseProvider):
                 timeout=self._timeout,
             )
         return self._http
+
+    async def _sdk_call(self, context: str, call: Any) -> Any:
+        """Await a replicate SDK call, mapping its errors like the direct path.
+
+        ``ReplicateError`` carries the HTTP ``status``; it used to escape raw,
+        so a 402 or 422 on the SDK backend was neither explained nor marked
+        non-retryable.
+        """
+        try:
+            return await call
+        except ProviderError:
+            raise
+        except Exception as e:
+            status = getattr(e, "status", None) or getattr(e, "status_code", None)
+            if isinstance(status, int):
+                self._raise_status(status, str(e), context)
+            raise ProviderError(
+                self.get_name(), f"Replicate SDK error: {e}", model_name=context, retryable=True
+            ) from e
 
     def _raise_status(self, status: int, body: str, context: str) -> None:
         """Map a Replicate HTTP error onto a :class:`ProviderError`."""
@@ -427,6 +454,13 @@ class ReplicateProvider(BaseProvider):
                 "schemas", {}
             )
             properties = dict((schemas.get("Input") or {}).get("properties") or {})
+            # Cog publishes enums as separate components behind allOf/$ref
+            # (Hailuo's duration: [6, 10]); inline them so the mapping sees them.
+            for name, prop in list(properties.items()):
+                for ref in (prop.get("allOf") or []):
+                    target = str(ref.get("$ref") or "").rsplit("/", 1)[-1]
+                    if isinstance(schemas.get(target), dict) and "enum" in schemas[target]:
+                        properties[name] = {**prop, "enum": schemas[target]["enum"]}
         except Exception as e:  # schema is an optimization, never a gate
             logger.warning("Replicate schema lookup failed for %s: %s", reference, e)
             properties = {}
@@ -458,7 +492,7 @@ class ReplicateProvider(BaseProvider):
                 # back to the canonical spelling and let the API say no; a 422
                 # naming the field is far more useful than a silent drop.
                 field = aliases[0]
-            mapped[field] = value
+            mapped[field] = _snap_to_enum(value, (schema.get(field) or {}).get("enum"))
 
         mapped.update({k: v for k, v in extra.items() if v is not None})
         return mapped
@@ -468,13 +502,19 @@ class ReplicateProvider(BaseProvider):
     # ------------------------------------------------------------------
 
     async def _submit_prediction(
-        self, model: str, inputs: dict[str, Any], webhook_url: str | None
+        self,
+        model: str,
+        inputs: dict[str, Any],
+        webhook_url: str | None,
+        *,
+        cancel_after: str | int | None = None,
     ) -> dict[str, Any]:
         """Create a prediction for *model*."""
         body: dict[str, Any] = {"input": inputs}
         if webhook_url:
             body["webhook"] = webhook_url
             body["webhook_events_filter"] = ["completed"]
+        headers = {"Cancel-After": str(cancel_after)} if cancel_after else None
 
         owner_name = model
         path = f"/v1/models/{owner_name}/predictions"
@@ -501,14 +541,25 @@ class ReplicateProvider(BaseProvider):
                 path = "/v1/predictions"
 
         if self._backend == "sdk":
-            prediction = await self._sdk.predictions.async_create(
-                model=owner_name, input=inputs, webhook=webhook_url or None
+            # Run by version when one was resolved: community models 404 on
+            # the model route, which is all this path used to call. The SDK
+            # takes no per-request headers, so Cancel-After cannot ride along.
+            if cancel_after:
+                logger.warning(
+                    "Replicate cancel_after is not supported on the SDK backend; ignored."
+                )
+            target = {"version": body["version"]} if "version" in body else {"model": owner_name}
+            params: dict[str, Any] = {}
+            if webhook_url:
+                params = {"webhook": webhook_url, "webhook_events_filter": ["completed"]}
+            prediction = await self._sdk_call(
+                model, self._sdk.predictions.async_create(**target, input=inputs, **params)
             )
             dump = getattr(prediction, "dict", None) or getattr(prediction, "model_dump", None)
             return dict(dump()) if callable(dump) else dict(prediction)
 
         try:
-            resp = await self._get_http().post(path, json=body)
+            resp = await self._get_http().post(path, json=body, headers=headers)
         except httpx.HTTPError as e:
             raise ProviderError(
                 self.get_name(), f"Replicate transport error: {e}", model_name=model,
@@ -522,7 +573,7 @@ class ReplicateProvider(BaseProvider):
             version = await self._latest_version(owner_name)
             if version:
                 body["version"] = version
-                resp = await self._get_http().post("/v1/predictions", json=body)
+                resp = await self._get_http().post("/v1/predictions", json=body, headers=headers)
 
         if resp.status_code >= 400:
             self._raise_status(resp.status_code, resp.text, model)
@@ -547,8 +598,11 @@ class ReplicateProvider(BaseProvider):
 
         reference = self._model_for(capability, model)
         webhook_url = extra.pop("webhook_url", None) or webhook_url
+        cancel_after = extra.pop("cancel_after", None) or self._cancel_after
         inputs = await self._map_inputs(reference, canonical, extra)
-        prediction = await self._submit_prediction(reference, inputs, webhook_url)
+        prediction = await self._submit_prediction(
+            reference, inputs, webhook_url, cancel_after=cancel_after
+        )
 
         urls = prediction.get("urls") or {}
         job = MediaJob(
@@ -591,7 +645,9 @@ class ReplicateProvider(BaseProvider):
         # Prefer the URL Replicate handed back over one rebuilt here.
         url = job.poll_url or f"/v1/predictions/{prediction_id}"
         if self._backend == "sdk":
-            prediction = await self._sdk.predictions.async_get(prediction_id)
+            prediction = await self._sdk_call(
+                prediction_id, self._sdk.predictions.async_get(prediction_id)
+            )
             dump = getattr(prediction, "dict", None) or getattr(prediction, "model_dump", None)
             prediction = dict(dump()) if callable(dump) else dict(prediction)
         else:
@@ -613,7 +669,7 @@ class ReplicateProvider(BaseProvider):
             return job
 
         if self._backend == "sdk":
-            await self._sdk.predictions.async_cancel(prediction_id)
+            await self._sdk_call(prediction_id, self._sdk.predictions.async_cancel(prediction_id))
             job.status = MediaJobStatus.CANCELED
             job.touch()
             return job
@@ -942,3 +998,18 @@ class ReplicateProvider(BaseProvider):
             finally:
                 self._http = None
         self._sdk = None
+
+
+def _snap_to_enum(value: Any, allowed: Any) -> Any:
+    """Fit a portable numeric argument onto a model's enum (nearest value).
+
+    Only canonical arguments pass through here; explicit keyword arguments
+    are sent as given. Non-numeric values and values already allowed are
+    returned unchanged.
+    """
+    if not isinstance(allowed, list) or not allowed or value in allowed:
+        return value
+    numeric = [a for a in allowed if isinstance(a, (int, float)) and not isinstance(a, bool)]
+    if not numeric or isinstance(value, bool) or not isinstance(value, (int, float)):
+        return value
+    return min(numeric, key=lambda a: (abs(a - value), -a))

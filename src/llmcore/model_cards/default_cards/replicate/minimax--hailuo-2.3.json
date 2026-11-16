@@ -1,6 +1,6 @@
 {
-  "model_id": "minimax/video-01",
-  "display_name": "MiniMax video-01 (Replicate)",
+  "model_id": "minimax/hailuo-2.3",
+  "display_name": "MiniMax Hailuo 2.3 (Replicate)",
   "provider": "replicate",
   "model_type": "video-generation",
   "architecture": null,
@@ -34,7 +34,7 @@
   "license": null,
   "open_weights": false,
   "aliases": [],
-  "description": "Generate 6s videos with prompts or images. (Also known as Hailuo). Use a subject reference to make a video with a character and the S2V-01 model.",
+  "description": "Text- or image-to-video (first_frame_image); duration 6 or 10 s, 768p or 1080p. Supersedes video-01 as llmcore's default.",
   "tags": [
     "video",
     "curated"
