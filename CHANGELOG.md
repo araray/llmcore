@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Fixed — Higgsfield: live parameter enums, first_frame, SDK errors, request deletion
+
+Audited against openapi.json 2.0.0, the live API and higgsfield-client 0.2.0
+(the latest) on 2026-11-16. A Soul image with `size="1024x768"` completed
+live on both backends.
+
+- **Soul image `size`** was sent as `resolution`, a 422. The live API takes
+  `720p`/`1080p` and seven aspect ratios, while the published openapi.json
+  still lists 2K/4K and ten ratios. A `"WxH"` size now picks the resolution
+  and the nearest accepted ratio.
+- **Video**:
+  - The media protocol's `first_frame` was ignored, which put a `MediaRef`
+    into the JSON body. It now selects the image-to-video endpoint.
+  - `duration_seconds` snaps to the integer enums the API enforces (Hailuo
+    6/10, Kling 5/10).
+  - Portable arguments a model does not declare are dropped with a warning.
+- **SDK backend**: `HiggsfieldClientError` (status only on `__cause__`) used
+  to escape raw. It now maps to `ProviderError` with the HTTP status (live:
+  422, non-retryable).
+- **`delete_request_data(request_id)`** wraps `DELETE /requests/{id}`
+  (stored inputs and outputs). An unknown id returns `False`, verified live.
+
 ### Fixed — Replicate: SDK backend, Cancel-After, enum-aware inputs, Hailuo 2.3
 
 Audited against the HTTP API reference and replicate 1.0.7 (the latest) on

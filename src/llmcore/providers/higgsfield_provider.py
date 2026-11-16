@@ -101,6 +101,22 @@ _IMAGE_TO_VIDEO_MODELS: dict[str, str] = {
     ),
 }
 
+#: Body fields each video family declares (docs.higgsfield.ai openapi.json
+#: 2.0.0, 2026-11-16), used to keep the protocol's portable arguments from
+#: turning into a 422. Explicit keyword arguments are never filtered.
+_VIDEO_FIELDS: dict[str, frozenset[str]] = {
+    "hailuo": frozenset({"prompt", "duration", "image_url", "prompt_optimizer"}),
+    "kling": frozenset({"prompt", "duration", "image_url", "cfg_scale", "negative_prompt"}),
+}
+
+#: Allowed ``duration`` values (an integer enum) per family.
+_VIDEO_DURATIONS: dict[str, tuple[int, ...]] = {"hailuo": (6, 10), "kling": (5, 10)}
+
+#: Soul's aspect-ratio enum as the live API enforces it (422 message,
+#: 2026-11-16). The published openapi.json still lists 5:4, 4:5 and 21:9 and a
+#: 2K/4K resolution, which the API rejects: it takes 720p / 1080p.
+_SOUL_RATIOS: tuple[str, ...] = ("9:16", "16:9", "4:3", "3:4", "1:1", "2:3", "3:2")
+
 #: Higgsfield request states → llmcore job statuses.
 _STATUS_MAP: dict[str, str] = {
     "queued": "queued",
@@ -441,8 +457,8 @@ class HiggsfieldProvider(BaseProvider):
             body["webhook_url"] = hook
 
         if self._backend == "sdk":
-            controller = await self._sdk.submit(
-                application=path, arguments=payload, webhook_url=hook
+            controller = await self._sdk_call(
+                path, self._sdk.submit(application=path, arguments=payload, webhook_url=hook)
             )
             # Normalized into the same shape the REST response has, so
             # everything downstream is transport-independent.
@@ -539,7 +555,7 @@ class HiggsfieldProvider(BaseProvider):
             return job
 
         if self._backend == "sdk":
-            await self._sdk.cancel(request_id)
+            await self._sdk_call(request_id, self._sdk.cancel(request_id))
             job.status = MediaJobStatus.CANCELED
             job.touch()
             return job
@@ -551,6 +567,22 @@ class HiggsfieldProvider(BaseProvider):
         job.status = MediaJobStatus.CANCELED
         job.touch()
         return job
+
+    async def delete_request_data(self, request_id: str) -> bool:
+        """Delete a finished request's stored data (``DELETE /requests/{id}``).
+
+        Higgsfield keeps inputs and outputs of past requests; this removes
+        them, for example once the artifacts have been downloaded. Returns
+        ``True`` when deleted and ``False`` when the request is unknown (404).
+        A request still running answers 409, raised as a ``ProviderError``.
+        Always uses the REST transport: the SDK has no delete call.
+        """
+        resp = await self._get_http().delete(f"/requests/{request_id}")
+        if resp.status_code == 404:
+            return False
+        if resp.status_code >= 400:
+            self._raise_status(resp.status_code, resp.text, request_id)
+        return True
 
     async def apply_webhook_payload(
         self, job: "MediaJob", payload: dict[str, Any]
@@ -574,6 +606,27 @@ class HiggsfieldProvider(BaseProvider):
             return await self.poll_media_job(job)
         return self._apply_result(job, payload)
 
+    async def _sdk_call(self, context: str, call: Any) -> Any:
+        """Await a higgsfield_client call, mapping its errors like the REST path.
+
+        The SDK raises a bare ``HiggsfieldClientError`` whose ``__cause__`` is
+        the httpx status error; it used to escape raw, so a 422 or a 403
+        (out of credits) was neither explained nor marked non-retryable.
+        """
+        try:
+            return await call
+        except ProviderError:
+            raise
+        except Exception as e:
+            response = getattr(e.__cause__, "response", None)
+            status = getattr(response, "status_code", None)
+            if isinstance(status, int):
+                body = getattr(response, "text", None) or str(e)
+                self._raise_status(status, body, context)
+            raise ProviderError(
+                self.get_name(), f"Higgsfield SDK error: {e}", model_name=context, retryable=True
+            ) from e
+
     async def _sdk_status(self, request_id: str) -> dict[str, Any]:
         """Return a REST-shaped status payload via the SDK.
 
@@ -583,14 +636,14 @@ class HiggsfieldProvider(BaseProvider):
         REST path produces. Keeping one payload shape is what lets
         :meth:`_apply_result` stay transport-independent.
         """
-        status = await self._sdk.status(request_id)
+        status = await self._sdk_call(request_id, self._sdk.status(request_id))
         state = _SDK_STATUS_CLASSES.get(type(status).__name__, "in_progress")
         payload: dict[str, Any] = {"request_id": request_id, "status": state}
 
         if state == "completed":
             # Only a completed request has output to fetch; asking earlier would
             # raise or return nothing useful.
-            result = await self._sdk.result(request_id)
+            result = await self._sdk_call(request_id, self._sdk.result(request_id))
             if isinstance(result, dict):
                 payload.update(result)
         error = getattr(status, "error", None)
@@ -711,15 +764,30 @@ class HiggsfieldProvider(BaseProvider):
         aspect_ratio: str | None = None,
         **kwargs: Any,
     ) -> "MediaJob":
-        """Generate images from *prompt*."""
+        """Generate images from *prompt*.
+
+        Soul takes ``resolution`` as ``720p``/``1080p`` and a fixed set of
+        aspect ratios (live API, 2026-11-16). A ``size`` of ``"WxH"`` used to
+        be sent as the resolution (a 422); it now picks the nearest aspect
+        ratio, and ``1080p`` when the longer side exceeds 1280 px. Any other
+        ``size`` string (``"720p"``) passes through as the resolution.
+        """
+        resolution = kwargs.pop("resolution", None)
+        if size and resolution is None:
+            parsed = _parse_size(size)
+            if parsed is None:
+                resolution = size
+            else:
+                width, height = parsed
+                resolution = "1080p" if max(width, height) > 1280 else "720p"
+                aspect_ratio = aspect_ratio or _nearest_ratio(width, height)
         payload: dict[str, Any] = {
             "prompt": prompt,
             "num_images": n,
             "aspect_ratio": aspect_ratio,
+            "resolution": resolution,
             **kwargs,
         }
-        if size and "resolution" not in payload:
-            payload["resolution"] = size
         return await self._submit_job("image_generate", model, payload)
 
     async def generate_video_media(
@@ -727,19 +795,38 @@ class HiggsfieldProvider(BaseProvider):
         prompt: str,
         *,
         model: str | None = None,
+        first_frame: "MediaRef | None" = None,
         image: "MediaRef | None" = None,
         duration_seconds: float | None = None,
         negative_prompt: str | None = None,
+        resolution: str | None = None,
+        aspect_ratio: str | None = None,
+        fps: float | None = None,
+        with_audio: bool | None = None,
+        seed: int | None = None,
+        last_frame: "MediaRef | None" = None,
+        reference_images: Any = None,
         **kwargs: Any,
     ) -> "MediaJob":
         """Generate video from *prompt*, optionally conditioned on an image.
 
         Higgsfield splits text-to-video and image-to-video into separate
-        endpoints, so supplying *image* switches to the matching path rather
-        than posting an image to a text-only endpoint and getting a 422.
+        endpoints, so supplying *first_frame* (or its older spelling *image*)
+        switches to the matching path rather than posting an image to a
+        text-only endpoint and getting a 422.
+
+        The protocol's portable arguments are fitted to the published
+        schemas: ``duration_seconds`` snaps onto the family's enum (Hailuo
+        6/10, Kling 5/10), and arguments a known endpoint does not declare
+        (``resolution``, ``fps``, ``seed`` ... on these models) are dropped
+        with a warning instead of turning the request into a 422. Explicit
+        model-specific keyword arguments are sent unchanged.
         """
         path = self._model_for("video_generate", model)
-        image_url = await self._ref_to_url(image)
+        # The media protocol (and so llm.media.video.generate) passes
+        # first_frame; only ``image`` was read, so a router call put a
+        # MediaRef object into the JSON body.
+        image_url = await self._ref_to_url(first_frame or image)
         if image_url:
             mapped = _IMAGE_TO_VIDEO_MODELS.get(path)
             if mapped:
@@ -756,11 +843,37 @@ class HiggsfieldProvider(BaseProvider):
                     path,
                 )
 
+        family = _video_family(path)
+        portable: dict[str, Any] = {
+            "negative_prompt": negative_prompt,
+            "resolution": resolution,
+            "aspect_ratio": aspect_ratio,
+            "fps": fps,
+            "generate_audio": with_audio,
+            "seed": seed,
+            "end_image_url": await self._ref_to_url(last_frame),
+            "reference_images": reference_images,
+        }
+        if family is not None:
+            fields = _VIDEO_FIELDS[family]
+            dropped = sorted(k for k, v in portable.items() if v is not None and k not in fields)
+            if dropped:
+                logger.warning(
+                    "Higgsfield %s does not take %s; dropped (pass model-specific "
+                    "fields as keyword arguments).",
+                    path,
+                    ", ".join(dropped),
+                )
+            portable = {k: v for k, v in portable.items() if k in fields}
+            duration: Any = _snap(duration_seconds, _VIDEO_DURATIONS[family])
+        else:
+            duration = duration_seconds
+
         payload: dict[str, Any] = {
             "prompt": prompt,
             "image_url": image_url,
-            "duration": duration_seconds,
-            "negative_prompt": negative_prompt,
+            "duration": duration,
+            **portable,
             **kwargs,
         }
         return await self._submit_job("video_generate", path, payload)
@@ -777,3 +890,38 @@ class HiggsfieldProvider(BaseProvider):
             finally:
                 self._http = None
         self._sdk = None
+
+
+def _video_family(path: str) -> str | None:
+    """``hailuo`` / ``kling`` for the published video paths, else ``None``."""
+    if path.startswith("minimax/hailuo-"):
+        return "hailuo"
+    if path.startswith("kling-video/"):
+        return "kling"
+    return None
+
+
+def _snap(value: float | None, allowed: tuple[int, ...]) -> int | None:
+    """Nearest allowed value (ties go to the longer clip)."""
+    if value is None:
+        return None
+    return min(allowed, key=lambda a: (abs(a - value), -a))
+
+
+def _parse_size(size: str) -> tuple[int, int] | None:
+    """``"1024x768"`` -> ``(1024, 768)``; anything else -> ``None``."""
+    width, sep, height = str(size).lower().partition("x")
+    if sep and width.strip().isdigit() and height.strip().isdigit() and int(height):
+        return int(width), int(height)
+    return None
+
+
+def _nearest_ratio(width: int, height: int) -> str:
+    """The Soul aspect ratio closest to ``width:height``."""
+    target = width / height
+
+    def distance(ratio: str) -> float:
+        w, h = ratio.split(":")
+        return abs(int(w) / int(h) - target)
+
+    return min(_SOUL_RATIOS, key=distance)

@@ -824,9 +824,9 @@ max_retries = 2
   # api_key_id = "..."
   # api_key_secret = "..."
 
-  # Transport backend: "httpx" (direct REST, default) or "sdk".
-  # Note the published higgsfield-client covers agent sessions and uploads
-  # rather than these generation endpoints, so "httpx" is the real path.
+  # Transport backend: "httpx" (direct REST, default) or "sdk"
+  # (higgsfield-client 0.2: submit/status/result/cancel; both generated a Soul
+  # image live on 2026-11-16). delete_request_data() always uses REST.
   # backend = "httpx"
 
   timeout = 300
@@ -844,9 +844,16 @@ max_retries = 2
   # Other documented video paths:
   #   kling-video/v2.5-turbo/pro/text-to-video
   #   kling-video/v2.5-turbo/pro/image-to-video
-  # Supplying an image to a text-to-video path switches to its image-to-video
-  # counterpart automatically, because Higgsfield splits them into separate
-  # endpoints.
+  # Supplying a first_frame to a text-to-video path switches to its
+  # image-to-video counterpart automatically, because Higgsfield splits them
+  # into separate endpoints.
+  #
+  # Portable arguments are fitted to what the live API enforces:
+  #   - Soul: size="1920x1080" -> resolution "1080p" (720p | 1080p) and the
+  #     nearest aspect ratio (9:16 16:9 4:3 3:4 1:1 2:3 3:2);
+  #   - video: duration_seconds snaps to Hailuo 6|10 or Kling 5|10 s; portable
+  #     args a model does not declare (seed, fps, resolution...) are dropped
+  #     with a warning. Model-specific keyword arguments are sent as given.
 
   # --- Replicate (one generic prediction adapter for the whole catalog) ---
   [providers.replicate]
