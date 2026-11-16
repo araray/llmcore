@@ -37,11 +37,13 @@ Transport (selectable via ``backend``)
 
 References:
   - https://elevenlabs.io/docs/api-reference
-  - Vendor SDK: elevenlabs-python (v2.70.0)
+  - Vendor SDK: elevenlabs-python (v2.78.0; audited 2026-11-16)
 """
 
 from __future__ import annotations
 
+import inspect
+import json
 import logging
 import os
 from collections.abc import AsyncGenerator, AsyncIterator
@@ -80,14 +82,16 @@ _BASE_URL = "https://api.elevenlabs.io"
 #: spelling their SDK still honours.
 _API_KEY_ENV_VARS: tuple[str, ...] = ("ELEVENLABS_API_KEY", "ELEVEN_API_KEY")
 
-#: Per-capability default models, verified against the live ``/v1/models``
-#: lineup on 2026-09-30. ``eleven_v4`` is GA (no alpha access, standard rate)
-#: and covers 85 languages, so it is the default rather than an older release.
+#: Per-capability default models, verified live on 2026-11-16. ``eleven_v4``
+#: is GA and covers 90+ languages; ``eleven_v4_turbo`` is the low-latency
+#: variant for streaming. ``scribe_v3`` (GA 2026-11-09, 27% fewer word errors
+#: than v2) replaces the deprecated ``scribe_v1``, and
+#: ``eleven_text_to_sound_v3`` replaces v2, which is removed on 2027-03-01.
 _DEFAULT_MODELS: dict[str, str] = {
     "tts": "eleven_v4",
-    "tts_stream": "eleven_v4",
-    "asr": "scribe_v1",
-    "sfx": "eleven_text_to_sound_v2",
+    "tts_stream": "eleven_v4_turbo",
+    "asr": "scribe_v3",
+    "sfx": "eleven_text_to_sound_v3",
     "music": "music_v2_5",
     "voice_design": "eleven_ttv_v3",
 }
@@ -102,6 +106,7 @@ _DEFAULT_OUTPUT_FORMAT = "mp3_44100_128"
 #: ``output_format`` prefix → MIME type.
 _FORMAT_MIME: dict[str, str] = {
     "mp3": "audio/mpeg",
+    "wav": "audio/wav",  # SFX takes wav_* since 2026-10 (was labelled mpeg)
     "pcm": "audio/pcm",
     "ulaw": "audio/basic",
     "alaw": "audio/x-alaw-basic",
@@ -582,11 +587,10 @@ class ElevenLabsProvider(BaseProvider):
     ) -> bytes:
         """Run a one-shot TTS request and return the audio bytes."""
         if self._backend == "sdk":
-            chunks = self._sdk.text_to_speech.convert(
-                voice_id=voice_id,
-                text=body["text"],
-                model_id=body.get("model_id"),
-                output_format=output_format,
+            # Every body field the SDK has a keyword for (voice_settings,
+            # seed, audio_effects, ...); they used to be dropped.
+            chunks = _sdk_call(
+                self._sdk.text_to_speech.convert, voice_id=voice_id, output_format=output_format, **body
             )
             return b"".join([c async for c in chunks])
 
@@ -604,11 +608,8 @@ class ElevenLabsProvider(BaseProvider):
     ) -> AsyncIterator[bytes]:
         """Stream TTS audio chunks."""
         if self._backend == "sdk":
-            chunks = self._sdk.text_to_speech.stream(
-                voice_id=voice_id,
-                text=body["text"],
-                model_id=body.get("model_id"),
-                output_format=output_format,
+            chunks = _sdk_call(
+                self._sdk.text_to_speech.stream, voice_id=voice_id, output_format=output_format, **body
             )
             async for chunk in chunks:
                 if chunk:
@@ -662,7 +663,10 @@ class ElevenLabsProvider(BaseProvider):
             data["diarize"] = str(bool(diarize)).lower()
         if timestamps is not None:
             data["timestamps_granularity"] = "word" if timestamps else "none"
-        data.update({k: str(v) for k, v in kwargs.items() if v is not None})
+        # List and object fields (secondary_language_codes, keyterms, ...) go as
+        # JSON strings: repeated form fields are a 500 and str(list) is not
+        # JSON (both measured 2026-11-16).
+        data.update({k: _form_value(v) for k, v in kwargs.items() if v is not None})
 
         payload = await self._transcribe(audio, data)
 
@@ -671,10 +675,14 @@ class ElevenLabsProvider(BaseProvider):
             kind=MediaKind.TEXT,
             text=payload.get("text"),
             mime_type="text/plain",
+            duration_seconds=payload.get("audio_duration_secs"),
             provider_metadata={
                 "language_code": payload.get("language_code"),
                 "language_probability": payload.get("language_probability"),
                 "words": words,
+                # transcript_edit=true (scribe_v3): the cleaned-up transcript.
+                "edited_transcript": payload.get("edited_transcript"),
+                "transcription_id": payload.get("transcription_id"),
             },
         )
         return MediaResult(
@@ -690,12 +698,12 @@ class ElevenLabsProvider(BaseProvider):
     async def _transcribe(self, audio: MediaRef, data: dict[str, Any]) -> dict[str, Any]:
         """Post audio to the speech-to-text endpoint.
 
-        A remote ``MediaRef`` is handed to ElevenLabs as a ``cloud_storage_url``
-        so the bytes never round-trip through this process; local refs are
-        uploaded as multipart.
+        A remote ``MediaRef`` is handed to ElevenLabs as a ``source_url``
+        (``cloud_storage_url`` is deprecated) so the bytes never round-trip
+        through this process; local refs are uploaded as multipart.
         """
         if audio.is_remote and audio.url:
-            data = {**data, "cloud_storage_url": audio.url}
+            data = {**data, "source_url": audio.url}
             if self._backend == "sdk":
                 result = await self._sdk.speech_to_text.convert(**data)
                 return self._as_dict(result)
@@ -799,20 +807,10 @@ class ElevenLabsProvider(BaseProvider):
     async def _audio_post(self, path: str, body: dict[str, Any], context: str) -> bytes:
         """POST a JSON body to an endpoint that answers with audio bytes."""
         if self._backend == "sdk":
-            if context == "music":
-                chunks = self._sdk.music.compose(
-                    prompt=body.get("prompt"),
-                    model_id=body.get("model_id"),
-                    music_length_ms=body.get("music_length_ms"),
-                    output_format=self._output_format,
-                )
-            else:
-                chunks = self._sdk.text_to_sound_effects.convert(
-                    text=body.get("text"),
-                    model_id=body.get("model_id"),
-                    duration_seconds=body.get("duration_seconds"),
-                    output_format=self._output_format,
-                )
+            fn = self._sdk.music.compose if context == "music" else self._sdk.text_to_sound_effects.convert
+            # loop, prompt_influence, seed, force_instrumental, ... used to be
+            # dropped on this backend.
+            chunks = _sdk_call(fn, output_format=self._output_format, **body)
             return b"".join([c async for c in chunks])
 
         resp = await self._get_http().post(
@@ -966,3 +964,29 @@ class ElevenLabsProvider(BaseProvider):
             finally:
                 self._http = None
         self._sdk = None
+
+
+def _form_value(value: Any) -> str:
+    """A multipart form value as ElevenLabs reads it."""
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, (list, tuple, dict)):
+        return json.dumps(list(value) if isinstance(value, tuple) else value)
+    return str(value)
+
+
+def _sdk_call(fn: Any, **kwargs: Any) -> Any:
+    """Call an SDK method with the fields it has keywords for.
+
+    Fields it does not know are dropped with a warning naming them, rather
+    than raising a TypeError deep inside the vendor package.
+    """
+    accepted = set(inspect.signature(fn).parameters)
+    known = {k: v for k, v in kwargs.items() if k in accepted and v is not None}
+    dropped = sorted(k for k in kwargs if k not in accepted)
+    if dropped:
+        logger.warning(
+            "The elevenlabs SDK has no parameter for %s; dropped (backend='httpx' sends them).",
+            ", ".join(dropped),
+        )
+    return fn(**known)

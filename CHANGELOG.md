@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Changed — ElevenLabs: scribe_v3, SFX v3, SDK backend fidelity, STT list fields
+
+Audited against the live API and elevenlabs 2.78 on 2026-11-16. Verified
+live on both backends: TTS, scribe_v3 transcription, streaming and SFX v3.
+
+- **Defaults**: ASR `scribe_v3` (GA 2026-11-09; `scribe_v1` is
+  deprecated), SFX `eleven_text_to_sound_v3` (v2 is removed on 2027-03-01),
+  streaming TTS `eleven_v4_turbo`.
+- **STT list fields** such as `secondary_language_codes` and `keyterms` were
+  sent as Python's `str(list)`. They now go as JSON strings; repeated form
+  fields return 500 (measured). Remote audio goes as `source_url`
+  (`cloud_storage_url` is deprecated). Results carry the duration and the
+  `edited_transcript`.
+- **SDK backend**: TTS, streaming TTS, SFX and music sent only text, model
+  and format. `voice_settings`, `seed`, `audio_effects`, `loop`,
+  `prompt_influence`, `force_instrumental` and the rest were dropped. Every
+  field the SDK has a keyword for is now forwarded, and the rest are named in
+  a warning.
+- WAV output is labelled `audio/wav`; it was `audio/mpeg`.
+  `elevenlabs>=2.78,<3`.
+
 ### Fixed — FriendliAI: SDK 0.16 streaming, per-model effort, reasoning replay, retired models
 
 Audited against friendli 0.16.6 (released 2026-11-04) and the live catalogue
