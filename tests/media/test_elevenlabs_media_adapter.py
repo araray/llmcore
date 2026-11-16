@@ -131,7 +131,7 @@ class TestConformance:
 
     def test_declares_the_voice_spread(self, provider):
         assert {c.value for c in provider.media_capabilities()} == {
-            "tts", "tts_stream", "asr", "sfx", "music", "voice_design",
+            "tts", "tts_stream", "asr", "asr_stream", "sfx", "music", "voice_design",
         }
 
     def test_every_declared_capability_is_backed(self, provider):
@@ -142,11 +142,11 @@ class TestConformance:
         ]
         assert unmet == []
 
-    def test_only_streaming_tts_is_a_stream(self, provider):
+    def test_only_the_streaming_capabilities_are_streams(self, provider):
         for cap in provider.media_capabilities():
             expected = (
                 MediaExecution.STREAM
-                if cap is MediaCapability.TTS_STREAM
+                if cap in (MediaCapability.TTS_STREAM, MediaCapability.ASR_STREAM)
                 else MediaExecution.REQUEST_RESPONSE
             )
             assert provider.media_execution(cap) is expected

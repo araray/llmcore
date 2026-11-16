@@ -122,7 +122,8 @@ fal = ["httpx>=0.27.0", "fal-client>=1.0.0"]
 # The provider talks to api.elevenlabs.io over httpx directly (default); the
 # official 'elevenlabs' SDK is an optional second backend (backend = "sdk").
 # Install with: pip install llmcore[elevenlabs]
-elevenlabs = ["httpx>=0.27.0", "elevenlabs>=2.78,<3"]
+# websockets: realtime Scribe (asr_stream) over the direct WebSocket.
+elevenlabs = ["httpx>=0.27.0", "elevenlabs>=2.78,<3", "websockets>=13"]
 # Replicate — one generic prediction adapter for the whole catalog, driven by
 # each model's published OpenAPI schema rather than a class per model.
 # Install with: pip install llmcore[replicate]

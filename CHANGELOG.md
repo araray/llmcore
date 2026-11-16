@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added — ElevenLabs: realtime transcription (`asr_stream`)
+
+- **`open_transcription_session()`** speaks Realtime Scribe
+  (`scribe_v2_realtime`) over the direct WebSocket
+  `/v1/speech-to-text/realtime`, with the same session shape as Deepgram's
+  (`send_audio`, `finalize`, `close`, async iteration). Mapped events:
+  - partial → `interim`;
+  - committed → `final` (words, start and end with `include_timestamps`);
+  - typed errors → `error`.
+
+  Every documented query option passes through, including single-use
+  `token` auth. Verified live: a TTS sentence streamed as `pcm_16000` came
+  back verbatim, with 17 word timings.
+- `websockets>=13` added to the `elevenlabs` extra. The usage guide's stale
+  defaults (`scribe_v1`, SFX v2, `cloud_storage_url`) are corrected.
+
 ### Fixed — Command Code: gateway Jev is text only
 
 Re-checked after the lane providers changed (2026-11-16). Messages

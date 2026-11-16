@@ -926,6 +926,7 @@ max_retries = 2
   # tts = "eleven_v4"                     # GA, 90+ languages
   # tts_stream = "eleven_v4_turbo"        # low-latency variant
   # asr = "scribe_v3"                     # GA 2026-11-09; scribe_v1 is deprecated
+  # asr_stream = "scribe_v2_realtime"     # realtime WebSocket: open_transcription_session()
   # sfx = "eleven_text_to_sound_v3"       # v2 is removed on 2027-03-01
   # music = "music_v2_5"
   # voice_design = "eleven_ttv_v3"

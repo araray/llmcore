@@ -7,9 +7,10 @@ reaches. In llmcore it is a **media-only provider** — it serves no chat API, a
 | Capability | Default model | Router call |
 |---|---|---|
 | `tts` | `eleven_v4` | `llm.media.audio.speak(...)` |
-| `tts_stream` | `eleven_v4` | `llm.media.audio.stream_tts(...)` |
-| `asr` | `scribe_v1` | `llm.media.audio.transcribe(...)` |
-| `sfx` | `eleven_text_to_sound_v2` | `llm.media.audio.sfx(...)` |
+| `tts_stream` | `eleven_v4_turbo` | `llm.media.audio.stream_tts(...)` |
+| `asr` | `scribe_v3` | `llm.media.audio.transcribe(...)` |
+| `asr_stream` | `scribe_v2_realtime` | `provider.open_transcription_session(...)` |
+| `sfx` | `eleven_text_to_sound_v3` | `llm.media.audio.sfx(...)` |
 | `music` | `music_v2_5` | `llm.media.audio.music(...)` |
 | `voice_design` | `eleven_ttv_v3` | `provider.design_voice_media(...)` |
 
@@ -18,7 +19,7 @@ reaches. In llmcore it is a **media-only provider** — it serves no chat API, a
 ## 1. Install and configure
 
 ```bash
-pip install "llmcore[elevenlabs]"
+pip install "llmcore[elevenlabs]"   # httpx, elevenlabs>=2.78, websockets (realtime STT)
 ```
 
 ```toml
@@ -32,7 +33,8 @@ backend = "auto"              # "auto" | "httpx" | "sdk"
 
 [providers.elevenlabs.models]
 tts = "eleven_v4"
-asr = "scribe_v1"
+asr = "scribe_v3"
+asr_stream = "scribe_v2_realtime"
 ```
 
 `eleven_v4` is the default because it is GA (no alpha access, standard rate) and
@@ -144,14 +146,63 @@ result.artifacts[0].provider_metadata["words"]       # word-level timings
 result.artifacts[0].provider_metadata["language_code"]
 ```
 
-A **remote** `MediaRef` is handed to ElevenLabs as a `cloud_storage_url`, so the
-bytes never round-trip through your process:
+A **remote** `MediaRef` is handed to ElevenLabs as a `source_url`
+(`cloud_storage_url` is deprecated), so the bytes never round-trip through your
+process:
 
 ```python
 await llm.media.audio.transcribe(
     audio=MediaRef.from_url("https://example.com/call.mp3"), provider="elevenlabs"
 )
 ```
+
+### Realtime transcription (`asr_stream`)
+
+Realtime Scribe runs over a WebSocket. The session has the same shape as
+Deepgram's: push raw audio, iterate `TranscriptionStreamEvent`s.
+
+```python
+provider = llm._provider_manager.get_provider("elevenlabs")
+async with provider.open_transcription_session(
+    sample_rate_hz=16000,          # pcm_8000 ... pcm_48000, or audio_format="ulaw_8000"
+    language="en",
+    commit_strategy="vad",         # server commits on silence; "manual" -> finalize()
+    include_timestamps=True,       # FINAL events carry word timings
+    keyterms=["llmcore"],
+) as session:
+    session.set_context("Earlier conversation text")   # optional, sent with the first chunk
+    for chunk in mic_chunks():                         # raw PCM bytes
+        await session.send_audio(chunk)
+    await session.finalize()
+    async for event in session:
+        if event.type == "interim":
+            show(event.text)
+        elif event.type == "final":
+            commit(event.text, event.words)
+        elif event.type == "error":
+            raise RuntimeError(event.text)
+```
+
+How server messages map to events:
+
+| Server message | Event |
+|---|---|
+| `partial_transcript` | `interim` |
+| `committed_transcript` | `final`; with `include_timestamps`, the `_with_timestamps` twin replaces it, carrying `words`, `start` and `end` |
+| `session_started` | `open` |
+| `auth_error`, `quota_exceeded`, `rate_limited`, `input_error`, ... | `error` |
+| entity, redaction, edit and language-detection results | `other` (see `event.raw`) |
+
+Every other documented option passes through as a query parameter:
+`secondary_languages`, `no_verbatim`, the `vad_*` and `min_*_ms` thresholds,
+`entity_detection`, `entity_redaction`, `entity_redaction_mode`,
+`transcript_edit`, `filter_background_audio`, `enable_logging`, and `token` (a
+single-use token in place of the API key).
+
+Verified live on 2026-11-16. TTS audio of "The quick brown fox jumps over the
+lazy dog." at `pcm_16000`, streamed in 100 ms chunks, produced three interim
+events and then that exact sentence as the final event; the timestamped run
+returned 17 word entries.
 
 ---
 
