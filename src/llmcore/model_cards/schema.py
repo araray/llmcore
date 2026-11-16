@@ -109,6 +109,7 @@ class Provider(str, Enum):
     ZAI = "zai"
     FRIENDLI = "friendli"
     TYPESAFE = "typesafe"
+    COMMANDCODE = "commandcode"
     HUGGINGFACE = "huggingface"
     DEEPGRAM = "deepgram"
     ELEVENLABS = "elevenlabs"

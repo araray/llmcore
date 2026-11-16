@@ -1,0 +1,60 @@
+{
+  "model_id": "gpt-6-luna",
+  "display_name": "GPT-6 Luna",
+  "provider": "commandcode",
+  "model_type": "chat",
+  "architecture": {
+    "family": "gpt"
+  },
+  "context": {
+    "max_input_tokens": 1050000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": true,
+    "image_generation": false,
+    "image_edit": false,
+    "image_upscale": false,
+    "video_generation": false,
+    "video_interpolation": false,
+    "speech_synthesis": false,
+    "transcription": false,
+    "music_generation": false,
+    "sfx_generation": false,
+    "voice_design": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.1,
+      "output": 0.5,
+      "cached_input": 0.01,
+      "cache_write": 0.125
+    }
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "GPT-6 Luna via Command Code's Provider API (/chat/completions).",
+  "tags": [],
+  "source": "generated",
+  "provider_extension": {
+    "routes": [
+      "/chat/completions",
+      "/responses"
+    ],
+    "inherits_from": "openai/gpt-6-luna",
+    "capabilities_from": "family-defaults"
+  }
+}

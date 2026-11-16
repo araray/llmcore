@@ -1545,6 +1545,63 @@ max_retries = 2
   # card matches the requested model.
   fallback_context_length = 65536
 
+  [providers.commandcode]
+  # type = "commandcode"  # auto-detected from the section name (aliases: command_code, command-code)
+  #
+  # Command Code's Provider API: one key for 98+ models (Claude, GPT, Gemini,
+  # Grok, DeepSeek, Kimi, GLM, Qwen, MiniMax, ...). The gateway speaks several
+  # protocols and each model answers on some of them. llmcore reads each
+  # model's routes from the live /models catalog: Claude goes to /messages,
+  # GPT to /responses (see responses_api), everything else to
+  # /chat/completions, and typesafe/jev to /systemone (provider.system_one).
+  # Requires a GOAT plan or higher; the $1 Go plan has no API access.
+
+  # --- Authentication (environment variable strongly preferred) ---
+  # Looked up in order: api_key, api_key_env_var, CMD_API_KEY,
+  # COMMAND_CODE_API_KEY, COMMANDCODE_API_KEY. Keys: https://commandcode.ai/studio
+  # api_key = "..."
+  # api_key_env_var = "CMD_API_KEY"
+
+  # --- Endpoint ---
+  # Gateway root (env CMD_BASE_URL is honoured when unset). The documented
+  # ".../provider/v1" form is accepted too.
+  # base_url = "https://api.commandcode.ai/provider"
+
+  # Default model. Short names resolve like the Command Code CLI's --model:
+  # "kimi-k3" -> "moonshotai/Kimi-K3", "glm-5.3" -> "zai-org/GLM-5.3".
+  default_model = "claude-sonnet-5-5"
+
+  # --- Transport ---
+  # "httpx" (direct HTTP, default) or "sdk" (the official OpenAI / Anthropic
+  # SDKs, which are the clients Command Code's docs use; it publishes none).
+  transport = "httpx"
+  timeout = 120
+  max_retries = 2
+
+  # --- Zero data retention ---
+  # true sends x-cmd-zdr: 1 on every request, so only zero-data-retention
+  # upstreams serve it (422 cmd_zdr_no_providers otherwise); per call:
+  # llm.chat(..., zdr=True). Left unset here on purpose: CMD_ZDR=1 is read only
+  # when this key is absent, so an explicit `zdr = false` would silently
+  # override it. Off unless one of them turns it on.
+  # zdr = true
+
+  # --- OpenAI Responses API ---
+  # For models served on both /responses and /chat/completions:
+  #   "openai" (default): GPT models use /responses, OpenAI's native API, which
+  #     carries their encrypted reasoning across tool-loop turns; others use
+  #     /chat/completions. The same split as Command Code's own pi provider.
+  #   "all": every model that offers /responses uses it.
+  #   "never": always /chat/completions.
+  # Per call: llm.chat(..., responses=True|False).
+  responses_api = "openai"
+
+  # --- Catalog ---
+  # Seconds the live /models catalog (routes, context windows) is trusted
+  # before re-reading. If it cannot be read, routing falls back to the bundled
+  # commandcode model cards, then to family names (claude-* -> /messages).
+  catalog_ttl = 3600
+
 
 
 # ==============================================================================

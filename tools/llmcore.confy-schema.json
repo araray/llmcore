@@ -2432,6 +2432,141 @@
       ]
     },
     {
+      "id": "provider_commandcode",
+      "title": "Provider: Command Code",
+      "description": "Command Code's Provider API (https://commandcode.ai/docs/provider): one key for 98+ models over three protocols. llmcore routes each model to the route that serves it, read from the live /models catalog: Claude to /messages (Anthropic shape), all other chat models to /chat/completions (OpenAI shape), and typesafe/jev to /systemone via provider.system_one(...). Short names resolve like the CLI's --model (kimi-k3 -> moonshotai/Kimi-K3). Needs a GOAT plan or higher. Aliases: command_code, command-code. Install with: pip install llmcore[commandcode]",
+      "icon": "⌘",
+      "order": 14,
+      "fields": [
+        {
+          "key": "providers.commandcode.api_key",
+          "title": "Api Key",
+          "type": "secret",
+          "required": false,
+          "description": "Command Code API key from Studio (https://commandcode.ai/studio). The same key works for the CLI and the API.",
+          "placeholder": "...",
+          "recommendation": "Set via CMD_API_KEY (or COMMAND_CODE_API_KEY / COMMANDCODE_API_KEY) or LLMCORE_PROVIDERS__COMMANDCODE__API_KEY.",
+          "tags": [
+            "security",
+            "credentials"
+          ]
+        },
+        {
+          "key": "providers.commandcode.api_key_env_var",
+          "title": "Api Key Env Var",
+          "type": "string",
+          "required": false,
+          "description": "Environment variable holding the key. When unset, CMD_API_KEY, COMMAND_CODE_API_KEY and COMMANDCODE_API_KEY are tried in that order.",
+          "default": "CMD_API_KEY"
+        },
+        {
+          "key": "providers.commandcode.base_url",
+          "title": "Base Url",
+          "type": "url",
+          "required": false,
+          "description": "Gateway root. Leave empty for https://api.commandcode.ai/provider (CMD_BASE_URL is honoured when unset). The documented .../provider/v1 form is accepted.",
+          "placeholder": "https://api.commandcode.ai/provider",
+          "validation": {
+            "schemes": [
+              "https",
+              "http"
+            ]
+          }
+        },
+        {
+          "key": "providers.commandcode.default_model",
+          "title": "Default Model",
+          "type": "string",
+          "required": false,
+          "description": "Default model id or short name, e.g. claude-sonnet-5-5, gpt-6-sol, kimi-k3, deepseek/deepseek-v4.1-flash. `await provider.get_models_details()` lists every model.",
+          "default": "claude-sonnet-5-5"
+        },
+        {
+          "key": "providers.commandcode.transport",
+          "title": "Transport",
+          "type": "enum",
+          "required": false,
+          "description": "httpx calls the gateway directly (default). sdk uses the official OpenAI and Anthropic SDKs, the clients Command Code's docs use.",
+          "default": "httpx",
+          "options": [
+            {
+              "value": "httpx",
+              "label": "httpx (direct, default)"
+            },
+            {
+              "value": "sdk",
+              "label": "sdk (OpenAI / Anthropic SDKs)"
+            }
+          ]
+        },
+        {
+          "key": "providers.commandcode.zdr",
+          "title": "Zero Data Retention",
+          "type": "boolean",
+          "required": false,
+          "description": "Send x-cmd-zdr: 1 on every request so only zero-data-retention upstreams serve it; a model without one fails with 422 cmd_zdr_no_providers. Leave unset to let the CMD_ZDR=1 environment variable decide: an explicit false overrides it. Per call: zdr=True."
+        },
+        {
+          "key": "providers.commandcode.responses_api",
+          "title": "Responses API",
+          "type": "enum",
+          "required": false,
+          "description": "For models served on both /responses and /chat/completions: openai sends GPT models to /responses (OpenAI's native API; carries encrypted reasoning across tool turns) and the rest to /chat/completions; all uses /responses wherever offered; never always uses /chat/completions. Per call: responses=True|False.",
+          "default": "openai",
+          "options": [
+            {
+              "value": "openai",
+              "label": "openai (GPT on /responses, default)"
+            },
+            {
+              "value": "all",
+              "label": "all (every model that offers it)"
+            },
+            {
+              "value": "never",
+              "label": "never (Chat Completions only)"
+            }
+          ]
+        },
+        {
+          "key": "providers.commandcode.catalog_ttl",
+          "title": "Catalog TTL",
+          "type": "integer",
+          "required": false,
+          "description": "Seconds the live /models catalog is trusted before it is re-read.",
+          "default": 3600,
+          "validation": {
+            "min": 0,
+            "max": 86400
+          }
+        },
+        {
+          "key": "providers.commandcode.timeout",
+          "title": "Timeout",
+          "type": "integer",
+          "required": false,
+          "description": "Request timeout in seconds.",
+          "default": 120,
+          "validation": {
+            "min": 5,
+            "max": 900
+          }
+        },
+        {
+          "key": "providers.commandcode.max_retries",
+          "title": "Max Retries",
+          "type": "integer",
+          "required": false,
+          "description": "SDK-transport and System One retries for transient failures.",
+          "default": 2,
+          "validation": {
+            "min": 0,
+            "max": 10
+          }
+        }
+      ]
+    },
+    {
       "id": "provider_typesafe",
       "title": "Provider: TypeSafe.ai (System One)",
       "description": "TypeSafe.ai System One typed-judgment provider (Jev models). NOT a chat API: POST /v1/systemone evaluates a state (string / JSON object / array) against typed questions — noul (yes/no probability), choice (pick one option; per-option probabilities + confidence), score (rubric level; per-level probabilities + confidence) — and returns structured, calibrated answers. Use provider.system_one(...) or the chat bridge llm.chat(..., provider_name=\"typesafe\", questions={...}). Streaming and tool calling are not supported. Alias: jev. Install with: pip install llmcore[typesafe] (httpx only). Docs: https://docs.typesafe.ai",

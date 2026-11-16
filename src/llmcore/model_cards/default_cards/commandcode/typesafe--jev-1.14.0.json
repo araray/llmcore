@@ -1,0 +1,55 @@
+{
+  "model_id": "typesafe/jev-1.14.0",
+  "display_name": "Jev 1.14.0",
+  "provider": "commandcode",
+  "model_type": "other",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 32768
+  },
+  "capabilities": {
+    "streaming": false,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false,
+    "image_generation": false,
+    "image_edit": false,
+    "image_upscale": false,
+    "video_generation": false,
+    "video_interpolation": false,
+    "speech_synthesis": false,
+    "transcription": false,
+    "music_generation": false,
+    "sfx_generation": false,
+    "voice_design": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.042,
+      "output": 0.0,
+      "cached_input": 0.0
+    }
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Pinned TypeSafe Jev 1.14.0 decision model via Command Code's /systemone.",
+  "tags": [],
+  "source": "generated",
+  "provider_extension": {
+    "routes": [
+      "/systemone"
+    ],
+    "upstream_org": "typesafe"
+  }
+}

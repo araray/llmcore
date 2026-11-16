@@ -7,6 +7,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added — Command Code provider
+
+`commandcode` (aliases `command_code`, `command-code`) reaches Command Code's
+Provider API: one key for 98+ models. The gateway speaks three protocols and
+each model answers on one, so the provider routes **per model** from the live
+`/models` catalog. Claude goes over the Anthropic wire (thinking, effort and
+caching come from `AnthropicProvider`), the other chat models over the OpenAI
+wire, and `typesafe/jev` through `system_one()`. Spend and spans are attributed
+to `commandcode` and priced from its own cards.
+
+- Short names resolve like the Command Code CLI (`kimi-k3` →
+  `moonshotai/Kimi-K3`). An ambiguous one raises rather than guessing.
+- An upstream failure sent as **HTTP 200** with `finish_reason: "error"` and
+  partial content now raises a retryable `ProviderError`, in streams too. The
+  fragment is never returned as an answer.
+- Double-encoded error messages are unwrapped, with the gateway's upstream
+  attempts. Every error carries `trace_id`, `error_code` and `failure_kind`.
+- A stale catalog heals itself: told a model lives on another route, the
+  provider re-reads the catalog and retries once.
+- Zero data retention: config `zdr`, `CMD_ZDR=1`, or per call `zdr=True`.
+- **OpenAI Responses API** on `/responses`. GPT models use it by default
+  (`responses_api = "openai"`; also `"all"` / `"never"`, or per call
+  `responses=True|False`). Requests are stateless with encrypted reasoning, and
+  `extract_reasoning_items()` plus `metadata["reasoning_items"]` carry a
+  reasoning model's chain across tool loops. Answers come back in the Chat
+  Completions shape. The conversion is reusable:
+  `llmcore.providers.openai_responses`.
+- Direct HTTP by default; `transport = "sdk"` uses the official OpenAI and
+  Anthropic SDKs.
+- 100 model cards from a new `cardctl` adapter (public catalog, no key).
+  Prices come from Command Code's pricing page, with peak rates for DeepSeek
+  V4.x and the off-peak rate kept alongside. Capabilities are inherited from
+  the origin vendor's card unless that card is a placeholder.
+
+### Changed — routing honours a provider's own failure classification
+
+`classify_failure` now reads a `failure_kind` attribute when an exception
+carries one, before inferring from status and text. A provider that knows a
+403 means "not served in your region" (fail over) rather than "bad key"
+(bench the target) can now say so.
+
+### Fixed — cardctl kept curated cache-write prices
+
+The card builder dropped `cache_write` from enrichment pricing, so a curated
+cache-write rate disappeared on every regeneration. It is now carried through.
+
 ### Fixed — transcription keeps word timings, speakers and language
 
 `transcribe_audio` threw away most of what OpenAI, DeepInfra, Mistral and

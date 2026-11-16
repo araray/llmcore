@@ -14,8 +14,8 @@
   <a href="https://opensource.org/licenses/MIT"><img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-yellow.svg"/></a>
   <a href="https://github.com/araray/llmcore"><img alt="Version" src="https://img.shields.io/badge/version-0.53.0-green.svg"/></a>
   <a href="https://github.com/araray/llmcore/actions"><img alt="CI" src="https://img.shields.io/badge/CI-lint%20%2B%20py3.11%20%2B%20py3.12-brightgreen.svg"/></a>
-  <a href="#-at-a-glance"><img alt="Providers" src="https://img.shields.io/badge/providers-23-blue.svg"/></a>
-  <a href="#-model-cards"><img alt="Model cards" src="https://img.shields.io/badge/model%20cards-2319-blue.svg"/></a>
+  <a href="#-at-a-glance"><img alt="Providers" src="https://img.shields.io/badge/providers-24-blue.svg"/></a>
+  <a href="#-model-cards"><img alt="Model cards" src="https://img.shields.io/badge/model%20cards-2419-blue.svg"/></a>
 </p>
 
 <p align="center">
@@ -30,7 +30,7 @@
 
 ---
 
-**llmcore** gives you one async interface over 23 model providers, plus the
+**llmcore** gives you one async interface over 24 model providers, plus the
 subsystems that usually get rebuilt per project: conversation persistence,
 retrieval, a generative-media layer (image/audio/video), tool-using agents with
 sandboxed execution, and provisioning for remotely served open-weights models.
@@ -45,11 +45,11 @@ Counts are measured from this repository, not estimated.
 
 | | |
 |---|---|
-| **Providers** | **23** behind one interface (plus 11 alias spellings) |
-| **Transport** | **21 of 23** have two transports — 17 direct-first with an SDK fallback, 4 SDK-first with direct available. The other 2 have no vendor SDK |
-| **Model cards** | **2,319** across 22 providers, generated from live APIs |
+| **Providers** | **24** behind one interface (plus 13 alias spellings) |
+| **Transport** | **22 of 24** have two transports — 18 direct-first with an SDK fallback, 4 SDK-first with direct available. The other 2 have no vendor SDK |
+| **Model cards** | **2,419** across 23 providers, generated from live APIs |
 | **Media capabilities** | **19** — image, video, speech, music, SFX, OCR, voice design |
-| **Install extras** | **35**, so you install only the providers you use |
+| **Install extras** | **36**, so you install only the providers you use |
 | **Tests** | **6,396** collected; 5,622 run in the default (no-infrastructure) profile |
 | **Coverage** | **66%** statement+branch, measured on that profile |
 | **Source** | ~156k lines across 318 modules |
@@ -67,11 +67,11 @@ by trial and error.
 
 | Model type | Cards | | Model type | Cards |
 |---|---:|---|---|---:|
-| chat | 1,716 | | audio | 71 |
+| chat | 1,814 | | audio | 71 |
 | image-generation | 156 | | stt | 58 |
 | tts | 125 | | multimodal | 13 |
 | embedding | 87 | | video-generation | 8 |
-| vision | 72 | | ocr / code / other | 13 |
+| vision | 72 | | ocr / code / other | 15 |
 
 ---
 
@@ -79,7 +79,7 @@ by trial and error.
 
 | Category | What it does |
 |----------|--------------|
-| **🔌 Providers** | 23 vendors, one `chat()` call. Streaming, tool calling, structured output, reasoning extraction, vision, exact tokenizers where the vendor exposes one |
+| **🔌 Providers** | 24 vendors, one `chat()` call. Streaming, tool calling, structured output, reasoning extraction, vision, exact tokenizers where the vendor exposes one |
 | **🎨 Generative media** | `llm.media` — image generate/edit/upscale, video generate/interpolate, TTS (+streaming), ASR, music, SFX, voice design. Async jobs with polling, a webhook receiver, and a content-addressed artifact store |
 | **🖥️ Remote GPU runtimes** | `llm.runtimes` — size an open-weights model, provision compute, serve it, and attach the endpoint as a provider instance. Spend ceilings and idle reaping are enforced, not optional |
 | **🧭 Routing** | `target=`/`pool=`/`lane=` on `chat()` — reach any provider+model without a config section, fail over on 429 / empty wallet / timeout, route by request kind, keep PII on your own hardware, and run as an OpenAI-compatible proxy for agent harnesses |
@@ -90,7 +90,7 @@ by trial and error.
 | **🔒 Sandboxing** | Docker and VM/SSH isolation with security policies and output tracking |
 | **👤 Human-in-the-loop** | Risk assessment, approval workflows, audit logging |
 | **📊 Observability** | Structured events, metrics, execution replay, context diagnostics |
-| **📚 Model cards** | 2,319 cards with capability validation and cost estimation, refreshed by `cardctl` |
+| **📚 Model cards** | 2,419 cards with capability validation and cost estimation, refreshed by `cardctl` |
 
 ### Recent additions (v0.51 → v0.53)
 
@@ -119,6 +119,13 @@ by trial and error.
   cascades, and prompt transforms. Plus proxy mode, so an unmodified agent
   harness routes through llmcore by setting two environment variables. Off by
   default; see [`Routing_usage.md`](docs/Routing_usage.md).
+- **Command Code** — one key for 98+ models (Claude, GPT, Gemini, Grok, DeepSeek,
+  Kimi, GLM, Qwen, MiniMax, …) through a gateway that speaks several protocols.
+  llmcore routes each model to the route that serves it from the live catalog
+  (Claude over Messages, GPT over the OpenAI Responses API by default),
+  raises on the gateway's HTTP-200 upstream failures instead of returning
+  partial output, and supports zero data retention per call. See
+  [`CommandCode_provider_usage.md`](docs/CommandCode_provider_usage.md).
 
 ---
 
@@ -448,6 +455,7 @@ pip install "llmcore[zai]"           # GLM family
 pip install "llmcore[friendli]"
 pip install "llmcore[deepinfra]"
 pip install "llmcore[openrouter]"
+pip install "llmcore[commandcode]"   # Claude, GPT, open models behind one key
 pip install "llmcore[poe]"
 pip install "llmcore[huggingface]"
 pip install "llmcore[ollama]"        # local, no API key
@@ -570,6 +578,12 @@ parse_reasoning = true          # split reasoning into reasoning_content
 # reasoning_effort = "high"     # minimal|low|medium|high|xhigh|max|ultracode
 timeout = 300
 
+[providers.commandcode]
+# Command Code: 98+ models, one key (CMD_API_KEY). Routed per model from the live catalog.
+default_model = "claude-sonnet-5-5"   # short names work: "kimi-k3", "glm-5.3"
+# zdr = true                          # zero-data-retention upstreams only (or env CMD_ZDR=1)
+responses_api = "openai"              # GPT over the Responses API; "all" | "never"
+
 [providers.typesafe]
 # TypeSafe.ai System One (typed judgments, NOT chat). API key via TYPESAFE_API_KEY.
 # Use provider.system_one(state, questions) or llm.chat(..., provider_name="typesafe", questions={...}).
@@ -626,13 +640,14 @@ export LLMCORE_STORAGE__SESSION__DB_URL="postgresql://user:pass@localhost/llmcor
 export LLMCORE_LOG_LEVEL="DEBUG"
 export LLMCORE_LOG_RAW_PAYLOADS="true"
 export TYPESAFE_API_KEY="..."          # TypeSafe.ai System One
+export CMD_API_KEY="..."               # Command Code (98+ models, one key)
 ```
 
 ---
 
 ## 🔌 Providers
 
-23 providers behind one interface. **Transport** shows which can call the vendor
+24 providers behind one interface. **Transport** shows which can call the vendor
 API directly and which fall back to a vendor SDK — llmcore prefers direct calls
 so an SDK lagging the API does not block you, and keeps the SDK where it owns
 something non-trivial. Full detail in
@@ -656,6 +671,7 @@ the provider support matrix.
 | **FriendliAI** | `zai-org/GLM-5.3`, `deepseek-ai/DeepSeek-V3.2` + your dedicated endpoints | direct → SDK | Reasoning effort/budget, regex-constrained output, exact tokenizer |
 | **DeepInfra** | `Qwen3-235B-A22B`, DeepSeek, Llama, FLUX, Whisper, Kokoro | direct + SDK | Chat, vision, TTS/ASR, images, embeddings |
 | **OpenRouter** | 620 cards spanning most vendors | direct + SDK | One key, many vendors |
+| **Command Code** | `claude-opus-5-5`, `gpt-6-sol`, `moonshotai/Kimi-K3`, `zai-org/GLM-5.3`, `deepseek/deepseek-v4.1-flash` + 93 more | direct + SDK | One key; Messages / Responses / Chat Completions routed per model, ZDR, self-healing routes, Jev via `system_one()` |
 | **Poe** | 497 cards across Anthropic/OpenAI/Google and others | direct + SDK | Aggregated access |
 | **Hugging Face** | 305 cards; any Inference Provider model | SDK + direct | Chat, image, TTS, ASR, **private Inference Endpoints** |
 | **Ollama** | `qwen3-vl:4b`, `llama3.3:70b`, `gemma3:12b`, `qwen3-embedding:8b` | SDK + direct | Local, no API key |
@@ -986,7 +1002,7 @@ Pre-built, security-hardened images organized by tier:
 
 ## 📚 Model cards
 
-**2,319 cards across 22 providers**, generated from live provider APIs and
+**2,419 cards across 23 providers**, generated from live provider APIs and
 bundled with the package. Each carries context window, capability flags, pricing
 and lifecycle — so capability and cost questions are answered locally instead of
 by trial and error against a paid endpoint.
@@ -1052,6 +1068,7 @@ card = registry.get("anthropic", "claude-4.5-sonnet")  # Resolves alias
 | ollama | 176 | | elevenlabs | 11 |
 | deepgram | 147 | | fal | 9 |
 | openai | 133 | | deepseek / friendli / replicate | 7 each |
+| commandcode | 100 | | | |
 | google | 44 | | higgsfield | 6 |
 | | | | qwen · xai · typesafe | 3 · 3 · 1 |
 - **xAI**: Grok-4, Grok-4-Heavy
@@ -1338,6 +1355,7 @@ from llmcore import (
 [Deepgram](docs/Deepgram_provider_usage.md) ·
 [FriendliAI](docs/Friendli_provider_usage.md) ·
 [TypeSafe.ai](docs/TypeSafe_provider_usage.md) ·
+[Command Code](docs/CommandCode_provider_usage.md) ·
 [Search providers](docs/Search_providers_usage.md)
 (rationale)
 
@@ -1355,7 +1373,7 @@ llmcore/
 │   ├── config/               # Configuration system
 │   │   ├── default_config.toml
 │   │   └── models.py
-│   ├── providers/            # 23 provider adapters
+│   ├── providers/            # 24 provider adapters
 │   │   ├── openai_provider.py      # base for deepinfra/vllm/poe/openrouter
 │   │   ├── anthropic_provider.py
 │   │   ├── gemini_provider.py

@@ -29,6 +29,10 @@ _ADAPTER_REGISTRY: dict[str, str] = {
     "zhipu": "zai_adapter.ZaiAdapter",
     "zhipuai": "zai_adapter.ZaiAdapter",
     "bigmodel": "zai_adapter.ZaiAdapter",
+    "commandcode": "commandcode_adapter.CommandCodeAdapter",
+    # Aliases: "command_code" / "command-code" (brand spellings) -> Command Code.
+    "command_code": "commandcode_adapter.CommandCodeAdapter",
+    "command-code": "commandcode_adapter.CommandCodeAdapter",
     "typesafe": "typesafe_adapter.TypeSafeAdapter",
     # Alias: "jev" (the model family) → TypeSafe.
     "jev": "typesafe_adapter.TypeSafeAdapter",

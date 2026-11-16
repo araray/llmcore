@@ -76,6 +76,8 @@ _CARD_PROVIDER_ALIASES: dict[str, str] = {
     "eleven_labs": "elevenlabs",
     "friendliai": "friendli",
     "friendli_ai": "friendli",
+    "command_code": "commandcode",
+    "command-code": "commandcode",
 }
 
 

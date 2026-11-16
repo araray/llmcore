@@ -1,0 +1,67 @@
+{
+  "model_id": "deepseek/deepseek-v4-flash",
+  "display_name": "DeepSeek V4 Flash (latest)",
+  "provider": "commandcode",
+  "model_type": "chat",
+  "architecture": {
+    "family": "deepseek-v4"
+  },
+  "context": {
+    "max_input_tokens": 1000000,
+    "max_output_tokens": 65536
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": true,
+    "structured_output": true,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": true,
+    "image_generation": false,
+    "image_edit": false,
+    "image_upscale": false,
+    "video_generation": false,
+    "video_interpolation": false,
+    "speech_synthesis": false,
+    "transcription": false,
+    "music_generation": false,
+    "sfx_generation": false,
+    "voice_design": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.3,
+      "output": 1.2,
+      "cached_input": 0.003
+    }
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "DeepSeek V4 Flash (latest) via Command Code's Provider API (/chat/completions).",
+  "tags": [],
+  "source": "generated",
+  "provider_extension": {
+    "routes": [
+      "/chat/completions",
+      "/responses"
+    ],
+    "upstream_org": "deepseek",
+    "inherits_from": "deepseek/deepseek-v4-flash",
+    "capabilities_from": "deepseek/deepseek-v4-flash",
+    "off_peak": {
+      "input": 0.15,
+      "output": 0.6,
+      "cached_input": 0.003,
+      "schedule_utc": "peak Mon-Fri 01:00-04:00 and 06:00-10:00; off-peak otherwise and all weekend"
+    }
+  }
+}

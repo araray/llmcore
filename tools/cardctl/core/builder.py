@@ -212,6 +212,11 @@ class CardBuilder:
         }
         if source.get("cached_input") is not None:
             per_million["cached_input"] = source["cached_input"]
+        # Cache writes are billed separately (often above the input rate), and
+        # the schema has carried the field for a while. Dropping it here made
+        # every curated cache-write price vanish on regeneration.
+        if source.get("cache_write") is not None:
+            per_million["cache_write"] = source["cache_write"]
         return {
             "currency": "USD",
             "per_million_tokens": per_million,
