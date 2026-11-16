@@ -231,6 +231,10 @@ class DeepSeekProvider(BaseProvider):
                 "providers.deepseek.api_key / api_key_env_var."
             )
 
+        #: Kept for the /v1/tools/* media endpoints (TTS, ASR, OCR).
+        self._api_key = str(api_key)
+        self._tools_base = str(config.get("tools_base_url", "https://api.deepseek.com/v1/tools")).rstrip("/")
+
         # --- Model / timeout ---
         self.default_model = config.get("default_model", _DEFAULT_MODEL)
         timeout = config.get("timeout", 300)
@@ -838,6 +842,189 @@ class DeepSeekProvider(BaseProvider):
             )
         return ProviderError(
             self.get_name(), f"API Error ({status}): {msg}", model_name=model_name, status_code=status
+        )
+
+    # =========================================================================
+    # Media: /v1/tools/{tts,asr,ocr}
+    # =========================================================================
+
+    _MEDIA_CAPABILITIES: frozenset[str] = frozenset({"tts", "tts_stream", "asr", "ocr"})
+
+    def media_capabilities(self) -> Any:
+        """Speech, transcription and OCR tool APIs (api-docs.deepseek.com/guides)."""
+        from ..media.models import MediaCapability
+
+        return frozenset(MediaCapability(c) for c in self._MEDIA_CAPABILITIES)
+
+    def media_execution(self, capability: Any, model: str | None = None) -> Any:
+        from ..media.models import MediaCapability, MediaExecution
+
+        if capability is MediaCapability.TTS_STREAM:
+            return MediaExecution.STREAM
+        return MediaExecution.REQUEST_RESPONSE
+
+    def _tools_error(self, status: int, body: str, what: str) -> ProviderError:
+        """Map a /v1/tools/* failure (402 balance, 413 size, 429 concurrency ...)."""
+        hints = {
+            400: "the input was rejected (unreadable content, unsupported format, or content review)",
+            402: "the account has insufficient balance",
+            408: "the upload did not finish in time",
+            413: "the file is too large",
+            429: "too many requests in progress for this account",
+            503: "the service is busy",
+            504: "processing timed out",
+        }
+        return ProviderError(
+            self.get_name(),
+            f"DeepSeek {what} failed ({status}): {hints.get(status, 'error')}. {body[:300]}",
+            status_code=status,
+            retryable=status in (429, 503, 504),
+        )
+
+    def _tools_client(self, timeout: float = 300.0) -> Any:
+        import httpx
+
+        return httpx.AsyncClient(timeout=timeout, headers={"Authorization": f"Bearer {self._api_key}"})
+
+    async def synthesize_speech_media(
+        self,
+        text: str,
+        *,
+        model: str | None = None,
+        voice: str | None = None,
+        audio_format: str | None = None,
+        sample_rate_hz: int | None = None,
+        speed: float | None = None,
+        **kwargs: Any,
+    ) -> Any:
+        """Text to speech (``POST /v1/tools/tts``): voices ``stella`` / ``tide``,
+        ``wav`` (default) or ``pcm`` (16-bit mono 24 kHz). The language is
+        detected from the text; speed control is not offered."""
+        from ..media.models import MediaArtifact, MediaCapability, MediaKind, MediaResult, MediaUsage
+
+        audio = b"".join([chunk async for chunk in self.stream_speech_media(
+            text, voice=voice, audio_format=audio_format, **kwargs)])
+        fmt = audio_format or "wav"
+        return MediaResult(
+            capability=MediaCapability.TTS,
+            provider=self.get_name(),
+            model="deepseek-tts",
+            artifacts=(MediaArtifact(
+                kind=MediaKind.AUDIO, data=audio,
+                mime_type="audio/wav" if fmt == "wav" else "audio/L16;rate=24000",
+                sample_rate_hz=24000,
+            ),),
+            usage=MediaUsage(provider=self.get_name(), model="deepseek-tts", basis="per_character",
+                             characters=len(text)),
+        )
+
+    def stream_speech_media(
+        self,
+        text: str,
+        *,
+        model: str | None = None,
+        voice: str | None = None,
+        audio_format: str | None = None,
+        sample_rate_hz: int | None = None,
+        **kwargs: Any,
+    ) -> Any:
+        """Stream TTS audio as it is synthesized. A response that ends early
+        is a failure per DeepSeek's docs (the stream is cut off)."""
+        body: dict[str, Any] = {"text": text, "voice_id": voice or "stella", "format": audio_format or "wav"}
+        body.update(kwargs)
+
+        async def _stream() -> Any:
+            async with self._tools_client() as client:
+                async with client.stream("POST", f"{self._tools_base}/tts", json=body) as resp:
+                    if resp.status_code >= 400:
+                        raise self._tools_error(resp.status_code, (await resp.aread()).decode("utf-8", "replace"), "TTS")
+                    async for chunk in resp.aiter_bytes():
+                        if chunk:
+                            yield chunk
+
+        return _stream()
+
+    async def transcribe_media(
+        self,
+        *,
+        audio: Any,
+        model: str | None = None,
+        language: str | None = None,
+        diarize: bool | None = None,
+        timestamps: bool | None = None,
+        **kwargs: Any,
+    ) -> Any:
+        """Speech to text (``POST /v1/tools/asr``): 16-bit PCM WAV or Ogg Opus,
+        at most 8 MiB and 120 s; the language is detected from the audio."""
+        from ..media.models import MediaCapability, MediaResult, MediaUsage
+        from ..models_multimodal import TranscriptionResult
+
+        if audio.is_remote:
+            from ..media.artifacts import default_fetcher
+
+            data = await default_fetcher()(audio.url or "")
+        else:
+            data = audio.read_bytes()
+        async with self._tools_client(timeout=660.0) as client:
+            resp = await client.post(f"{self._tools_base}/asr",
+                                     files={"file": (audio.filename or "audio.wav", data, audio.mime_type or "audio/wav")})
+        if resp.status_code >= 400:
+            raise self._tools_error(resp.status_code, resp.text, "ASR")
+        payload = resp.json()
+        seconds = (payload.get("duration_ms") or 0) / 1000 or None
+        transcript = TranscriptionResult(text=str(payload.get("text") or ""), duration_seconds=seconds,
+                                         model="deepseek-asr", metadata={"request_id": payload.get("request_id")})
+        return MediaResult(
+            capability=MediaCapability.ASR, provider=self.get_name(), model="deepseek-asr",
+            artifacts=(transcript.to_artifact(),),
+            usage=MediaUsage(provider=self.get_name(), model="deepseek-asr", basis="per_second", seconds=seconds),
+            raw=payload,
+        )
+
+    async def ocr_media(
+        self,
+        *,
+        document: Any,
+        model: str | None = None,
+        pages: Any = None,
+        purpose: str = "text_recognition",
+        **kwargs: Any,
+    ) -> Any:
+        """OCR (``POST /v1/tools/ocr``): PDF, Word, PowerPoint or an image;
+        ``purpose`` is ``text_recognition`` or ``rich_layout_recognition``.
+        The service keeps the connection alive with leading newlines, which
+        JSON parsing ignores."""
+        from ..media.models import MediaCapability, MediaResult, MediaUsage
+        from ..models_multimodal import OCRResult
+
+        if pages is not None:
+            logger.debug("DeepSeek OCR has no page selection; all pages are recognized.")
+        if document.is_remote:
+            from ..media.artifacts import default_fetcher
+
+            data = await default_fetcher()(document.url or "")
+        else:
+            data = document.read_bytes()
+        async with self._tools_client(timeout=200.0) as client:
+            resp = await client.post(
+                f"{self._tools_base}/ocr", data={"purpose": purpose},
+                files={"file": (document.filename or "document", data, document.mime_type or "application/octet-stream")})
+        if resp.status_code >= 400:
+            raise self._tools_error(resp.status_code, resp.text, "OCR")
+        payload = json.loads(resp.text)
+        result = OCRResult(
+            pages=[{"index": p.get("index"), "markdown": p.get("text", ""), "finish_reason": p.get("finish_reason")}
+                   for p in payload.get("pages") or []],
+            model="deepseek-ocr", pages_processed=int(payload.get("page_count") or 0),
+            metadata={"id": payload.get("id"), "purpose": payload.get("purpose"), "usage": payload.get("usage")},
+        )
+        usage = payload.get("usage") or {}
+        return MediaResult(
+            capability=MediaCapability.OCR, provider=self.get_name(), model="deepseek-ocr",
+            artifacts=(result.to_artifact(),),
+            usage=MediaUsage(provider=self.get_name(), model="deepseek-ocr", basis="per_page",
+                             input_tokens=usage.get("input_tokens"), output_tokens=usage.get("output_tokens")),
+            raw=payload,
         )
 
     def supports_native_search(self, model: str | None = None) -> bool:

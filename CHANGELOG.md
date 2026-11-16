@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added — DeepSeek: speech, transcription and OCR tool APIs
+
+- `/v1/tools/tts` (voices `stella` and `tide`; WAV or 24 kHz PCM, streamed),
+  `/v1/tools/asr` (WAV or Ogg Opus, at most 120 s) and `/v1/tools/ocr` (PDF,
+  Office documents and images, by page) are now media capabilities: `tts`,
+  `tts_stream`, `asr` and `ocr`.
+- Errors are mapped to their documented causes (balance, size, concurrency,
+  timeouts).
+- Live: all three authenticate and stop on this account's 402 (insufficient
+  balance).
+
 ### Added — Mistral realtime transcription; cards for live models the bundle lacked
 
 - **Mistral `asr_stream`** via the official SDK's realtime client
