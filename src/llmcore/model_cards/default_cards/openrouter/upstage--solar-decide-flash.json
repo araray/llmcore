@@ -1,0 +1,50 @@
+{
+  "model_id": "upstage/solar-decide-flash",
+  "display_name": "Upstage: Solar Decide Flash",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 524288,
+    "max_output_tokens": 471859
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false,
+    "image_generation": false,
+    "image_edit": false,
+    "image_upscale": false,
+    "video_generation": false,
+    "video_interpolation": false,
+    "speech_synthesis": false,
+    "transcription": false,
+    "music_generation": false,
+    "sfx_generation": false,
+    "voice_design": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.05,
+      "output": 0.0
+    }
+  },
+  "lifecycle": {
+    "status": "active",
+    "release_date": "2026-10-08"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Solar Decide Flash is Upstage's low-latency structured decision model, a faster variant of [Solar Decide](/upstage/solar-decide) built on Solar Mini 4 and served through the System One (`/v1/systemone`) API. Instead of...",
+  "tags": [],
+  "source": "generated"
+}

@@ -1,0 +1,50 @@
+{
+  "model_id": "liquid/d1.1",
+  "display_name": "LiquidAI: d1.1",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 65536,
+    "max_output_tokens": 58982
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false,
+    "image_generation": false,
+    "image_edit": false,
+    "image_upscale": false,
+    "video_generation": false,
+    "video_interpolation": false,
+    "speech_synthesis": false,
+    "transcription": false,
+    "music_generation": false,
+    "sfx_generation": false,
+    "voice_design": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.02,
+      "output": 0.0
+    }
+  },
+  "lifecycle": {
+    "status": "active",
+    "release_date": "2026-10-27"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "d1.1 is Liquid AI's structured decision model, served as a System One endpoint and the successor to d1. Send a state along with typed questions, and it returns a choice,...",
+  "tags": [],
+  "source": "generated"
+}

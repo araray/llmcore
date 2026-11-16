@@ -1,0 +1,50 @@
+{
+  "model_id": "x-ai/grok-4.7:batch",
+  "display_name": "SpaceXAI: Grok 4.7 (batch)",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 500000,
+    "max_output_tokens": 450000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": true,
+    "structured_output": true,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": true,
+    "image_generation": false,
+    "image_edit": false,
+    "image_upscale": false,
+    "video_generation": false,
+    "video_interpolation": false,
+    "speech_synthesis": false,
+    "transcription": false,
+    "music_generation": false,
+    "sfx_generation": false,
+    "voice_design": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 1.6,
+      "output": 4.8
+    }
+  },
+  "lifecycle": {
+    "status": "active",
+    "release_date": "2026-09-21"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Grok 4.7 is SpaceXAI's flagship model for coding, agentic tasks, and knowledge work, succeeding Grok 4.6. It is particularly strong at long-running software engineering tasks, verifying its own work, and...",
+  "tags": [],
+  "source": "generated"
+}

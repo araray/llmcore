@@ -1,0 +1,44 @@
+{
+  "model_id": "openrouter/auto-code",
+  "display_name": "Auto Code",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 2000000,
+    "max_output_tokens": 64000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": true,
+    "structured_output": true,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": true,
+    "image_generation": false,
+    "image_edit": false,
+    "image_upscale": false,
+    "video_generation": false,
+    "video_interpolation": false,
+    "speech_synthesis": false,
+    "transcription": false,
+    "music_generation": false,
+    "sfx_generation": false,
+    "voice_design": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active",
+    "release_date": "2026-11-05"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Auto Code is OpenRouter’s router built specifically for coding agents and harnesses. It uses the same routing engine as the [Auto Router](https://openrouter.ai/openrouter/auto), with every request treated as part of an...",
+  "tags": [],
+  "source": "generated"
+}

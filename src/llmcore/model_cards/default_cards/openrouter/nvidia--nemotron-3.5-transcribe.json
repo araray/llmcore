@@ -1,0 +1,47 @@
+{
+  "model_id": "nvidia/nemotron-3.5-transcribe",
+  "display_name": "NVIDIA: Nemotron 3.5 Transcribe",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": null,
+  "context": null,
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false,
+    "image_generation": false,
+    "image_edit": false,
+    "image_upscale": false,
+    "video_generation": false,
+    "video_interpolation": false,
+    "speech_synthesis": false,
+    "transcription": false,
+    "music_generation": false,
+    "sfx_generation": false,
+    "voice_design": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 16.6667,
+      "output": 0.0
+    }
+  },
+  "lifecycle": {
+    "status": "active",
+    "release_date": "2026-10-29"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Nemotron 3.5 Transcribe is an open-weight speech recognition model from NVIDIA, a 30B mixture-of-experts with about 4B active parameters. It transcribes recordings of up to one hour in 40 languages,...",
+  "tags": [],
+  "source": "generated"
+}

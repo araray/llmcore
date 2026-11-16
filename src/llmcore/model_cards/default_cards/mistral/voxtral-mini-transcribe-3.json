@@ -1,0 +1,59 @@
+{
+  "model_id": "voxtral-mini-transcribe-3",
+  "display_name": "Voxtral Mini Transcribe 3.0",
+  "provider": "mistral",
+  "model_type": "stt",
+  "architecture": {
+    "family": "mistral",
+    "architecture_type": "dense",
+    "parameter_count": "4B"
+  },
+  "context": {
+    "max_input_tokens": 65536
+  },
+  "capabilities": {
+    "streaming": false,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": true,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false,
+    "image_generation": false,
+    "image_edit": false,
+    "image_upscale": false,
+    "video_generation": false,
+    "video_interpolation": false,
+    "speech_synthesis": false,
+    "transcription": false,
+    "music_generation": false,
+    "sfx_generation": false,
+    "voice_design": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active",
+    "release_date": "2026-11-16"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [
+    "voxtral-mini-transcribe-3-0"
+  ],
+  "description": "Fast, cost-effective transcription with diarization in 40+ languages - ideal for high-volume audio processing at scale.",
+  "tags": [
+    "audio"
+  ],
+  "source": "generated",
+  "provider_mistral": {
+    "open_weights": false,
+    "fill_in_middle": false,
+    "guardrails": {
+      "system_prompt": false
+    },
+    "default_temperature": 0.0
+  }
+}

@@ -1,0 +1,50 @@
+{
+  "model_id": "minimax/minimax-h3-image-highspeed",
+  "display_name": "MiniMax: MiniMax H3 Image Highspeed",
+  "provider": "openrouter",
+  "model_type": "multimodal",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 4096,
+    "max_output_tokens": 3686
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false,
+    "image_generation": false,
+    "image_edit": false,
+    "image_upscale": false,
+    "video_generation": false,
+    "video_interpolation": false,
+    "speech_synthesis": false,
+    "transcription": false,
+    "music_generation": false,
+    "sfx_generation": false,
+    "voice_design": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 2.3,
+      "output": 0.0
+    }
+  },
+  "lifecycle": {
+    "status": "active",
+    "release_date": "2026-11-11"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "MiniMax H3 Image Highspeed is the faster version of MiniMax's H3 Image model. It takes the same inputs and limits as MiniMax H3 Image: it creates images from text prompts...",
+  "tags": [],
+  "source": "generated"
+}

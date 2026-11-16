@@ -1,0 +1,63 @@
+{
+  "model_id": "Bria/remove_background_guided",
+  "display_name": "remove_background_guided",
+  "provider": "deepinfra",
+  "model_type": "image-generation",
+  "architecture": null,
+  "context": null,
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false,
+    "image_generation": false,
+    "image_edit": false,
+    "image_upscale": false,
+    "video_generation": false,
+    "video_interpolation": false,
+    "speech_synthesis": false,
+    "transcription": false,
+    "music_generation": false,
+    "sfx_generation": false,
+    "voice_design": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": true,
+  "aliases": [],
+  "description": "Prompt-guided background removal by Bria: tell it what to keep or what to remove and get a clean cutout with true transparency, at the original resolution with the original pixels untouched. Trained exclusively on licensed data for commercially safe use.",
+  "tags": [
+    "text",
+    "output:image"
+  ],
+  "source": "generated",
+  "provider_extension": {
+    "hugging_face_id": "Bria/remove_background_guided",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "image"
+    ],
+    "supported_features": [
+      "width",
+      "height",
+      "num_inference_steps",
+      "guidance_scale",
+      "n",
+      "seed"
+    ],
+    "datacenters": [
+      "US"
+    ]
+  }
+}

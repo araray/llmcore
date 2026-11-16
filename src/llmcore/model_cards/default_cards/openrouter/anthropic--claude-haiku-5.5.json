@@ -1,0 +1,50 @@
+{
+  "model_id": "anthropic/claude-haiku-5.5",
+  "display_name": "Anthropic: Claude Haiku 5.5",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 1000000,
+    "max_output_tokens": 128000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": true,
+    "structured_output": true,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": true,
+    "image_generation": false,
+    "image_edit": false,
+    "image_upscale": false,
+    "video_generation": false,
+    "video_interpolation": false,
+    "speech_synthesis": false,
+    "transcription": false,
+    "music_generation": false,
+    "sfx_generation": false,
+    "voice_design": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.1,
+      "output": 0.5
+    }
+  },
+  "lifecycle": {
+    "status": "active",
+    "release_date": "2026-10-07"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Claude Haiku 5.5 is Anthropic's small, fast model for high-volume, cost-sensitive work such as summarization, subagents, and browser use. It succeeds Claude Haiku 4.5 with stronger coding, computer use, and...",
+  "tags": [],
+  "source": "generated"
+}

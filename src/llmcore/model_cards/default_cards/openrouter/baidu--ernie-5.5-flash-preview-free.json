@@ -1,0 +1,44 @@
+{
+  "model_id": "baidu/ernie-5.5-flash-preview:free",
+  "display_name": "Baidu: ERNIE-5.5-Flash-Preview (free)",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 1024000,
+    "max_output_tokens": 921600
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": true,
+    "structured_output": true,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": true,
+    "image_generation": false,
+    "image_edit": false,
+    "image_upscale": false,
+    "video_generation": false,
+    "video_interpolation": false,
+    "speech_synthesis": false,
+    "transcription": false,
+    "music_generation": false,
+    "sfx_generation": false,
+    "voice_design": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active",
+    "release_date": "2026-11-10"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "ERNIE 5.5 Flash Preview is the latest foundation model in the ERNIE family, with comprehensive improvements in coding, agentic capabilities, knowledge work, and deep research. It has 280 billion total...",
+  "tags": [],
+  "source": "generated"
+}

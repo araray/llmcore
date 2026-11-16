@@ -1,0 +1,50 @@
+{
+  "model_id": "qwen/qwen3-embedding-8b",
+  "display_name": "Qwen: Qwen3 Embedding 8B",
+  "provider": "openrouter",
+  "model_type": "embedding",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 40960,
+    "max_output_tokens": 29491
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false,
+    "image_generation": false,
+    "image_edit": false,
+    "image_upscale": false,
+    "video_generation": false,
+    "video_interpolation": false,
+    "speech_synthesis": false,
+    "transcription": false,
+    "music_generation": false,
+    "sfx_generation": false,
+    "voice_design": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.01,
+      "output": 0.0
+    }
+  },
+  "lifecycle": {
+    "status": "active",
+    "release_date": "2025-10-28"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "The Qwen3 Embedding model series is the latest proprietary model of the Qwen family, specifically designed for text embedding and ranking tasks. This series inherits the exceptional multilingual capabilities, long-text...",
+  "tags": [],
+  "source": "generated"
+}

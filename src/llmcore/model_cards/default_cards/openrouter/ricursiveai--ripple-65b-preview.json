@@ -1,0 +1,50 @@
+{
+  "model_id": "ricursiveai/ripple-65b-preview",
+  "display_name": "Ricursive: Ripple 65B Preview",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 1048576,
+    "max_output_tokens": 131072
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": true,
+    "structured_output": true,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": true,
+    "image_generation": false,
+    "image_edit": false,
+    "image_upscale": false,
+    "video_generation": false,
+    "video_interpolation": false,
+    "speech_synthesis": false,
+    "transcription": false,
+    "music_generation": false,
+    "sfx_generation": false,
+    "voice_design": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.1,
+      "output": 0.3
+    }
+  },
+  "lifecycle": {
+    "status": "active",
+    "release_date": "2026-11-04"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Ripple-65B-Preview by ricursiveAI, a 65B model with native tool calling, served in BF16.",
+  "tags": [],
+  "source": "generated"
+}

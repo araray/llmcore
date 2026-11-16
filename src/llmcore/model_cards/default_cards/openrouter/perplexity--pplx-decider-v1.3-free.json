@@ -1,0 +1,44 @@
+{
+  "model_id": "perplexity/pplx-decider-v1.3:free",
+  "display_name": "Perplexity: Decider V1.3 (free)",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 262144,
+    "max_output_tokens": 235929
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false,
+    "image_generation": false,
+    "image_edit": false,
+    "image_upscale": false,
+    "video_generation": false,
+    "video_interpolation": false,
+    "speech_synthesis": false,
+    "transcription": false,
+    "music_generation": false,
+    "sfx_generation": false,
+    "voice_design": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active",
+    "release_date": "2026-11-12"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Decider V1.3 is a decision model from Perplexity, succeeding [Decider V1.2](/perplexity/pplx-decider-v1.2). Instead of generating text, it reads content passed as `state` (text, JSON, or images) and returns typed, probabilistic answers...",
+  "tags": [],
+  "source": "generated"
+}

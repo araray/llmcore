@@ -1,0 +1,44 @@
+{
+  "model_id": "sourceful/riverflow-v2-pro",
+  "display_name": "Sourceful: Riverflow V2 Pro",
+  "provider": "openrouter",
+  "model_type": "multimodal",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 8192,
+    "max_output_tokens": 7372
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false,
+    "image_generation": false,
+    "image_edit": false,
+    "image_upscale": false,
+    "video_generation": false,
+    "video_interpolation": false,
+    "speech_synthesis": false,
+    "transcription": false,
+    "music_generation": false,
+    "sfx_generation": false,
+    "voice_design": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active",
+    "release_date": "2026-02-02"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Riverflow V2 Pro is the most powerful variant of Sourceful's Riverflow 2.0 lineup, best for top-tier control and perfect text rendering. The Riverflow 2.0 series represents SOTA performance on image...",
+  "tags": [],
+  "source": "generated"
+}

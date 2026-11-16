@@ -1,0 +1,47 @@
+{
+  "model_id": "openai/gpt-transcribe",
+  "display_name": "OpenAI: GPT Transcribe",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": null,
+  "context": null,
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false,
+    "image_generation": false,
+    "image_edit": false,
+    "image_upscale": false,
+    "video_generation": false,
+    "video_interpolation": false,
+    "speech_synthesis": false,
+    "transcription": false,
+    "music_generation": false,
+    "sfx_generation": false,
+    "voice_design": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 75.0,
+      "output": 0.0
+    }
+  },
+  "lifecycle": {
+    "status": "active",
+    "release_date": "2026-08-05"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "GPT Transcribe is a high-accuracy speech-to-text model from OpenAI. It is suited for recorded audio, streamed file transcription, and committed Realtime turns, with free-form context, keyword hints, and multiple language...",
+  "tags": [],
+  "source": "generated"
+}

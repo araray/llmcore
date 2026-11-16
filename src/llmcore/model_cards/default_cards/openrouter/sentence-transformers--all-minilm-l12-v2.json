@@ -1,0 +1,50 @@
+{
+  "model_id": "sentence-transformers/all-minilm-l12-v2",
+  "display_name": "Sentence Transformers: all-MiniLM-L12-v2",
+  "provider": "openrouter",
+  "model_type": "embedding",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 512,
+    "max_output_tokens": 460
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false,
+    "image_generation": false,
+    "image_edit": false,
+    "image_upscale": false,
+    "video_generation": false,
+    "video_interpolation": false,
+    "speech_synthesis": false,
+    "transcription": false,
+    "music_generation": false,
+    "sfx_generation": false,
+    "voice_design": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.005,
+      "output": 0.0
+    }
+  },
+  "lifecycle": {
+    "status": "active",
+    "release_date": "2025-11-18"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "The all-MiniLM-L12-v2 embedding model maps sentences and short paragraphs into a 384-dimensional dense vector space, producing efficient and high-quality semantic embeddings optimized for tasks such as semantic search, clustering, and...",
+  "tags": [],
+  "source": "generated"
+}

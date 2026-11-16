@@ -1,0 +1,50 @@
+{
+  "model_id": "mongodb/voyage-multimodal-3.5",
+  "display_name": "VoyageAI by MongoDB: voyage-multimodal-3.5",
+  "provider": "openrouter",
+  "model_type": "embedding",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 32000,
+    "max_output_tokens": 28800
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false,
+    "image_generation": false,
+    "image_edit": false,
+    "image_upscale": false,
+    "video_generation": false,
+    "video_interpolation": false,
+    "speech_synthesis": false,
+    "transcription": false,
+    "music_generation": false,
+    "sfx_generation": false,
+    "voice_design": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.12,
+      "output": 0.0
+    }
+  },
+  "lifecycle": {
+    "status": "active",
+    "release_date": "2026-07-27"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "voyage-multimodal-3.5 is a state-of-the-art multimodal embedding model capable of vectorizing not only text, images, and video individually, but also content that interleaves all three modalities. It delivers excellent performance for...",
+  "tags": [],
+  "source": "generated"
+}

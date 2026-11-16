@@ -1,0 +1,50 @@
+{
+  "model_id": "google/gemini-nano-banana-2.1",
+  "display_name": "Google: Nano Banana 2.1",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 65536,
+    "max_output_tokens": 58982
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": true,
+    "structured_output": true,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": true,
+    "image_generation": false,
+    "image_edit": false,
+    "image_upscale": false,
+    "video_generation": false,
+    "video_interpolation": false,
+    "speech_synthesis": false,
+    "transcription": false,
+    "music_generation": false,
+    "sfx_generation": false,
+    "voice_design": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 1.5,
+      "output": 7.5
+    }
+  },
+  "lifecycle": {
+    "status": "active",
+    "release_date": "2026-10-06"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Nano Banana 2.1 (Gemini Nano Banana 2.1) is Google's image generation and editing model on the Flash tier, succeeding Nano Banana 2 and Nano Banana Pro. It improves product recontextualization,...",
+  "tags": [],
+  "source": "generated"
+}

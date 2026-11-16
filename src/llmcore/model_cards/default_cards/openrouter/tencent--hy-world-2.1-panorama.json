@@ -1,0 +1,44 @@
+{
+  "model_id": "tencent/hy-world-2.1-panorama",
+  "display_name": "Tencent: HY-World 2.1 Panorama",
+  "provider": "openrouter",
+  "model_type": "multimodal",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 4096,
+    "max_output_tokens": 3686
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false,
+    "image_generation": false,
+    "image_edit": false,
+    "image_upscale": false,
+    "video_generation": false,
+    "video_interpolation": false,
+    "speech_synthesis": false,
+    "transcription": false,
+    "music_generation": false,
+    "sfx_generation": false,
+    "voice_design": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active",
+    "release_date": "2026-11-13"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "HY-World 2.1 Panorama is a 360-degree panorama generation model from Tencent, part of the Hunyuan World family. It turns a single text prompt into one high-resolution equirectangular panorama suitable for...",
+  "tags": [],
+  "source": "generated"
+}

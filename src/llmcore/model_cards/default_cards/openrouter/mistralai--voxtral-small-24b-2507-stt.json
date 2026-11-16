@@ -1,0 +1,47 @@
+{
+  "model_id": "mistralai/voxtral-small-24b-2507-stt",
+  "display_name": "Mistral: Voxtral Small 24B 2507 STT",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": null,
+  "context": null,
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false,
+    "image_generation": false,
+    "image_edit": false,
+    "image_upscale": false,
+    "video_generation": false,
+    "video_interpolation": false,
+    "speech_synthesis": false,
+    "transcription": false,
+    "music_generation": false,
+    "sfx_generation": false,
+    "voice_design": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 50.0,
+      "output": 0.0
+    }
+  },
+  "lifecycle": {
+    "status": "active",
+    "release_date": "2026-08-13"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Voxtral Small 24B 2507 STT is a speech transcription model from Mistral AI. It is suited for transcription, translation, and audio understanding workloads that benefit from its larger model capacity.",
+  "tags": [],
+  "source": "generated"
+}

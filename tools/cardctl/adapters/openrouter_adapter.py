@@ -83,7 +83,10 @@ class OpenRouterAdapter(BaseAdapter):
         model_type = "chat"
         if "text" not in outputs:
             if "image" in outputs:
-                model_type = "image-generation"
+                # Called through chat completions with a token prompt, so the
+                # stated window is a real token budget: a multimodal model
+                # with image output, not a fixed-prompt image endpoint.
+                model_type = "multimodal"
             elif "audio" in outputs:
                 model_type = "tts"
             elif "video" in outputs:

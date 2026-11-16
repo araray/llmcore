@@ -1,0 +1,50 @@
+{
+  "model_id": "mistralai/mistral-embed-2312",
+  "display_name": "Mistral: Mistral Embed 2312",
+  "provider": "openrouter",
+  "model_type": "embedding",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 8192,
+    "max_output_tokens": 6553
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false,
+    "image_generation": false,
+    "image_edit": false,
+    "image_upscale": false,
+    "video_generation": false,
+    "video_interpolation": false,
+    "speech_synthesis": false,
+    "transcription": false,
+    "music_generation": false,
+    "sfx_generation": false,
+    "voice_design": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.1,
+      "output": 0.0
+    }
+  },
+  "lifecycle": {
+    "status": "active",
+    "release_date": "2025-10-31"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Mistral Embed is a specialized embedding model for text data, optimized for semantic search and RAG applications. Developed by Mistral AI in late 2023, it produces 1024-dimensional vectors that effectively...",
+  "tags": [],
+  "source": "generated"
+}

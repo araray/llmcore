@@ -1,0 +1,50 @@
+{
+  "model_id": "inclusionai/ling-3.0-tiny",
+  "display_name": "inclusionAI: Ling 3.0 Tiny",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 262144,
+    "max_output_tokens": 250000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": true,
+    "structured_output": true,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": true,
+    "image_generation": false,
+    "image_edit": false,
+    "image_upscale": false,
+    "video_generation": false,
+    "video_interpolation": false,
+    "speech_synthesis": false,
+    "transcription": false,
+    "music_generation": false,
+    "sfx_generation": false,
+    "voice_design": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.015,
+      "output": 0.045
+    }
+  },
+  "lifecycle": {
+    "status": "active",
+    "release_date": "2026-08-06"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Ling 3.0 Tiny is a mixture-of-experts model from InclusionAI, with 1.3B active parameters out of 7.9B total. It is designed for responsive agents, instruction following, and multi-turn conversations, with switchable...",
+  "tags": [],
+  "source": "generated"
+}

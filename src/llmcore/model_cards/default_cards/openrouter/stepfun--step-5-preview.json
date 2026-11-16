@@ -1,0 +1,50 @@
+{
+  "model_id": "stepfun/step-5-preview",
+  "display_name": "StepFun: Step 5 Preview",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 1000000,
+    "max_output_tokens": 64000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": true,
+    "structured_output": true,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": true,
+    "image_generation": false,
+    "image_edit": false,
+    "image_upscale": false,
+    "video_generation": false,
+    "video_interpolation": false,
+    "speech_synthesis": false,
+    "transcription": false,
+    "music_generation": false,
+    "sfx_generation": false,
+    "voice_design": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 1.0,
+      "output": 2.7
+    }
+  },
+  "lifecycle": {
+    "status": "active",
+    "release_date": "2026-10-08"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Step 5 Preview is StepFun's flagship model for agentic work, built on a sparse Mixture-of-Experts architecture (27B active / 600B total parameters). It performs strongly in software engineering and professional...",
+  "tags": [],
+  "source": "generated"
+}

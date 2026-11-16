@@ -1,0 +1,44 @@
+{
+  "model_id": "nvidia/llama-nemotron-embed-vl-1b-v2:free",
+  "display_name": "NVIDIA: Llama Nemotron Embed VL 1B V2 (free)",
+  "provider": "openrouter",
+  "model_type": "embedding",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 131072,
+    "max_output_tokens": 117964
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false,
+    "image_generation": false,
+    "image_edit": false,
+    "image_upscale": false,
+    "video_generation": false,
+    "video_interpolation": false,
+    "speech_synthesis": false,
+    "transcription": false,
+    "music_generation": false,
+    "sfx_generation": false,
+    "voice_design": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active",
+    "release_date": "2026-02-25"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "The Llama Nemotron Embed VL 1B V2 embedding model is optimized for multimodal question-answering retrieval. The model can embed 'documents' in the form of image, text, or image and text...",
+  "tags": [],
+  "source": "generated"
+}

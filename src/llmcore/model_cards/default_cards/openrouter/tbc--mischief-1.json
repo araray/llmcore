@@ -1,0 +1,41 @@
+{
+  "model_id": "tbc/mischief-1",
+  "display_name": "TBC: mischief 1",
+  "provider": "openrouter",
+  "model_type": "video-generation",
+  "architecture": null,
+  "context": null,
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false,
+    "image_generation": false,
+    "image_edit": false,
+    "image_upscale": false,
+    "video_generation": false,
+    "video_interpolation": false,
+    "speech_synthesis": false,
+    "transcription": false,
+    "music_generation": false,
+    "sfx_generation": false,
+    "voice_design": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active",
+    "release_date": "2026-10-30"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "TBC mischief 1 is the world's first neuron-derived video model from The Biological Computing Co. It supports image to video and is a fast and affordable way to bring ideas...",
+  "tags": [],
+  "source": "generated"
+}

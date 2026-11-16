@@ -1,0 +1,50 @@
+{
+  "model_id": "liquid/lfm-2.5-24b-a2b",
+  "display_name": "LiquidAI: LFM2.5-24B-A2B",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 128000,
+    "max_output_tokens": 8192
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": true,
+    "structured_output": true,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": true,
+    "image_generation": false,
+    "image_edit": false,
+    "image_upscale": false,
+    "video_generation": false,
+    "video_interpolation": false,
+    "speech_synthesis": false,
+    "transcription": false,
+    "music_generation": false,
+    "sfx_generation": false,
+    "voice_design": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.05,
+      "output": 0.7
+    }
+  },
+  "lifecycle": {
+    "status": "active",
+    "release_date": "2026-10-13"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "LFM2.5-24B-A2B is a mixture-of-experts reasoning model from Liquid AI with 24B total and 2.45B active parameters. It always reasons before answering and is built for agents that call tools. Liquid...",
+  "tags": [],
+  "source": "generated"
+}

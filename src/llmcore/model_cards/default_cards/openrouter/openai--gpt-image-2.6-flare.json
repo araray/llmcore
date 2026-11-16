@@ -1,0 +1,50 @@
+{
+  "model_id": "openai/gpt-image-2.6-flare",
+  "display_name": "OpenAI: GPT Image 2.6 Flare",
+  "provider": "openrouter",
+  "model_type": "multimodal",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 400000,
+    "max_output_tokens": 360000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": true,
+    "structured_output": true,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false,
+    "image_generation": false,
+    "image_edit": false,
+    "image_upscale": false,
+    "video_generation": false,
+    "video_interpolation": false,
+    "speech_synthesis": false,
+    "transcription": false,
+    "music_generation": false,
+    "sfx_generation": false,
+    "voice_design": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 8.0,
+      "output": 8.0
+    }
+  },
+  "lifecycle": {
+    "status": "active",
+    "release_date": "2026-11-04"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "GPT Image 2.6 Flare is OpenAI's image generation and editing model optimized for speed: fast iteration and interactive text-to-image and image-to-image workflows, generating about 50% faster than GPT Image 2.5....",
+  "tags": [],
+  "source": "generated"
+}

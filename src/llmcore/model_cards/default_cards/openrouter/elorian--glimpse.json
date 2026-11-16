@@ -1,0 +1,50 @@
+{
+  "model_id": "elorian/glimpse",
+  "display_name": "Elorian: Glimpse",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 262144,
+    "max_output_tokens": 256000
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": true,
+    "structured_output": true,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": true,
+    "image_generation": false,
+    "image_edit": false,
+    "image_upscale": false,
+    "video_generation": false,
+    "video_interpolation": false,
+    "speech_synthesis": false,
+    "transcription": false,
+    "music_generation": false,
+    "sfx_generation": false,
+    "voice_design": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.6,
+      "output": 3.0
+    }
+  },
+  "lifecycle": {
+    "status": "active",
+    "release_date": "2026-10-17"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Glimpse is a multimodal visual reasoning model from Elorian, built for visual understanding and complex visual reasoning in the physical world. It reasons directly over images and video rather than...",
+  "tags": [],
+  "source": "generated"
+}

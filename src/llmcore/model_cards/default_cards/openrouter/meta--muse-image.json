@@ -1,0 +1,44 @@
+{
+  "model_id": "meta/muse-image",
+  "display_name": "Meta: Muse Image",
+  "provider": "openrouter",
+  "model_type": "multimodal",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 65536,
+    "max_output_tokens": 58982
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false,
+    "image_generation": false,
+    "image_edit": false,
+    "image_upscale": false,
+    "video_generation": false,
+    "video_interpolation": false,
+    "speech_synthesis": false,
+    "transcription": false,
+    "music_generation": false,
+    "sfx_generation": false,
+    "voice_design": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active",
+    "release_date": "2026-08-26"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Muse Image is an agentic image generation model from Meta that generates and edits images from text and reference images. Unlike single-pass image models, it reasons before it renders, breaking...",
+  "tags": [],
+  "source": "generated"
+}

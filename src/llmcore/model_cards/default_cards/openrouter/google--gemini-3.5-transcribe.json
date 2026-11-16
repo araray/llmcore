@@ -1,0 +1,50 @@
+{
+  "model_id": "google/gemini-3.5-transcribe",
+  "display_name": "Google: Gemini 3.5 Transcribe",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 98304,
+    "max_output_tokens": 32768
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false,
+    "image_generation": false,
+    "image_edit": false,
+    "image_upscale": false,
+    "video_generation": false,
+    "video_interpolation": false,
+    "speech_synthesis": false,
+    "transcription": false,
+    "music_generation": false,
+    "sfx_generation": false,
+    "voice_design": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 2.0,
+      "output": 12.0
+    }
+  },
+  "lifecycle": {
+    "status": "active",
+    "release_date": "2026-09-25"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Gemini 3.5 Transcribe is a speech-to-text model from Google. It is suited for synchronous transcription that needs word-level timestamps or speaker diarization, with support for up to eight speakers. Audio...",
+  "tags": [],
+  "source": "generated"
+}
