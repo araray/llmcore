@@ -65,6 +65,7 @@ from ..models import Role as LLMCoreRole
 from ..tokens import EstimateCounter as _EstimateCounter
 from . import openai_responses as rsp
 from .base import BaseProvider, ContextPayload
+from ._media_bridge import LegacyMediaBridge
 from .openai_provider import nearest_effort
 
 try:
@@ -244,7 +245,7 @@ def _normalize_message_content(message: dict[str, Any]) -> None:
         message["reasoning_content"] = thinking
 
 
-class MistralProvider(BaseProvider):
+class MistralProvider(LegacyMediaBridge, BaseProvider):
     """LLMCore provider for the native Mistral AI API.
 
     Uses ``httpx.AsyncClient`` directly.  No ``mistralai`` SDK dependency.
@@ -264,6 +265,9 @@ class MistralProvider(BaseProvider):
     #: Parameters a model answered "not enabled for this model" to, per model.
     #: Learned once per process; the request is retried without them.
     _REJECTED_PARAMS: dict[str, set[str]] = {}
+
+    #: Served through llm.media by the legacy-method bridge (_media_bridge).
+    _MEDIA_CAPABILITIES: frozenset[str] = frozenset({"tts", "asr", "ocr"})
 
     def __init__(self, config: dict[str, Any], log_raw_payloads: bool = False):
         super().__init__(config, log_raw_payloads)
@@ -285,6 +289,11 @@ class MistralProvider(BaseProvider):
         self.api_key = api_key
         self.base_url = config.get("base_url", DEFAULT_MISTRAL_BASE_URL).rstrip("/")
         self.default_model = config.get("default_model", DEFAULT_MODEL)
+        #: Speech model used when a call names none. The API now requires a
+        #: model (422 "No model provided for speech" without one).
+        #: voxtral-mini-tts-3 takes preset voices and ref_audio; -latest (2603)
+        #: takes ref_audio only (measured 2026-11-16).
+        self.tts_model: str = str(config.get("tts_model") or "voxtral-mini-tts-3")
         self.timeout = float(config.get("timeout", 120.0))
         self.max_retries = int(config.get("max_retries", 2))
         self._discovered_context_lengths = {}
@@ -1357,7 +1366,7 @@ class MistralProvider(BaseProvider):
         """
         from ..models_multimodal import SpeechResult
 
-        tts_model = model or kwargs.pop("tts_model", None)
+        tts_model = model or kwargs.pop("tts_model", None) or self.tts_model
 
         body: dict[str, Any] = {
             "input": text,

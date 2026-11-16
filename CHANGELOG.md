@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added — Mistral, Z.ai and Gemini media reachable through `llm.media`
+
+- **Mistral** (TTS, ASR, OCR) and **Z.ai** (TTS, ASR, OCR, images, video)
+  had working legacy methods that the media manager never routed to, because
+  neither provider was a media adapter. A shared bridge
+  (`providers/_media_bridge.py`) now exposes them through the media
+  protocols. Z.ai video is a polled `MediaJob` on `/async-result/{id}`, and
+  its cancel refuses honestly because Z.ai has no cancel endpoint.
+- **Mistral speech** sent no model unless one was given, and the API now
+  answers 422 "No model provided for speech". It defaults to
+  `voxtral-mini-tts-3` (configurable as `tts_model`).
+- **Gemini `asr`** via `gemini-3.5-transcribe` on the Developer API
+  (`generateContent`). It answers with an `audio_transcription` part, which
+  `response.text` ignores.
+- Verified live: Mistral and Gemini transcription returned the exact text.
+  Mistral OCR and TTS, and Z.ai video, reach the API and stop only on those
+  accounts' quota or balance.
+- README: a table of which provider serves which media capability.
+
 ### Fixed — agents `ModelRouter` defaults named only retired models
 
 - `DEFAULT_MODELS` listed gpt-3.5-turbo, o1-preview, Claude 3, Gemini 1.5 and

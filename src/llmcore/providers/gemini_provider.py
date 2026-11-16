@@ -477,11 +477,12 @@ class GeminiProvider(BaseProvider):
         self._vertex_ai = config.get("vertex_ai", False)
         # Optional per-capability media model overrides:
         #   default_image_model / default_video_model /
-        #   default_tts_model / default_embedding_model
+        #   default_tts_model / default_asr_model / default_embedding_model
         self._media_model_config: dict[str, Any] = {
             "image": config.get("default_image_model"),
             "video": config.get("default_video_model"),
             "tts": config.get("default_tts_model"),
+            "asr": config.get("default_asr_model"),
             "embed": config.get("default_embedding_model"),
         }
         self._project = config.get("project")
@@ -1849,11 +1850,17 @@ class GeminiProvider(BaseProvider):
         {"image_edit", "image_upscale", "video_generate"}
     )
 
+    #: Developer-API-only capabilities: ``gemini-3.5-transcribe`` is listed and
+    #: verified there (generateContent, 2026-11-16); its Vertex availability
+    #: is unverified, so it is not declared in Vertex mode.
+    _DEV_ONLY_MEDIA_CAPABILITIES: frozenset[str] = frozenset({"asr"})
+
     #: Default models per media capability, overridable per call and via config.
     _DEFAULT_IMAGE_MODEL = "imagen-4.0-generate-001"        # Vertex only
     _DEFAULT_DEV_IMAGE_MODEL = "gemini-nano-banana-2.1"     # Developer API (GA)
     _DEFAULT_VIDEO_MODEL = "veo-3.1-generate-001"           # Vertex only
     _DEFAULT_TTS_MODEL = "gemini-3.8-flash-tts"
+    _DEFAULT_ASR_MODEL = "gemini-3.5-transcribe"
     _DEFAULT_EMBED_MODEL = "gemini-embedding-2"
 
     def media_capabilities(self) -> "frozenset[MediaCapability]":
@@ -1868,6 +1875,8 @@ class GeminiProvider(BaseProvider):
         names = set(self._MEDIA_CAPABILITIES)
         if self._vertex_ai:
             names |= self._VERTEX_ONLY_MEDIA_CAPABILITIES
+        else:
+            names |= self._DEV_ONLY_MEDIA_CAPABILITIES
         return frozenset(MediaCapability(c) for c in names)
 
     def media_execution(
@@ -1896,6 +1905,7 @@ class GeminiProvider(BaseProvider):
             "image": self._DEFAULT_IMAGE_MODEL,
             "video": self._DEFAULT_VIDEO_MODEL,
             "tts": self._DEFAULT_TTS_MODEL,
+            "asr": self._DEFAULT_ASR_MODEL,
             "embed": self._DEFAULT_EMBED_MODEL,
         }[capability]
 
@@ -2278,6 +2288,83 @@ class GeminiProvider(BaseProvider):
                 model=tts_model,
                 basis="per_character",
                 characters=len(text),
+            ),
+        )
+
+    # --- transcription ---
+
+    async def transcribe_media(
+        self,
+        *,
+        audio: "MediaRef",
+        model: str | None = None,
+        language: str | None = None,
+        diarize: bool | None = None,
+        timestamps: bool | None = None,
+        **kwargs: Any,
+    ) -> "MediaResult":
+        """Transcribe audio with ``gemini-3.5-transcribe`` (``generateContent``).
+
+        The model answers with an ``audio_transcription`` part (``text``
+        only; ``response.text`` is empty), and ignores prompting for
+        timestamps, so ``timestamps`` / ``diarize`` are not offered. A
+        ``language`` hint is sent as a short text part.
+        """
+        from google.genai import types as genai_types
+
+        from ..media.models import MediaCapability, MediaResult, MediaUsage
+        from ..models_multimodal import TranscriptionResult
+
+        for unsupported, value in (("timestamps", timestamps), ("diarize", diarize)):
+            if value:
+                logger.debug("Gemini transcription ignores '%s' (text only).", unsupported)
+        asr_model = self._media_model("asr", model)
+        if audio.is_remote:
+            from ..media.artifacts import default_fetcher
+
+            data = await default_fetcher()(audio.url or "")
+        else:
+            data = audio.read_bytes()
+        parts: list[Any] = [
+            genai_types.Part.from_bytes(data=data, mime_type=audio.mime_type or "audio/mpeg")
+        ]
+        if language:
+            parts.append(genai_types.Part.from_text(text=f"The audio is in {language}."))
+        try:
+            response = await self._client.aio.models.generate_content(
+                model=asr_model,
+                contents=parts,
+                config=genai_types.GenerateContentConfig(**kwargs) if kwargs else None,
+            )
+        except Exception as e:
+            self._raise_media_error(e, asr_model, "transcription")
+
+        pieces: list[str] = []
+        for candidate in getattr(response, "candidates", None) or []:
+            for part in getattr(getattr(candidate, "content", None), "parts", None) or []:
+                spoken = getattr(part, "audio_transcription", None)
+                if spoken is not None and getattr(spoken, "text", None):
+                    pieces.append(spoken.text)
+                elif getattr(part, "text", None):
+                    pieces.append(part.text)
+        usage = getattr(response, "usage_metadata", None)
+        transcript = TranscriptionResult(
+            text=" ".join(p.strip() for p in pieces if p.strip()),
+            language=language,
+            model=str(getattr(response, "model_version", None) or asr_model),
+            metadata={"response_id": getattr(response, "response_id", None)},
+        )
+        return MediaResult(
+            capability=MediaCapability.ASR,
+            provider=self.get_name(),
+            model=transcript.model,
+            artifacts=(transcript.to_artifact(),),
+            usage=MediaUsage(
+                provider=self.get_name(),
+                model=transcript.model,
+                basis="per_token",
+                input_tokens=getattr(usage, "prompt_token_count", None),
+                output_tokens=getattr(usage, "candidates_token_count", None),
             ),
         )
 

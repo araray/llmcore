@@ -1233,6 +1233,7 @@ max_retries = 2
   #   Code / FIM: codestral-latest (alias mistral-code-latest)
   #   Audio:      voxtral-small-latest (chat with audio input),
   #               voxtral-mini-transcribe-3 (STT), voxtral-mini-tts-3 (TTS)
+  # tts_model = "voxtral-mini-tts-3"   # default speech model (preset voices + ref_audio)
   #   OCR:        mistral-ocr-latest (OCR 4)
   #   Embedding:  mistral-embed, codestral-embed (output_dimension)
   #   magistral-* ids are now aliases of Small and Medium.

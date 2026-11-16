@@ -154,6 +154,7 @@ from ..models_multimodal import (
 from ..tokens import EstimateCounter as _EstimateCounter
 from . import openai_responses as rsp
 from .base import BaseProvider, ContextPayload
+from ._media_bridge import ZaiVideoJobs, LegacyMediaBridge
 from .openai_provider import nearest_effort
 
 logger = logging.getLogger(__name__)
@@ -225,7 +226,7 @@ _VALID_EFFORTS: frozenset[str] = frozenset(
 )
 
 
-class ZaiProvider(BaseProvider):
+class ZaiProvider(ZaiVideoJobs, LegacyMediaBridge, BaseProvider):
     """First-class Z.ai (GLM) provider with native thinking-mode support.
 
     Configuration keys (under ``[providers.zai]``):
@@ -261,6 +262,9 @@ class ZaiProvider(BaseProvider):
     _base_url: str
     _timeout: float
     _http: Any  # httpx.AsyncClient | None
+
+    #: Served through llm.media by the legacy-method bridge (_media_bridge).
+    _MEDIA_CAPABILITIES: frozenset[str] = frozenset({"tts", "asr", "ocr", "image_generate", "video_generate"})
 
     def __init__(self, config: dict[str, Any], log_raw_payloads: bool = False):
         """Initialize the Z.ai provider.

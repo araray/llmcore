@@ -263,6 +263,21 @@ them. Polling remains the fallback, so no public ingress is required.
 | **Audio** | `tts`, `tts_stream`, `asr`, `asr_stream`, `music`, `sfx`, `voice_design`, `voice_agent` |
 | **Document** | `ocr` |
 
+Which provider serves what (default configuration, 2026-11-16):
+
+| Provider | Media capabilities |
+|---|---|
+| OpenAI | `image_generate`, `image_edit`, `tts`, `tts_stream`, `asr` |
+| Gemini | `image_generate`, `tts`; `asr` on the Developer API; `image_edit`, `image_upscale`, `video_generate` on Vertex |
+| Mistral | `tts`, `asr`, `ocr` |
+| Z.ai | `tts`, `asr`, `ocr`, `image_generate`, `video_generate` (job) |
+| DeepInfra, Hugging Face | `image_generate`, `tts`, `asr` |
+| ElevenLabs | `tts`, `tts_stream`, `asr`, `asr_stream`, `sfx`, `music`, `voice_design` |
+| Deepgram | `tts`, `tts_stream`, `asr`, `asr_stream`, `voice_agent` |
+| fal | `image_generate`, `image_edit`, `image_upscale`, `video_generate`, `video_interpolate`, `sfx`, `music`, `tts`, `asr` |
+| Replicate | `image_generate`, `image_edit`, `image_upscale`, `video_generate`, `music`, `tts`, `asr` |
+| Higgsfield | `image_generate`, `video_generate` |
+
 Artifacts carry bytes or a URI, checksums, dimensions/duration, usage, and
 provenance. A content-addressed store can materialize remote artifacts before
 vendor URLs expire. For synthetic speech, provenance includes a `VoiceConsent`

@@ -120,10 +120,12 @@ class TestConformance:
     def test_declared_capabilities_developer_api(self, provider):
         # No video on the Developer API: its Veo previews were shut down on
         # 2026-10-22, and google-genai 3.x refuses generate_videos outside Vertex.
+        # ASR (gemini-3.5-transcribe) is declared on the Developer API only.
         assert provider.media_capabilities() == frozenset(
             {
                 MediaCapability.IMAGE_GENERATE,
                 MediaCapability.TTS,
+                MediaCapability.ASR,
             }
         )
 
@@ -570,9 +572,9 @@ class TestRouting:
     def test_developer_api_does_not_offer_video(self, provider):
         assert MediaManager({"gemini": provider}).who_can(MediaCapability.VIDEO_GENERATE) == []
 
-    def test_gemini_does_not_claim_asr(self, provider):
-        media = MediaManager({"gemini": provider})
-        assert media.who_can(MediaCapability.ASR) == []
+    def test_gemini_claims_asr_on_the_developer_api_only(self, provider, vertex_provider):
+        assert MediaManager({"gemini": provider}).who_can(MediaCapability.ASR) == ["gemini"]
+        assert MediaManager({"gemini": vertex_provider}).who_can(MediaCapability.ASR) == []
 
     async def test_image_routes_through_the_router(self, provider):
         part = MagicMock(inline_data=MagicMock(data=b"P", mime_type="image/png"))
