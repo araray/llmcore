@@ -83,7 +83,7 @@ class OllamaAdapter(BaseAdapter):
         try:
             resp = await client.post(
                 f"{url}/api/show",
-                json={"name": model_name},
+                json={"model": model_name},  # "name" is the deprecated key
                 timeout=10,
             )
             if resp.status_code == 200:
@@ -111,10 +111,18 @@ class OllamaAdapter(BaseAdapter):
 
         arch_type = _FAMILY_ARCH_MAP.get(family, "dense")
 
+        # The server states capabilities itself (show, and tags since 0.34.1):
+        # completion / tools / thinking / vision / embedding / decision.
+        capabilities = details.get("capabilities") or listing.get("capabilities") or []
+        if "embedding" in capabilities and "completion" not in capabilities:
+            model_type = "embedding"
+        else:
+            model_type = "chat"
+
         normalized = NormalizedModel(
             model_id=model_name,
             provider="ollama",
-            model_type="chat",
+            model_type=model_type,
             context_length=context_length,
             supports_streaming=True,
             architecture_family=family or None,
@@ -126,15 +134,20 @@ class OllamaAdapter(BaseAdapter):
             raw_api_data={"listing": listing, "details": details},
         )
 
-        # Vision detection
-        families = model_details.get("families", []) or []
-        if "clip" in families or "vision" in family:
-            normalized.supports_vision = True
-            normalized.tags.append("vision")
-
-        # Tool support for newer models
-        if any(f in family for f in ("llama3", "qwen2", "qwen3", "gemma3", "mistral")):
-            normalized.supports_tools = True
+        if capabilities:
+            normalized.supports_vision = "vision" in capabilities
+            normalized.supports_tools = "tools" in capabilities
+            normalized.supports_reasoning = "thinking" in capabilities
+            if normalized.supports_vision:
+                normalized.tags.append("vision")
+        else:
+            # Older servers: guess from the family, as before.
+            families = model_details.get("families", []) or []
+            if "clip" in families or "vision" in family:
+                normalized.supports_vision = True
+                normalized.tags.append("vision")
+            if any(f in family for f in ("llama3", "qwen2", "qwen3", "gemma3", "mistral")):
+                normalized.supports_tools = True
 
         if quant:
             normalized.tags.append(f"quant:{quant}")

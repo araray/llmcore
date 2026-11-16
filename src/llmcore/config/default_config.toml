@@ -909,11 +909,37 @@ max_retries = 2
   # The official `ollama` Python library uses this parameter.
   # host = "http://localhost:11434"
 
+  # (OLLAMA_HOST is honoured too, on both backends.)
+
   # Default local model to use. Ensure you have run `ollama pull <model_name>`.
-  default_model = "llama3"
+  # qwen3.5:4b has tools, thinking and vision and fits a 6 GiB GPU; llama3
+  # (the old default) has no tool support.
+  default_model = "qwen3.5:4b"
 
   # Longer timeout is recommended for local models.
   timeout = 240
+
+  # Context window the server allocates for every request. Without it Ollama
+  # uses its own default - 4096 below 24 GiB of VRAM, 32k below 48 GiB, 256k
+  # above - whatever the model was trained for, and truncates longer prompts
+  # SILENTLY. llmcore reads the effective window from /api/ps and warns, but
+  # setting this (or OLLAMA_CONTEXT_LENGTH on the server) is the fix.
+  # num_ctx = 32768
+
+  # Transport: "sdk" (ollama-python, default) or "httpx" (direct REST; it also
+  # reads /api/show fields the SDK drops, such as thinking levels).
+  # backend = "sdk"
+
+  # keep_alive = "5m"          # default keep_alive for requests
+  # models_cache_ttl = 60      # seconds to cache get_models_details()
+  # api_key = "..."            # ollama.com cloud / authenticated proxies
+  #                            # (or OLLAMA_API_KEY)
+  #
+  # effort= maps to think: "none" -> false, otherwise true (or the nearest
+  # level the model lists). Tool loops: put
+  # provider.assistant_replay_metadata(response) into the next assistant
+  # Message's metadata (it carries the thinking back); tool_calls go in
+  # Message.tool_calls.
 
   # Tokenizer for token counting. `tiktoken_cl100k_base` is a good default.
   # Use 'char_div_4' as a rough fallback if tiktoken causes issues with a model.

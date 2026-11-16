@@ -41,25 +41,34 @@ def ollama_provider():
         return OllamaProvider(config)
 
 
+@pytest.fixture
+def no_cards():
+    """The table is the last resort now: mask the cards to reach it."""
+    registry = MagicMock()
+    registry.get_context_length.return_value = 0
+    with patch("llmcore.model_cards.get_model_card_registry", return_value=registry):
+        yield
+
+
 class TestOllamaContextLengthFromModelCard:
     """OllamaProvider should consult model card registry for unknown models."""
 
-    def test_hardcoded_model_uses_dict(self, ollama_provider):
+    def test_hardcoded_model_uses_dict(self, ollama_provider, no_cards):
         """Models in DEFAULT_OLLAMA_TOKEN_LIMITS use the hardcoded value."""
-        assert ollama_provider.get_max_context_length("llama3") == 8000
+        assert ollama_provider.get_max_context_length("llama3") == 8192
 
-    def test_hardcoded_model_with_tag(self, ollama_provider):
+    def test_hardcoded_model_with_tag(self, ollama_provider, no_cards):
         """Models with tags (e.g. llama3:8b) also match the hardcoded dict."""
-        assert ollama_provider.get_max_context_length("llama3:8b") == 8000
+        assert ollama_provider.get_max_context_length("llama3:8b") == 8192
 
-    def test_qwen3_4b_in_hardcoded_dict(self, ollama_provider):
-        """qwen3:4b should resolve from hardcoded dict (262144) without
-        needing model card fallback — the original bug was a 4096 fallback."""
-        assert ollama_provider.get_max_context_length("qwen3:4b") == 262144
+    def test_qwen3_4b_in_hardcoded_dict(self, ollama_provider, no_cards):
+        """qwen3:4b resolves from the table, not the 4096 fallback. Its
+        trained window is 40960 (the server reports it); 262144 was wrong."""
+        assert ollama_provider.get_max_context_length("qwen3:4b") == 40960
 
-    def test_qwen3_base_name_in_hardcoded_dict(self, ollama_provider):
+    def test_qwen3_base_name_in_hardcoded_dict(self, ollama_provider, no_cards):
         """qwen3 base name should also resolve from hardcoded dict."""
-        assert ollama_provider.get_max_context_length("qwen3") == 262144
+        assert ollama_provider.get_max_context_length("qwen3") == 40960
 
     def test_unknown_model_falls_back_to_model_card(self, ollama_provider):
         """Models not in hardcoded dict should consult model card registry."""
@@ -104,9 +113,18 @@ class TestOllamaContextLengthFromModelCard:
 
         assert result == 4096
 
-    def test_base_model_name_strips_tag(self, ollama_provider):
+    def test_base_model_name_strips_tag(self, ollama_provider, no_cards):
         """Hardcoded dict lookup tries both full name and base name."""
-        assert ollama_provider.get_max_context_length("gemma3:4b") == 128000
+        assert ollama_provider.get_max_context_length("gemma3:4b") == 131072
+
+    def test_server_figures_win(self, ollama_provider):
+        """num_ctx, then what the server loaded, then what it says it was trained on."""
+        ollama_provider._server_ctx["qwen3.5:4b"] = 262144
+        assert ollama_provider.get_max_context_length("qwen3.5:4b") == 262144
+        ollama_provider._effective_ctx["qwen3.5:4b"] = 4096  # /api/ps on a 6 GiB GPU
+        assert ollama_provider.get_max_context_length("qwen3.5:4b") == 4096
+        ollama_provider.num_ctx = 32768
+        assert ollama_provider.get_max_context_length("qwen3.5:4b") == 32768
 
     def test_default_model_used_when_none(self, ollama_provider):
         """When model=None, uses provider's default_model."""

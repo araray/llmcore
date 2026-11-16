@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Fixed — Ollama: silent context truncation, tool-loop replay, direct-backend listing
+
+Audited against a live server (0.32.14) and ollama-python 0.6.3 on
+2026-11-16. Verified live on both backends.
+
+- **Silent truncation.** The server loads models with its own default
+  context: 4096 on the test GPU (`/api/ps`), while llmcore assumed the
+  trained 262,144. A new `num_ctx` setting is sent with every request.
+  Without it, the effective window is read from `/api/ps` and reported by
+  `get_max_context_length()`, with a one-time warning. The server's own
+  figures now come before the static table, which had qwen3 at 262,144
+  instead of 40,960.
+- **Tool loops.** Assistant turns were sent without their `tool_calls` and
+  `thinking`. Both are replayed now, with arguments as objects. Tool results
+  get `tool_name`, resolved from the call id or by position, since the SDK
+  drops ids. Tool calls keep the server's `id`. `assistant_replay_metadata()`
+  returns the thinking, and the final stream chunk carries all of it.
+- **Direct backend**: model listing crashed (a dict read as an object); it
+  now uses the tags' own capabilities and windows. It honours `OLLAMA_HOST`
+  and sends `api_key` / `OLLAMA_API_KEY` (ollama.com cloud).
+- `effort=` maps to `think` ("none" turns it off). Usage reports cached
+  tokens and the finish reason when the server sends them.
+- Default `qwen3.5:4b` (tools, thinking, vision); config and code used to
+  disagree, on `llama3` and `gemma3:4b`, neither of which has tools. cardctl
+  takes types and capabilities from the server instead of guessing from the
+  family, so embedding models stop being carded as chat models.
+
 ### Changed — Hugging Face: router catalogue, reasoning replay, broken config section, hub 2.4
 
 Audited against the live router and huggingface_hub 2.4 on 2026-11-16.

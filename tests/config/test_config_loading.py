@@ -82,8 +82,9 @@ class TestConfyParameterNames:
 
         # WRONG (old bug): config_file_path= — silently ignored
         cfg_wrong = Config(defaults=defaults, config_file_path=user_config)
-        # The file is NOT loaded, so the default "llama3" remains
-        assert cfg_wrong.get("providers.ollama.default_model") == "llama3"
+        # The file is NOT loaded, so the packaged default remains
+        expected = defaults["providers"]["ollama"]["default_model"]
+        assert cfg_wrong.get("providers.ollama.default_model") == expected
 
     def test_overrides_dict_is_used_not_overrides(self, tmp_path):
         """Override dict values must override everything when overrides_dict is correct."""
