@@ -39,7 +39,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterator, Mapping
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import (
@@ -130,237 +130,111 @@ class TierConfig:
 # =============================================================================
 
 
-# Default model configurations
-DEFAULT_MODELS: dict[str, ModelInfo] = {
-    # OpenAI - Fast Tier
-    "gpt-4o-mini": ModelInfo(
-        id="gpt-4o-mini",
-        tier=ModelTier.FAST,
-        provider="openai",
-        capabilities={
-            ModelCapability.NATIVE_TOOLS,
-            ModelCapability.VISION,
-            ModelCapability.STRUCTURED_OUTPUT,
-            ModelCapability.STREAMING,
-        },
-        context_window=128000,
-        cost_per_1k_input=0.00015,
-        cost_per_1k_output=0.0006,
-        max_output_tokens=16384,
-    ),
-    "gpt-3.5-turbo": ModelInfo(
-        id="gpt-3.5-turbo",
-        tier=ModelTier.FAST,
-        provider="openai",
-        capabilities={
-            ModelCapability.NATIVE_TOOLS,
-            ModelCapability.STRUCTURED_OUTPUT,
-            ModelCapability.STREAMING,
-        },
-        context_window=16384,
-        cost_per_1k_input=0.0005,
-        cost_per_1k_output=0.0015,
-        max_output_tokens=4096,
-    ),
-    # OpenAI - Balanced Tier
-    "gpt-4o": ModelInfo(
-        id="gpt-4o",
-        tier=ModelTier.BALANCED,
-        provider="openai",
-        capabilities={
-            ModelCapability.NATIVE_TOOLS,
-            ModelCapability.VISION,
-            ModelCapability.LONG_CONTEXT,
-            ModelCapability.STRUCTURED_OUTPUT,
-            ModelCapability.STREAMING,
-        },
-        context_window=128000,
-        cost_per_1k_input=0.0025,
-        cost_per_1k_output=0.01,
-        max_output_tokens=16384,
-    ),
-    # OpenAI - Capable Tier
-    "gpt-4-turbo": ModelInfo(
-        id="gpt-4-turbo",
-        tier=ModelTier.CAPABLE,
-        provider="openai",
-        capabilities={
-            ModelCapability.NATIVE_TOOLS,
-            ModelCapability.VISION,
-            ModelCapability.LONG_CONTEXT,
-            ModelCapability.STRUCTURED_OUTPUT,
-            ModelCapability.STREAMING,
-        },
-        context_window=128000,
-        cost_per_1k_input=0.01,
-        cost_per_1k_output=0.03,
-        max_output_tokens=4096,
-    ),
-    "o1-preview": ModelInfo(
-        id="o1-preview",
-        tier=ModelTier.CAPABLE,
-        provider="openai",
-        capabilities={
-            ModelCapability.REASONING,
-            ModelCapability.LONG_CONTEXT,
-        },
-        context_window=128000,
-        cost_per_1k_input=0.015,
-        cost_per_1k_output=0.06,
-        max_output_tokens=32768,
-    ),
-    # Anthropic - Fast Tier
-    "claude-3-haiku-20240307": ModelInfo(
-        id="claude-3-haiku-20240307",
-        tier=ModelTier.FAST,
-        provider="anthropic",
-        capabilities={
-            ModelCapability.NATIVE_TOOLS,
-            ModelCapability.VISION,
-            ModelCapability.STREAMING,
-        },
-        context_window=200000,
-        cost_per_1k_input=0.00025,
-        cost_per_1k_output=0.00125,
-        max_output_tokens=4096,
-    ),
-    # Anthropic - Balanced Tier
-    "claude-sonnet-4-20250514": ModelInfo(
-        id="claude-sonnet-4-20250514",
-        tier=ModelTier.BALANCED,
-        provider="anthropic",
-        capabilities={
-            ModelCapability.NATIVE_TOOLS,
-            ModelCapability.VISION,
-            ModelCapability.LONG_CONTEXT,
-            ModelCapability.STREAMING,
-            ModelCapability.REASONING,
-        },
-        context_window=200000,
-        cost_per_1k_input=0.003,
-        cost_per_1k_output=0.015,
-        max_output_tokens=8192,
-    ),
-    "claude-3-5-sonnet-20241022": ModelInfo(
-        id="claude-3-5-sonnet-20241022",
-        tier=ModelTier.BALANCED,
-        provider="anthropic",
-        capabilities={
-            ModelCapability.NATIVE_TOOLS,
-            ModelCapability.VISION,
-            ModelCapability.LONG_CONTEXT,
-            ModelCapability.STREAMING,
-            ModelCapability.CODE_EXECUTION,
-        },
-        context_window=200000,
-        cost_per_1k_input=0.003,
-        cost_per_1k_output=0.015,
-        max_output_tokens=8192,
-    ),
-    # Anthropic - Capable Tier
-    "claude-opus-4-20250514": ModelInfo(
-        id="claude-opus-4-20250514",
-        tier=ModelTier.CAPABLE,
-        provider="anthropic",
-        capabilities={
-            ModelCapability.NATIVE_TOOLS,
-            ModelCapability.VISION,
-            ModelCapability.LONG_CONTEXT,
-            ModelCapability.STREAMING,
-            ModelCapability.REASONING,
-            ModelCapability.CODE_EXECUTION,
-        },
-        context_window=200000,
-        cost_per_1k_input=0.015,
-        cost_per_1k_output=0.075,
-        max_output_tokens=32768,
-    ),
-    # Google - Balanced Tier
-    "gemini-1.5-pro": ModelInfo(
-        id="gemini-1.5-pro",
-        tier=ModelTier.BALANCED,
-        provider="google",
-        capabilities={
-            ModelCapability.NATIVE_TOOLS,
-            ModelCapability.VISION,
-            ModelCapability.LONG_CONTEXT,
-            ModelCapability.STREAMING,
-        },
-        context_window=2000000,
-        cost_per_1k_input=0.00125,
-        cost_per_1k_output=0.005,
-        max_output_tokens=8192,
-    ),
-    "gemini-1.5-flash": ModelInfo(
-        id="gemini-1.5-flash",
-        tier=ModelTier.FAST,
-        provider="google",
-        capabilities={
-            ModelCapability.NATIVE_TOOLS,
-            ModelCapability.VISION,
-            ModelCapability.LONG_CONTEXT,
-            ModelCapability.STREAMING,
-        },
-        context_window=1000000,
-        cost_per_1k_input=0.000075,
-        cost_per_1k_output=0.0003,
-        max_output_tokens=8192,
-    ),
-    # DeepSeek - Fast/Balanced
-    "deepseek-chat": ModelInfo(
-        id="deepseek-chat",
-        tier=ModelTier.FAST,
-        provider="deepseek",
-        capabilities={
-            ModelCapability.NATIVE_TOOLS,
-            ModelCapability.STREAMING,
-        },
-        context_window=64000,
-        cost_per_1k_input=0.00014,
-        cost_per_1k_output=0.00028,
-        max_output_tokens=8192,
-    ),
-    "deepseek-reasoner": ModelInfo(
-        id="deepseek-reasoner",
-        tier=ModelTier.BALANCED,
-        provider="deepseek",
-        capabilities={
-            ModelCapability.REASONING,
-            ModelCapability.STREAMING,
-        },
-        context_window=64000,
-        cost_per_1k_input=0.00055,
-        cost_per_1k_output=0.00219,
-        max_output_tokens=8192,
-    ),
-    # Local models via Ollama (no cost, variable capability)
-    "llama3.3:70b": ModelInfo(
-        id="llama3.3:70b",
-        tier=ModelTier.BALANCED,
-        provider="ollama",
-        capabilities={
-            ModelCapability.NATIVE_TOOLS,
-            ModelCapability.STREAMING,
-        },
-        context_window=128000,
-        cost_per_1k_input=0.0,
-        cost_per_1k_output=0.0,
-        max_output_tokens=8192,
-    ),
-    "qwen2.5:32b": ModelInfo(
-        id="qwen2.5:32b",
-        tier=ModelTier.FAST,
-        provider="ollama",
-        capabilities={
-            ModelCapability.NATIVE_TOOLS,
-            ModelCapability.STREAMING,
-        },
-        context_window=32000,
-        cost_per_1k_input=0.0,
-        cost_per_1k_output=0.0,
-        max_output_tokens=8192,
-    ),
-}
+#: (provider, model id, tier) for the default registry. Prices, windows and
+#: capabilities are NOT written here: they are read from the bundled model
+#: cards, so they cannot drift from what cost tracking uses. A model whose
+#: card carries no price is left out rather than treated as free (cost
+#: optimisation would otherwise prefer it); local Ollama models are free.
+#: Reviewed 2026-11-16; the previous table named only retired models
+#: (gpt-3.5-turbo, o1-preview, Claude 3, Gemini 1.5, deepseek-chat/-reasoner).
+_DEFAULT_SPECS: tuple[tuple[str, str, ModelTier], ...] = (
+    ("anthropic", "claude-haiku-5-5", ModelTier.FAST),
+    ("openai", "gpt-5.4-nano", ModelTier.FAST),
+    ("openai", "gpt-5.4-mini", ModelTier.FAST),
+    ("google", "gemini-2.5-flash-lite", ModelTier.FAST),
+    ("google", "gemini-2.5-flash", ModelTier.FAST),
+    ("ollama", "qwen3.5:4b", ModelTier.FAST),
+    ("anthropic", "claude-sonnet-5-5", ModelTier.BALANCED),
+    ("openai", "gpt-5.4", ModelTier.BALANCED),
+    ("google", "gemini-2.5-pro", ModelTier.BALANCED),
+    ("deepseek", "deepseek-v4-pro", ModelTier.BALANCED),
+    ("ollama", "qwen3.5:35b", ModelTier.BALANCED),
+    ("anthropic", "claude-opus-5-5", ModelTier.CAPABLE),
+)
+
+_LOCAL_PROVIDERS = frozenset({"ollama", "vllm"})
+
+
+def _model_info_from_card(provider: str, model_id: str, tier: ModelTier) -> ModelInfo | None:
+    """Build a :class:`ModelInfo` from the bundled card, or ``None``."""
+    from llmcore.model_cards.registry import get_model_card_registry
+
+    registry = get_model_card_registry()
+    registry.load()
+    card = registry.get(provider, model_id)
+    if card is None or (card.lifecycle and card.lifecycle.status in ("retired", "deprecated")):
+        return None
+    per_m = card.pricing.per_million_tokens if card.pricing else None
+    if provider in _LOCAL_PROVIDERS:
+        cost_in = cost_out = 0.0
+    elif per_m is None or per_m.input is None or per_m.output is None:
+        return None
+    else:
+        cost_in, cost_out = per_m.input / 1000, per_m.output / 1000
+    caps = card.capabilities
+    capabilities = {ModelCapability.STREAMING} if caps.streaming else set()
+    for flag, capability in (
+        (caps.tool_use or caps.function_calling, ModelCapability.NATIVE_TOOLS),
+        (caps.vision, ModelCapability.VISION),
+        (caps.structured_output or caps.json_mode, ModelCapability.STRUCTURED_OUTPUT),
+        (caps.reasoning, ModelCapability.REASONING),
+    ):
+        if flag:
+            capabilities.add(capability)
+    window = int(card.context.max_input_tokens or 0)
+    if window > 100_000:
+        capabilities.add(ModelCapability.LONG_CONTEXT)
+    return ModelInfo(
+        id=model_id,
+        tier=tier,
+        provider=provider,
+        capabilities=capabilities,
+        context_window=window,
+        cost_per_1k_input=cost_in,
+        cost_per_1k_output=cost_out,
+        max_output_tokens=int(card.context.max_output_tokens or 4096),
+    )
+
+
+def build_default_models() -> dict[str, ModelInfo]:
+    """The default registry, priced and sized from the bundled model cards."""
+    models: dict[str, ModelInfo] = {}
+    for provider, model_id, tier in _DEFAULT_SPECS:
+        try:
+            info = _model_info_from_card(provider, model_id, tier)
+        except Exception as exc:  # a broken card must not break routing
+            logger.warning("Model router: card for %s/%s unusable: %s", provider, model_id, exc)
+            continue
+        if info is None:
+            logger.debug("Model router: %s/%s skipped (no active, priced card).", provider, model_id)
+            continue
+        models[model_id] = info
+    return models
+
+
+class _LazyDefaultModels(Mapping[str, ModelInfo]):
+    """``DEFAULT_MODELS`` built on first use, so importing the module stays
+    cheap (the card registry loads a few thousand files)."""
+
+    _data: dict[str, ModelInfo] | None = None
+
+    def _load(self) -> dict[str, ModelInfo]:
+        if self._data is None:
+            self._data = build_default_models()
+        return self._data
+
+    def __getitem__(self, key: str) -> ModelInfo:
+        return self._load()[key]
+
+    def __iter__(self) -> Iterator[str]:
+        return iter(self._load())
+
+    def __len__(self) -> int:
+        return len(self._load())
+
+
+# Default model configurations (read-only mapping; see _DEFAULT_SPECS)
+DEFAULT_MODELS: Mapping[str, ModelInfo] = _LazyDefaultModels()
 
 
 # =============================================================================

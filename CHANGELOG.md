@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Fixed — agents `ModelRouter` defaults named only retired models
+
+- `DEFAULT_MODELS` listed gpt-3.5-turbo, o1-preview, Claude 3, Gemini 1.5 and
+  deepseek-chat/-reasoner, with 2024 prices typed by hand. It is now built
+  lazily from the bundled model cards. Prices, windows and capabilities are
+  read from each card.
+- The tiers are:
+  - **FAST:** Haiku 5.5, GPT-5.4 nano/mini, Gemini 2.5 Flash(-Lite), qwen3.5:4b;
+  - **BALANCED:** Sonnet 5.5, GPT-5.4, Gemini 2.5 Pro, DeepSeek V4 Pro,
+    qwen3.5:35b;
+  - **CAPABLE:** Opus 5.5.
+- A model whose card has no price is left out instead of being treated as
+  free; Gemini 3.x and GPT-5.5+ cards are unpriced today.
+
 ### Fixed — model cards: one file per model, Ollama windows from the registry
 
 - **Duplicates removed.** 80 Ollama ids and 7 Hugging Face ids each had two
