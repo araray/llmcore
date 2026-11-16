@@ -1035,34 +1035,21 @@ if _openai_lane_available:
                     self.get_name(), f"Connection error: {e}", model_name=model_name
                 ) from e
 
-    #: Responses create() keywords the OpenAI SDK knows. Anything else travels
-    #: in ``extra_body``, or the SDK raises a TypeError.
-    _SDK_RESPONSES_KWARGS = frozenset(
-        {
-            "model", "input", "instructions", "tools", "tool_choice", "stream",
-            "max_output_tokens", "temperature", "top_p", "reasoning", "text", "include",
-            "store", "metadata", "user", "service_tier", "truncation",
-            "parallel_tool_calls", "previous_response_id", "prompt_cache_key",
-            "prompt_cache_retention", "max_tool_calls", "top_logprobs",
-            "safety_identifier", "background", "stream_options",
-        }
-    )
-
     class _ResponsesLane(_ChatLane):
         """``/responses`` lane: OpenAI's Responses API through the gateway.
 
-        Requests are built and responses normalized by
-        :mod:`llmcore.providers.openai_responses`, so callers see the same Chat
-        Completions shape as on the other lanes. Two things are specific to
-        this route:
+        The request building, both transports and the normalization to the
+        Chat Completions shape are :class:`OpenAIProvider`'s own Responses
+        support. This lane only supplies the gateway's error mapping, its
+        trace-id capture and its in-band failure shape, through the three
+        hooks OpenAIProvider exposes for exactly that.
 
         - ``store`` defaults to false and encrypted reasoning is requested, so
           a reasoning model's chain can be carried across turns without
-          server-side state. The items come back as
-          ``message["reasoning_items"]`` and go out again from an assistant
-          message's ``metadata["reasoning_items"]``.
+          server-side state (``message["reasoning_items"]`` out,
+          ``metadata["reasoning_items"]`` back in).
         - ``extra_tools`` passes raw Responses tool declarations (``custom``,
-          ``local_shell``, ``web_search``) next to llmcore ``Tool`` objects.
+          ``local_shell``) next to llmcore ``Tool`` objects.
         """
 
         #: Chat only, like the Chat Completions lane.
@@ -1082,35 +1069,38 @@ if _openai_lane_available:
             **kwargs: Any,
         ) -> dict[str, Any] | AsyncGenerator[dict[str, Any], None]:
             model_name = model or self.default_model
-            if not (isinstance(context, list) and all(isinstance(m, Message) for m in context)):
-                raise ProviderError(self.get_name(), "Unsupported context type.", model_name=model_name)
-            extra_tools = kwargs.pop("extra_tools", None)
-            body = rsp.build_responses_request(
-                model_name,
-                context,
-                stream=stream,
-                tools=tools,
-                tool_choice=tool_choice,
-                extra_tools=extra_tools,
-                **kwargs,
-            )
-            if not body["input"]:
-                raise ProviderError(self.get_name(), "No valid messages.", model_name=model_name)
-            if self.log_raw_payloads_enabled and logger.isEnabledFor(logging.DEBUG):
-                logger.debug(
-                    "RAW LLM REQUEST (%s, responses): %s",
-                    self.get_name(),
-                    json.dumps(body, indent=2, default=str),
+            try:
+                return await self._responses_completion(
+                    context, model_name, stream, tools, tool_choice, False, **kwargs
                 )
-            if self._transport == "httpx":
-                if stream:
-                    return self._stream_responses_httpx(body, model_name)
-                return await self._responses_httpx(body, model_name)
-            return await self._responses_sdk(body, model_name, stream)
+            except ContextLengthError:
+                raise
+            except ProviderError as exc:
+                if getattr(exc, "failure_kind", None):
+                    raise
+                mapped = _from_sdk_exception(
+                    self.get_name(), exc, model=model_name, route=ROUTE_RESPONSES
+                )
+                if mapped is not None:
+                    raise mapped from exc
+                raise
 
-        # -- failures ---------------------------------------------------
+        # -- OpenAIProvider hooks -----------------------------------------
 
-        def _failed(self, exc: rsp.ResponsesFailed, model_name: str) -> ProviderError:
+        def _on_http_response(self, response: Any) -> None:
+            _note_call(response.headers)
+
+        def _raise_http_error(self, response: Any, model_name: str) -> None:
+            raise build_commandcode_error(
+                self.get_name(),
+                response.status_code,
+                response.text,
+                model=model_name,
+                headers=response.headers,
+                route=ROUTE_RESPONSES,
+            )
+
+        def _responses_failed(self, exc: rsp.ResponsesFailed, model_name: str) -> ProviderError:
             code = str(exc.error.get("code") or "")
             status = 429 if "rate_limit" in code else 400 if code.startswith("invalid") else 502
             return build_inband_error(
@@ -1124,121 +1114,6 @@ if _openai_lane_available:
                 upstream=None,
                 partial=exc.partial,
             )
-
-        # -- direct transport -------------------------------------------
-
-        async def _responses_httpx(self, body: dict[str, Any], model_name: str) -> dict[str, Any]:
-            try:
-                resp = await self._get_http().post("/responses", json=body)
-            except httpx.TimeoutException as e:
-                raise ProviderError(self.get_name(), f"Timeout: {e}", model_name=model_name) from e
-            except httpx.HTTPError as e:
-                raise ProviderError(
-                    self.get_name(), f"Connection error: {e}", model_name=model_name
-                ) from e
-            _note_call(resp.headers)
-            if resp.status_code >= 400:
-                raise build_commandcode_error(
-                    self.get_name(),
-                    resp.status_code,
-                    resp.text,
-                    model=model_name,
-                    headers=resp.headers,
-                    route=ROUTE_RESPONSES,
-                )
-            data = resp.json()
-            if self.log_raw_payloads_enabled and logger.isEnabledFor(logging.DEBUG):
-                logger.debug(
-                    "RAW LLM RESPONSE (%s, responses): %s",
-                    self.get_name(),
-                    json.dumps(data, indent=2, default=str),
-                )
-            try:
-                return rsp.normalize_response(data)
-            except rsp.ResponsesFailed as exc:
-                raise self._failed(exc, model_name) from None
-
-        async def _stream_responses_httpx(
-            self, body: dict[str, Any], model_name: str
-        ) -> AsyncGenerator[dict[str, Any], None]:
-            normalizer = rsp.ResponsesStreamNormalizer()
-            try:
-                async with self._get_http().stream("POST", "/responses", json=body) as resp:
-                    _note_call(resp.headers)
-                    if resp.status_code >= 400:
-                        await resp.aread()
-                        raise build_commandcode_error(
-                            self.get_name(),
-                            resp.status_code,
-                            resp.text,
-                            model=model_name,
-                            headers=resp.headers,
-                            route=ROUTE_RESPONSES,
-                        )
-                    async for line in resp.aiter_lines():
-                        if not line or not line.startswith("data:"):
-                            continue  # `event:` lines repeat the payload's own `type`
-                        payload = line[5:].strip()
-                        if not payload or payload == "[DONE]":
-                            continue
-                        try:
-                            event = json.loads(payload)
-                        except ValueError:
-                            logger.warning("Skipping unparseable Responses event from %s.", self.get_name())
-                            continue
-                        try:
-                            chunks = normalizer.feed(event)
-                        except rsp.ResponsesFailed as exc:
-                            raise self._failed(exc, model_name) from None
-                        for chunk in chunks:
-                            yield chunk
-            except ProviderError:
-                raise
-            except httpx.TimeoutException as e:
-                raise ProviderError(self.get_name(), f"Timeout: {e}", model_name=model_name) from e
-            except httpx.HTTPError as e:
-                raise ProviderError(
-                    self.get_name(), f"Connection error: {e}", model_name=model_name
-                ) from e
-
-        # -- SDK transport ----------------------------------------------
-
-        async def _responses_sdk(
-            self, body: dict[str, Any], model_name: str, stream: bool
-        ) -> dict[str, Any] | AsyncGenerator[dict[str, Any], None]:
-            kwargs = {k: v for k, v in body.items() if k in _SDK_RESPONSES_KWARGS}
-            extra = {k: v for k, v in body.items() if k not in _SDK_RESPONSES_KWARGS}
-            if extra:
-                kwargs["extra_body"] = extra
-            try:
-                result = await self._client.responses.create(**kwargs)  # type: ignore[union-attr]
-            except Exception as exc:  # SDK status errors carry what the mapper needs
-                mapped = _from_sdk_exception(
-                    self.get_name(), exc, model=model_name, route=ROUTE_RESPONSES
-                )
-                if mapped is not None:
-                    raise mapped from exc
-                raise ProviderError(
-                    self.get_name(), f"Responses request failed: {exc}", model_name=model_name
-                ) from exc
-            if not stream:
-                try:
-                    return rsp.normalize_response(result.model_dump(exclude_none=True))
-                except rsp.ResponsesFailed as exc:
-                    raise self._failed(exc, model_name) from None
-            return self._stream_responses_sdk(result, model_name)
-
-        async def _stream_responses_sdk(
-            self, events: Any, model_name: str
-        ) -> AsyncGenerator[dict[str, Any], None]:
-            normalizer = rsp.ResponsesStreamNormalizer()
-            async for event in events:
-                try:
-                    chunks = normalizer.feed(event.model_dump(exclude_none=True))
-                except rsp.ResponsesFailed as exc:
-                    raise self._failed(exc, model_name) from None
-                for chunk in chunks:
-                    yield chunk
 
 else:  # pragma: no cover
     _ChatLane = None  # type: ignore[assignment,misc]

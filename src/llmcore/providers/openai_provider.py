@@ -7,7 +7,7 @@ Accepts context as List[Message] and supports standardized tool-calling,
 multimodal content (vision, audio input), structured output, and
 extended token usage extraction.
 
-Tested against openai Python SDK v2.31.0.
+Tested against openai Python SDK v3.51.0 (live, 2026-11-16).
 """
 
 from __future__ import annotations
@@ -16,6 +16,8 @@ import asyncio
 import json
 import logging
 import os
+import re
+from dataclasses import dataclass, field
 from types import MappingProxyType
 
 try:
@@ -25,7 +27,7 @@ try:
 except ImportError:  # pragma: no cover
     httpx_available = False
     httpx = None  # type: ignore
-from collections.abc import AsyncGenerator, Mapping
+from collections.abc import AsyncGenerator, Mapping, Sequence
 from typing import TYPE_CHECKING, Any, ClassVar
 
 try:
@@ -85,10 +87,11 @@ from ..models import Message, ModelDetails, Tool, ToolCall
 from ..models import Role as LLMCoreRole
 from ..tokens import count_tokens as _count_tokens
 from ..tokens import get_counter as _get_token_counter
+from . import openai_responses as rsp
 from .base import BaseProvider, ContextPayload
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
-    from collections.abc import AsyncIterator, Sequence
+    from collections.abc import AsyncIterator
 
     from ..media.models import MediaCapability, MediaExecution, MediaRef, MediaResult
 
@@ -119,30 +122,28 @@ DEFAULT_OPENAI_TOKEN_LIMITS = {
     "gpt-3.5-turbo-16k-0613": 16000,
 }
 
+#: Maximum INPUT tokens per model family, measured live on 2026-11-16 from
+#: OpenAI's own overflow errors ("Input tokens exceed the configured limit of
+#: N tokens" / "maximum context length is N tokens"). This is the number a
+#: prompt must fit in, which is below the advertised total window: the GPT-5
+#: line's "400K" is 272K in + 128K out, and the "1.05M" models take 922K in.
+#: First match wins, so specific prefixes come before general ones.
 _OPENAI_PREFIX_CONTEXT_HEURISTICS: list[tuple[str, int]] = [
-    ("gpt-5.4-pro", 1050000),
-    ("gpt-5.4-mini", 400000),
-    ("gpt-5.4-nano", 400000),
-    ("gpt-5.4", 1050000),
-    ("gpt-5.3", 400000),
-    ("gpt-5.2-pro", 400000),
-    ("gpt-5.2", 400000),
-    ("gpt-5.1-codex", 400000),
-    ("gpt-5.1-mini", 400000),
-    ("gpt-5.1", 400000),
-    ("gpt-5-nano", 200000),
-    ("gpt-5-mini", 200000),
-    ("gpt-5", 400000),
+    ("gpt-6", 922000),
+    ("gpt-5.6", 922000),
+    ("gpt-5.5", 922000),
+    ("gpt-5.4-mini", 272000),
+    ("gpt-5.4-nano", 272000),
+    ("gpt-5.4", 922000),
+    ("gpt-5.3", 272000),
+    ("gpt-5.2", 272000),
+    ("gpt-5.1", 272000),
+    ("gpt-5", 272000),
     ("o4-mini", 200000),
-    ("o3-pro", 200000),
-    ("o3-mini", 200000),
     ("o3", 200000),
-    ("o1-pro", 200000),
     ("o1-mini", 128000),
     ("o1", 200000),
-    ("gpt-4.1-nano", 1048576),
-    ("gpt-4.1-mini", 1048576),
-    ("gpt-4.1", 1048576),
+    ("gpt-4.1", 1047576),
     ("codex-mini", 200000),
     ("gpt-4o-mini", 128000),
     ("gpt-4o", 128000),
@@ -150,16 +151,149 @@ _OPENAI_PREFIX_CONTEXT_HEURISTICS: list[tuple[str, int]] = [
 ]
 
 _warned_unknown_models: set[str] = set()
-DEFAULT_MODEL = "gpt-4o"
+DEFAULT_MODEL = "gpt-6-luna"
+
+#: gpt-image-1 and the DALL-E models are gone (live 2026-11-16: "The model
+#: 'gpt-image-1' does not exist").
+DEFAULT_IMAGE_MODEL = "gpt-image-2"
 
 def _is_reasoning_model(model: str) -> bool:
-    """Check if model is an o-series reasoning model."""
-    return any(model.startswith(p) for p in ("o1", "o3", "o4"))
+    """Whether ``model`` is an OpenAI reasoning model.
+
+    The o-series and every GPT-5+ model reason (they reject ``max_tokens`` and,
+    most of them, custom sampling). Chat-tuned and search variants do not.
+    """
+    if re.search(r"(chat-latest|search-api|search-preview|audio|realtime)", model):
+        return False
+    return bool(re.match(r"(o\d|gpt-[5-9])", model))
 
 
 def _needs_developer_role(model: str) -> bool:
     """Check if model requires developer role instead of system."""
     return _is_reasoning_model(model)
+
+
+# ---------------------------------------------------------------------------
+# Responses routing and per-model parameter rules (native OpenAI only)
+# ---------------------------------------------------------------------------
+
+#: ``responses_api`` values. ``auto`` routes OpenAI's reasoning families to
+#: ``/responses`` and keeps the rest on Chat Completions. ``always`` and
+#: ``never`` do what they say. Native OpenAI defaults to ``auto``; an
+#: OpenAI-compatible endpoint (deepinfra, vllm, groq, …) defaults to ``never``,
+#: since most of them have no ``/responses``.
+RESPONSES_POLICIES: tuple[str, ...] = ("auto", "always", "never")
+
+#: Models ``auto`` sends to ``/responses``: the o-series and the GPT-5+
+#: reasoning families, plus pro/codex/computer-use. Several of those are
+#: Responses-only, and every reasoning model keeps its chain across tool turns
+#: only there.
+_RESPONSES_PREFERRED = re.compile(r"^(o\d|gpt-[5-9]|codex|computer-use)", re.IGNORECASE)
+
+#: Model names that stay on Chat Completions under ``auto``. Search-API and
+#: audio models are Chat-only (live 2026-11-16: ``gpt-5-search-api`` answers
+#: 400 on ``/responses``).
+_CHAT_PREFERRED = re.compile(r"(search-api|search-preview|audio|realtime|chat-latest)", re.IGNORECASE)
+
+#: Chat Completions parameters with no Responses equivalent. Asking for one
+#: keeps the call on Chat Completions, whatever the policy.
+CHAT_ONLY_PARAMS = frozenset(
+    {
+        "n", "logprobs", "top_logprobs", "seed", "stop", "logit_bias",
+        "frequency_penalty", "presence_penalty", "modalities", "audio",
+        "prediction", "web_search_options", "stream_options", "functions",
+        "function_call",
+    }
+)
+
+#: Responses parameters with no Chat Completions equivalent. Asking for one
+#: sends the call to ``/responses``.
+RESPONSES_ONLY_PARAMS = frozenset(
+    {
+        "reasoning", "reasoning_summary", "text", "include", "previous_response_id",
+        "max_output_tokens", "truncation", "instructions", "extra_tools",
+        "max_tool_calls", "safety_identifier", "background", "conversation",
+    }
+)
+
+#: Effort levels in increasing order. A rejected level moves to the nearest one
+#: the model accepts, preferring the higher on a tie.
+_EFFORT_ORDER: tuple[str, ...] = ("none", "minimal", "low", "medium", "high", "xhigh", "max")
+
+#: Wire field named in an OpenAI error -> the call keywords that produce it.
+_WIRE_KWARGS: dict[str, tuple[str, ...]] = {
+    "reasoning_effort": ("reasoning_effort", "effort"),
+    "reasoning.effort": ("reasoning_effort", "effort"),
+    "max_tokens": ("max_tokens",),
+    "max_output_tokens": ("max_tokens", "max_completion_tokens", "max_output_tokens"),
+    "text.verbosity": ("verbosity",),
+    "logprobs": ("logprobs", "top_logprobs"),
+}
+
+# The exact phrasings OpenAI uses, observed live 2026-11-16 across gpt-4.1,
+# gpt-5, gpt-5.1, gpt-5.4, gpt-6 and o3.
+_RX_USE_INSTEAD = re.compile(
+    r"Unsupported parameter: '([\w.]+)' is not supported with this model\. Use '([\w.]+)' instead"
+)
+_RX_UNSUPPORTED_PARAM = re.compile(r"Unsupported parameter: '([\w.]+)' is not supported with this model")
+_RX_DEFAULT_ONLY = re.compile(r"Unsupported value: '([\w.]+)' does not support .*?Only the default")
+_RX_SUPPORTED_VALUES = re.compile(
+    r"Unsupported value: '([\w.]+)' does not support '([^']+)' with this model\. Supported values are: ([^\n\"}]+)"
+)
+#: The Responses route words an effort rejection without naming the field:
+#: "Unsupported value: 'none' is not supported with the 'gpt-5-nano' model.
+#: Supported values are: 'minimal', 'low', 'medium', and 'high'."
+_RX_SUPPORTED_VALUES_NAMELESS = re.compile(
+    r"Unsupported value: '([^']+)' is not supported with the '[^']+' model\. Supported values are: ([^\n\"}]+)"
+)
+_RX_UNRECOGNIZED = re.compile(r"Unrecognized request argument supplied: ([\w.]+)")
+_RX_NO_LOGPROBS = re.compile(r"not allowed to request logprobs")
+_RX_RESPONSES_ONLY = re.compile(
+    r"(only supported in v1/responses|Use the v1/responses endpoint|not a chat model)", re.IGNORECASE
+)
+_RX_NOT_ON_RESPONSES = re.compile(r"not supported with the Responses API", re.IGNORECASE)
+
+
+#: Parameters only the Responses route takes, advertised where it is enabled.
+_RESPONSES_EXTRA_PARAMS: dict[str, Any] = {
+    "reasoning": {"type": "object", "description": "Responses {effort, summary}."},
+    "reasoning_summary": {"type": "string", "enum": ["auto", "concise", "detailed"]},
+    "text": {"type": "object", "description": "Responses {format, verbosity}."},
+    "include": {"type": "array", "items": {"type": "string"}},
+    "previous_response_id": {"type": "string"},
+    "max_output_tokens": {"type": "integer", "minimum": 1},
+    "truncation": {"type": "string", "enum": ["auto", "disabled"]},
+    "instructions": {"type": "string"},
+    "extra_tools": {
+        "type": "array",
+        "description": "Raw Responses tools (web_search, file_search, code_interpreter, mcp, …).",
+    },
+    "max_tool_calls": {"type": "integer", "minimum": 1},
+    "safety_identifier": {"type": "string"},
+}
+
+
+def nearest_effort(requested: str, supported: Sequence[str]) -> str | None:
+    """The supported effort level closest to ``requested`` (higher on a tie)."""
+    order = {name: i for i, name in enumerate(_EFFORT_ORDER)}
+    known = [s for s in supported if s in order]
+    if not known:
+        return None
+    if requested not in order:
+        return known[len(known) // 2]
+    target = order[requested]
+    return min(known, key=lambda s: (abs(order[s] - target), -order[s]))
+
+
+@dataclass
+class _ModelRules:
+    """What one model has been seen to reject, learned from its 400s."""
+
+    drop: set[str] = field(default_factory=set)
+    rename: dict[str, str] = field(default_factory=dict)
+    effort: dict[str, str] = field(default_factory=dict)
+    responses_only: bool = False
+    chat_only: bool = False
 
 
 class _ModelList:
@@ -223,6 +357,14 @@ class OpenAIProvider(BaseProvider):
     #: Lazily-built direct HTTP client.
     _http: Any = None
 
+    #: Responses routing and parameter adaptation; see ``__init__``. Class-level
+    #: defaults keep instances built with ``object.__new__`` (as tests do) on
+    #: the old behaviour: Chat Completions only, nothing adapted.
+    _native_openai: bool = False
+    _responses_policy: str = "never"
+    _adaptive_params: bool = False
+    _model_rules: dict[str, _ModelRules] | None = None
+
     def __init__(self, config: dict[str, Any], log_raw_payloads: bool = False):
         super().__init__(config, log_raw_payloads)
         if not openai_available:
@@ -230,6 +372,9 @@ class OpenAIProvider(BaseProvider):
         if not tiktoken_available:
             raise ImportError("tiktoken library not installed.")
 
+        # Kept for the direct transport's organization/project headers, which
+        # read it; without it those headers were silently never sent.
+        self.config = dict(config)
         self._api_key_env_var = config.get("api_key_env_var")
         api_key = config.get("api_key")
         if not api_key and self._api_key_env_var:
@@ -311,6 +456,29 @@ class OpenAIProvider(BaseProvider):
         self._direct_headers = dict(config.get("default_headers") or {})
         self._http = None
 
+        # --- Responses API and per-model parameter rules -------------------
+        #
+        # Both are on by default only against OpenAI itself. This class is the
+        # base for a dozen OpenAI-compatible servers, most of which have no
+        # /responses and word their errors differently, so for them both stay
+        # off unless configured.
+        base = str(self.base_url or "")
+        self._native_openai = not base or "api.openai.com" in base
+        policy = str(
+            config.get("responses_api") or ("auto" if self._native_openai else "never")
+        ).lower()
+        if policy not in RESPONSES_POLICIES:
+            logger.warning(
+                "Unknown responses_api '%s' for %s; using 'auto'.", policy, self.get_name()
+            )
+            policy = "auto"
+        self._responses_policy = policy
+        param_policy = str(
+            config.get("param_policy") or ("adapt" if self._native_openai else "strict")
+        ).lower()
+        self._adaptive_params = param_policy == "adapt"
+        self._model_rules = {}
+
         self._load_tokenizer(self.default_model)
 
     # ------------------------------------------------------------------
@@ -332,12 +500,33 @@ class OpenAIProvider(BaseProvider):
             org = self.config.get("organization") if hasattr(self, "config") else None
             if org:
                 headers["OpenAI-Organization"] = str(org)
+            project = self.config.get("project") if hasattr(self, "config") else None
+            if project:
+                headers["OpenAI-Project"] = str(project)
             self._http = httpx.AsyncClient(
                 base_url=self._direct_base_url(),
                 headers=headers,
                 timeout=self.timeout,
             )
         return self._http
+
+    def _is_context_overflow(self, status: int | None, text: str, code: str | None) -> bool:
+        """OpenAI's prompt-too-long error, by code first and wording second.
+
+        From SDK 3.38 ``str(APIStatusError)`` carries only the message, not the
+        body, so the code (``context_length_exceeded``) has to be read from
+        the exception. Chat words it "maximum context length is N tokens";
+        Responses says "exceeds the context window".
+        """
+        if code == "context_length_exceeded":
+            return True
+        lowered = text.lower()
+        return status in (400, None) and (
+            "context_length" in lowered
+            or "maximum context length" in lowered
+            or "exceeds the context window" in lowered
+            or "exceed the configured limit" in lowered
+        )
 
     def _raise_direct_status(self, status: int, body: str, model_name: str) -> None:
         """Map a direct-transport HTTP failure onto llmcore's exceptions.
@@ -352,14 +541,14 @@ class OpenAIProvider(BaseProvider):
             ProviderError: For every other failure.
         """
         lowered = body.lower()
-        if status == 400 and "context_length" in lowered:
+        if self._is_context_overflow(status, body, None):
             raise ContextLengthError(
                 model_name=model_name,
                 limit=self.get_max_context_length(model_name),
                 actual=0,
                 message=body,
             )
-        if status == 400 and any(
+        if status in (400, 404) and any(
             phrase in lowered
             for phrase in ("model not exist", "does not exist", "model_not_found", "invalid model")
         ):
@@ -370,7 +559,13 @@ class OpenAIProvider(BaseProvider):
                 f"the model name is correct for this provider's API. "
                 f"Original error: {body}",
             )
-        raise ProviderError(self.get_name(), f"API Error ({status}): {body}")
+        raise ProviderError(
+            self.get_name(),
+            f"API Error ({status}): {body}",
+            model_name=model_name,
+            status_code=status,
+            retryable=status == 429 or status >= 500,
+        )
 
     async def _chat_via_httpx(
         self,
@@ -386,11 +581,18 @@ class OpenAIProvider(BaseProvider):
         method downstream parses those dicts. The transports have to be
         interchangeable at that boundary or the choice leaks into callers.
         """
+        api_kwargs = dict(api_kwargs)
+        extra_body = api_kwargs.pop("extra_body", None) or {}
+        api_kwargs.pop("extra_headers", None)
         body: dict[str, Any] = {
             "model": model_name,
             "messages": messages_payload,
             "stream": stream,
             **api_kwargs,
+            # The SDK merges extra_body into the request body; sending it as a
+            # literal "extra_body" field (as this path used to) is a request the
+            # server does not understand.
+            **dict(extra_body),
         }
         client = self._get_http()
 
@@ -457,7 +659,7 @@ class OpenAIProvider(BaseProvider):
         except KeyError:
             fallback = (
                 "o200k_base"
-                if any(s in model_name for s in ("4o", "gpt-5", "gpt-4.1", "o1", "o3", "o4"))
+                if any(s in model_name for s in ("4o", "gpt-5", "gpt-6", "gpt-7", "gpt-4.1", "o1", "o3", "o4"))
                 else "cl100k_base"
             )
             logger.warning(f"No tiktoken encoding for '{model_name}'. Using '{fallback}'.")
@@ -541,19 +743,9 @@ class OpenAIProvider(BaseProvider):
                         )
                         supports_vision = card.capabilities.vision
                 if not supports_tools:
-                    supports_tools = any(
-                        mid.startswith(p)
-                        for p in (
-                            "gpt-3.5-turbo",
-                            "gpt-4",
-                            "gpt-5",
-                            "o1",
-                            "o3",
-                            "o4",
-                            "chatgpt",
-                            "codex",
-                        )
-                    )
+                    supports_tools = bool(
+                        re.match(r"(gpt-3\.5-turbo|gpt-[4-9]|o\d|chatgpt|codex)", mid)
+                    ) and not re.search(r"(tts|transcribe|whisper|image|embedding|moderation|realtime|audio)", mid)
                 result.append(
                     ModelDetails(
                         id=mid,
@@ -589,7 +781,20 @@ class OpenAIProvider(BaseProvider):
             "stream_options": {"type": "object"},
             "modalities": {"type": "array", "items": {"type": "string"}},
             "audio": {"type": "object"},
-            "reasoning_effort": {"type": "string", "enum": ["low", "medium", "high", "xhigh"]},
+            "reasoning_effort": {
+                "type": "string",
+                "enum": ["none", "minimal", "low", "medium", "high", "xhigh", "max"],
+                "description": "Accepted levels vary by model; see param_policy.",
+            },
+            "effort": {
+                "type": "string",
+                "enum": ["none", "minimal", "low", "medium", "high", "xhigh", "max"],
+                "description": "llmcore's canonical reasoning effort.",
+            },
+            "responses": {
+                "type": "boolean",
+                "description": "True: use /responses; False: use /chat/completions.",
+            },
             "prediction": {"type": "object"},
             "service_tier": {"type": "string"},
             "store": {"type": "boolean"},
@@ -600,13 +805,23 @@ class OpenAIProvider(BaseProvider):
             "web_search_options": {"type": "object"},
             "verbosity": {"type": "string", "enum": ["low", "medium", "high"]},
         }
-        if not is_reasoning:
+        if not is_reasoning or self._native_openai:
+            # Renamed to max_completion_tokens on the way out for OpenAI itself.
             params["max_tokens"] = {"type": "integer", "minimum": 1}
+        if self._responses_policy != "never":
+            params.update(_RESPONSES_EXTRA_PARAMS)
         return params
 
     def get_max_context_length(self, model: str | None = None) -> int:
         model_name = model or self.default_model
         limit = DEFAULT_OPENAI_TOKEN_LIMITS.get(model_name)
+        if limit is None:
+            # Known prefixes first: the substring checks below once matched
+            # "gpt-4" inside "gpt-4.1" and reported 8,192 for a 1M model, and
+            # several generated cards still carry a placeholder 128,000.
+            for prefix, ctx in _OPENAI_PREFIX_CONTEXT_HEURISTICS:
+                if model_name.startswith(prefix):
+                    return ctx
         if limit is None:
             if "gpt-4o" in model_name:
                 limit = 128000
@@ -717,6 +932,430 @@ class OpenAIProvider(BaseProvider):
         native_search: bool = False,
         **kwargs: Any,
     ) -> dict[str, Any] | AsyncGenerator[dict[str, Any], None]:
+        """Send a chat request over Chat Completions or the Responses API.
+
+        ``native_search=True`` against OpenAI uses the Responses ``web_search``
+        tool, which every current model has; Chat Completions offers search
+        only on the ``*-search-api`` models, so those stay there.
+
+        Which one is used follows ``responses_api`` (see
+        :data:`RESPONSES_POLICIES`) and the call itself: ``responses=True`` or
+        ``False`` forces a route, a Chat-only parameter (``n``, ``logprobs``,
+        ``seed``, ``stop``, …) keeps the call on Chat Completions, and a
+        Responses-only one (``reasoning``, ``text``, ``include``,
+        ``previous_response_id``, …) sends it to ``/responses``. Both routes
+        return the same Chat Completions-shaped dict.
+
+        Against OpenAI itself, a model's parameter rules are learned from its
+        own errors (``param_policy = "adapt"``, the default there). When a
+        model rejects a parameter or value, the call is adjusted and retried
+        once, and the rule is remembered for that model: ``max_tokens`` is
+        renamed, an unsupported ``temperature``/``top_p`` is dropped, an effort
+        level moves to the nearest supported one, and a Responses-only model
+        moves to ``/responses``. Each adjustment is logged once.
+        ``param_policy = "strict"`` turns this off.
+        """
+        if not self._client:
+            raise ProviderError(self.get_name(), "Client not initialized.")
+        model_name = model or self.default_model
+        prefer = kwargs.pop("responses", None)
+        if (
+            native_search
+            and prefer is None
+            and self._native_openai
+            and self._responses_policy != "never"
+            and not _CHAT_PREFERRED.search(model_name)
+        ):
+            prefer = True
+        supported = self.get_supported_parameters(model_name)
+        unknown = [key for key in kwargs if key not in supported]
+        if unknown:
+            # Checked before routing, so neither route sends anything for a
+            # parameter this provider does not know.
+            raise ValueError(f"Unsupported parameter '{unknown[0]}' for OpenAI provider.")
+        attempts = 3 if self._adaptive_params else 1
+        last_error: ProviderError | None = None
+        for _attempt in range(attempts):
+            call_kwargs = self._apply_model_rules(model_name, dict(kwargs))
+            use_responses = self._use_responses(model_name, call_kwargs, context, prefer)
+            try:
+                if use_responses:
+                    result = await self._responses_completion(
+                        context, model_name, stream, tools, tool_choice, native_search, **call_kwargs
+                    )
+                else:
+                    result = await self._chat_completions_once(
+                        context, model_name, stream, tools, tool_choice, native_search, **call_kwargs
+                    )
+                if stream and self._transport == "httpx":
+                    # The direct stream is lazy: pull its first chunk now so a
+                    # rejected request fails here, where it can be adapted.
+                    result = await self._primed(result)  # type: ignore[arg-type]
+                return result
+            except ContextLengthError:
+                raise
+            except ProviderError as exc:
+                last_error = exc
+                if not self._learn_from_error(model_name, exc, call_kwargs, use_responses):
+                    raise
+        assert last_error is not None
+        raise last_error
+
+    # ------------------------------------------------------------------
+    # Routing and learned parameter rules
+    # ------------------------------------------------------------------
+
+    def _use_responses(
+        self, model: str, kwargs: Mapping[str, Any], context: Any, prefer: bool | None
+    ) -> bool:
+        """Whether this call goes to ``/responses``."""
+        rules = (self._model_rules or {}).get(model)
+        if rules is not None and rules.responses_only:
+            return True  # the model serves nothing else
+        if rules is not None and rules.chat_only:
+            return False
+        if prefer is not None:
+            return bool(prefer)
+        if self._responses_policy == "never":
+            return False
+        if CHAT_ONLY_PARAMS & set(kwargs):
+            return False
+        if RESPONSES_ONLY_PARAMS & set(kwargs):
+            return True
+        if self._responses_policy == "always":
+            return True
+        # auto
+        if isinstance(context, list) and any(
+            "inline_audio" in (m.metadata or {}) for m in context if isinstance(m, Message)
+        ):
+            return False  # audio input is a Chat Completions feature
+        if _CHAT_PREFERRED.search(model):
+            return False
+        return bool(_RESPONSES_PREFERRED.search(model))
+
+    def _apply_model_rules(self, model: str, kwargs: dict[str, Any]) -> dict[str, Any]:
+        """Rewrite ``kwargs`` with what ``model`` is known to reject."""
+        rules = (self._model_rules or {}).get(model)
+        if rules is None:
+            return kwargs
+        for key in rules.drop:
+            kwargs.pop(key, None)
+        for old, new in rules.rename.items():
+            if old in kwargs and new not in kwargs:
+                kwargs[new] = kwargs.pop(old)
+        for key in ("effort", "reasoning_effort"):
+            value = kwargs.get(key)
+            if isinstance(value, str) and value in rules.effort:
+                kwargs[key] = rules.effort[value]
+        reasoning = kwargs.get("reasoning")
+        if isinstance(reasoning, dict) and reasoning.get("effort") in rules.effort:
+            kwargs["reasoning"] = {**reasoning, "effort": rules.effort[reasoning["effort"]]}
+        return kwargs
+
+    def _learn_from_error(
+        self, model: str, exc: ProviderError, kwargs: Mapping[str, Any], responses: bool
+    ) -> bool:
+        """Learn a rule from OpenAI's rejection of this call.
+
+        Returns:
+            Whether a rule changed this call, so a retry may succeed.
+        """
+        if not self._adaptive_params:
+            return False
+        text = str(exc)
+        if self._model_rules is None:
+            self._model_rules = {}
+        rules = self._model_rules.setdefault(model, _ModelRules())
+        note: str | None = None
+
+        def present(wire: str) -> list[str]:
+            names = _WIRE_KWARGS.get(wire, (wire,))
+            hits = [n for n in names if n in kwargs]
+            if wire.startswith("reasoning") and isinstance(kwargs.get("reasoning"), dict):
+                hits.append("reasoning")
+            return hits
+
+        if (m := _RX_USE_INSTEAD.search(text)) and present(m.group(1)):
+            for name in present(m.group(1)):
+                rules.rename[name] = m.group(2)
+            note = f"renamed {m.group(1)} to {m.group(2)}"
+        elif _RX_RESPONSES_ONLY.search(text) and not responses:
+            rules.responses_only = True
+            note = "served only on /responses; routing there"
+        elif _RX_NOT_ON_RESPONSES.search(text) and responses:
+            rules.chat_only = True
+            note = "not served on /responses; routing to Chat Completions"
+        elif (m := _RX_SUPPORTED_VALUES.search(text)) and present(m.group(1)):
+            requested = m.group(2)
+            supported = re.findall(r"'([^']+)'", m.group(3))
+            chosen = nearest_effort(requested, supported)
+            if chosen is None or chosen == requested:
+                return False
+            rules.effort[requested] = chosen
+            note = f"{m.group(1)} '{requested}' is unsupported; using '{chosen}'"
+        elif (m := _RX_SUPPORTED_VALUES_NAMELESS.search(text)) and self._effort_requested(
+            kwargs, m.group(1)
+        ):
+            requested = m.group(1)
+            chosen = nearest_effort(requested, re.findall(r"'([^']+)'", m.group(2)))
+            if chosen is None or chosen == requested:
+                return False
+            rules.effort[requested] = chosen
+            note = f"effort '{requested}' is unsupported; using '{chosen}'"
+        else:
+            wire = None
+            for rx in (_RX_DEFAULT_ONLY, _RX_UNSUPPORTED_PARAM, _RX_UNRECOGNIZED):
+                if (m := rx.search(text)) is not None:
+                    wire = m.group(1)
+                    break
+            if wire is None and _RX_NO_LOGPROBS.search(text):
+                wire = "logprobs"
+            hits = present(wire) if wire else []
+            if not hits:
+                return False
+            rules.drop.update(hits)
+            note = f"dropped {', '.join(sorted(hits))} (unsupported)"
+
+        logger.warning(
+            "%s: model '%s' rejected the request; %s, and retrying. This is remembered "
+            "for the model. Set param_policy = \"strict\" to fail instead.",
+            self.get_name(),
+            model,
+            note,
+        )
+        return True
+
+    @staticmethod
+    def _effort_requested(kwargs: Mapping[str, Any], value: str) -> bool:
+        """Whether this call asks for effort ``value`` under any spelling."""
+        if value in (kwargs.get("effort"), kwargs.get("reasoning_effort")):
+            return True
+        reasoning = kwargs.get("reasoning")
+        return isinstance(reasoning, Mapping) and reasoning.get("effort") == value
+
+    @staticmethod
+    async def _primed(
+        stream: AsyncGenerator[dict[str, Any], None],
+    ) -> AsyncGenerator[dict[str, Any], None]:
+        """Pull the first chunk now; replay it, then the rest."""
+        try:
+            first = await stream.__anext__()
+        except StopAsyncIteration:
+            first = None
+
+        async def replay() -> AsyncGenerator[dict[str, Any], None]:
+            if first is not None:
+                yield first
+            async for chunk in stream:
+                yield chunk
+
+        return replay()
+
+    # ------------------------------------------------------------------
+    # Responses API
+    # ------------------------------------------------------------------
+
+    def _on_http_response(self, response: Any) -> None:
+        """Hook: called with every direct-transport response (headers etc.)."""
+
+    def _raise_http_error(self, response: Any, model_name: str) -> None:
+        """Hook: raise the error for a failed direct-transport response."""
+        self._raise_direct_status(response.status_code, response.text, model_name)
+
+    def _responses_failed(self, exc: rsp.ResponsesFailed, model_name: str) -> ProviderError:
+        """Hook: the error for a response whose ``status`` is ``failed``."""
+        code = str(exc.error.get("code") or "")
+        if code == "context_length_exceeded":
+            return ContextLengthError(  # type: ignore[return-value]
+                model_name=model_name,
+                limit=self.get_max_context_length(model_name),
+                actual=0,
+                message=str(exc.error.get("message") or code),
+            )
+        retryable = not code.startswith("invalid")
+        err = ProviderError(
+            self.get_name(),
+            f"Response failed ({code or 'unknown'}): {exc.error.get('message') or 'no detail'}",
+            model_name=model_name,
+            status_code=429 if "rate_limit" in code else 400 if not retryable else 502,
+            retryable=retryable,
+        )
+        err.partial_content = exc.partial  # type: ignore[attr-defined]
+        return err
+
+    async def _responses_completion(
+        self,
+        context: ContextPayload,
+        model_name: str,
+        stream: bool,
+        tools: list[Tool] | None,
+        tool_choice: str | None,
+        native_search: bool,
+        **kwargs: Any,
+    ) -> dict[str, Any] | AsyncGenerator[dict[str, Any], None]:
+        """One call to ``POST /responses``, normalized to the Chat shape."""
+        if not (isinstance(context, list) and all(isinstance(m, Message) for m in context)):
+            raise ProviderError(self.get_name(), "Unsupported context type.")
+        extra_tools = list(kwargs.pop("extra_tools", None) or [])
+        if native_search and self._native_openai:
+            extra_tools.append({"type": "web_search"})
+        kwargs.pop("stream_options", None)
+        body = rsp.build_responses_request(
+            model_name,
+            context,
+            stream=stream,
+            tools=tools,
+            tool_choice=tool_choice,
+            extra_tools=extra_tools,
+            **kwargs,
+        )
+        if not body["input"]:
+            raise ProviderError(self.get_name(), "No valid messages.")
+        if self.log_raw_payloads_enabled and logger.isEnabledFor(logging.DEBUG):
+            logger.debug(
+                "RAW LLM REQUEST (%s, responses): %s",
+                self.get_name(),
+                json.dumps(body, indent=2, default=str),
+            )
+        if self._transport == "httpx":
+            if stream:
+                return self._responses_stream_httpx(body, model_name)
+            return await self._responses_httpx(body, model_name)
+        return await self._responses_sdk(body, model_name, stream)
+
+    async def _responses_httpx(self, body: dict[str, Any], model_name: str) -> dict[str, Any]:
+        try:
+            resp = await self._get_http().post("/responses", json=body)
+        except httpx.TimeoutException as e:
+            raise ProviderError(self.get_name(), f"Timeout: {e}", model_name=model_name) from e
+        except httpx.HTTPError as e:
+            raise ProviderError(self.get_name(), f"Connection error: {e}", model_name=model_name) from e
+        self._on_http_response(resp)
+        if resp.status_code >= 400:
+            self._raise_http_error(resp, model_name)
+        data = resp.json()
+        if self.log_raw_payloads_enabled and logger.isEnabledFor(logging.DEBUG):
+            logger.debug(
+                "RAW LLM RESPONSE (%s, responses): %s",
+                self.get_name(),
+                json.dumps(data, indent=2, default=str),
+            )
+        try:
+            return rsp.normalize_response(data)
+        except rsp.ResponsesFailed as exc:
+            raise self._responses_failed(exc, model_name) from None
+
+    async def _responses_stream_httpx(
+        self, body: dict[str, Any], model_name: str
+    ) -> AsyncGenerator[dict[str, Any], None]:
+        normalizer = rsp.ResponsesStreamNormalizer()
+        try:
+            async with self._get_http().stream("POST", "/responses", json=body) as resp:
+                self._on_http_response(resp)
+                if resp.status_code >= 400:
+                    await resp.aread()
+                    self._raise_http_error(resp, model_name)
+                async for line in resp.aiter_lines():
+                    if not line or not line.startswith("data:"):
+                        continue  # `event:` lines repeat the payload's own `type`
+                    payload = line[5:].strip()
+                    if not payload or payload == "[DONE]":
+                        continue
+                    try:
+                        event = json.loads(payload)
+                    except ValueError:
+                        logger.warning("Skipping unparseable Responses event from %s.", self.get_name())
+                        continue
+                    try:
+                        chunks = normalizer.feed(event)
+                    except rsp.ResponsesFailed as exc:
+                        raise self._responses_failed(exc, model_name) from None
+                    for chunk in chunks:
+                        yield chunk
+        except ProviderError:
+            raise
+        except httpx.TimeoutException as e:
+            raise ProviderError(self.get_name(), f"Timeout: {e}", model_name=model_name) from e
+        except httpx.HTTPError as e:
+            raise ProviderError(self.get_name(), f"Connection error: {e}", model_name=model_name) from e
+
+    #: ``responses.create`` keywords the OpenAI SDK knows; anything else rides in
+    #: ``extra_body`` (an unknown keyword is a TypeError in the SDK).
+    _SDK_RESPONSES_KWARGS: ClassVar[frozenset[str]] = frozenset(
+        {
+            "model", "input", "instructions", "tools", "tool_choice", "stream",
+            "max_output_tokens", "temperature", "top_p", "reasoning", "text", "include",
+            "store", "metadata", "user", "service_tier", "truncation",
+            "parallel_tool_calls", "previous_response_id", "prompt_cache_key",
+            "prompt_cache_retention", "max_tool_calls", "top_logprobs",
+            "safety_identifier", "background", "stream_options", "conversation",
+        }
+    )
+
+    async def _responses_sdk(
+        self, body: dict[str, Any], model_name: str, stream: bool
+    ) -> dict[str, Any] | AsyncGenerator[dict[str, Any], None]:
+        sdk_kwargs = {k: v for k, v in body.items() if k in self._SDK_RESPONSES_KWARGS}
+        extra = {k: v for k, v in body.items() if k not in self._SDK_RESPONSES_KWARGS}
+        if extra:
+            sdk_kwargs["extra_body"] = extra
+        try:
+            result = await self._client.responses.create(**sdk_kwargs)  # type: ignore[union-attr]
+        except OpenAIAPIStatusError as e:
+            if self._is_context_overflow(e.status_code, str(e), getattr(e, "code", None)):
+                raise ContextLengthError(
+                    model_name=model_name,
+                    limit=self.get_max_context_length(model_name),
+                    actual=0,
+                    message=str(e),
+                ) from e
+            raise ProviderError(
+                self.get_name(),
+                f"API Error ({e.status_code}): {e}",
+                model_name=model_name,
+                status_code=e.status_code,
+                original_exception=e,
+            ) from e
+        except OpenAIAPITimeoutError as e:
+            raise ProviderError(self.get_name(), f"Timeout: {e}", model_name=model_name) from e
+        except OpenAIAPIConnectionError as e:
+            raise ProviderError(self.get_name(), f"Connection error: {e}", model_name=model_name) from e
+        except OpenAIError as e:
+            raise ProviderError(self.get_name(), f"Error: {e}", model_name=model_name) from e
+        if not stream:
+            try:
+                return rsp.normalize_response(result.model_dump(exclude_none=True))
+            except rsp.ResponsesFailed as exc:
+                raise self._responses_failed(exc, model_name) from None
+        return self._responses_stream_sdk(result, model_name)
+
+    async def _responses_stream_sdk(
+        self, events: Any, model_name: str
+    ) -> AsyncGenerator[dict[str, Any], None]:
+        normalizer = rsp.ResponsesStreamNormalizer()
+        async for event in events:
+            try:
+                chunks = normalizer.feed(event.model_dump(exclude_none=True))
+            except rsp.ResponsesFailed as exc:
+                raise self._responses_failed(exc, model_name) from None
+            for chunk in chunks:
+                yield chunk
+
+    # ------------------------------------------------------------------
+    # Chat Completions
+    # ------------------------------------------------------------------
+
+    async def _chat_completions_once(
+        self,
+        context: ContextPayload,
+        model: str | None = None,
+        stream: bool = False,
+        tools: list[Tool] | None = None,
+        tool_choice: str | None = None,
+        native_search: bool = False,
+        **kwargs: Any,
+    ) -> dict[str, Any] | AsyncGenerator[dict[str, Any], None]:
+        """One Chat Completions call (no routing, no adaptation)."""
         if not self._client:
             raise ProviderError(self.get_name(), "Client not initialized.")
 
@@ -725,6 +1364,16 @@ class OpenAIProvider(BaseProvider):
         for key in kwargs:
             if key not in supported_params:
                 raise ValueError(f"Unsupported parameter '{key}' for OpenAI provider.")
+        effort = kwargs.pop("effort", None)
+        if effort and "reasoning_effort" not in kwargs:
+            kwargs["reasoning_effort"] = str(effort).strip().lower()
+        if self._native_openai and "max_tokens" in kwargs:
+            # OpenAI deprecated max_tokens; every current model takes
+            # max_completion_tokens, and the GPT-5+/o-series reject max_tokens.
+            if "max_completion_tokens" not in kwargs:
+                kwargs["max_completion_tokens"] = kwargs.pop("max_tokens")
+            else:
+                kwargs.pop("max_tokens")
 
         if not (isinstance(context, list) and all(isinstance(msg, Message) for msg in context)):
             raise ProviderError(self.get_name(), "Unsupported context type.")
@@ -745,6 +1394,10 @@ class OpenAIProvider(BaseProvider):
 
         if native_search:
             self._apply_native_search(api_kwargs)
+        if stream and self._native_openai and "stream_options" not in api_kwargs:
+            # Without this OpenAI sends no usage on a stream, so streamed calls
+            # had no token counts and no cost.
+            api_kwargs["stream_options"] = {"include_usage": True}
 
         if _is_reasoning_model(model_name) and "max_tokens" in api_kwargs:
             if "max_completion_tokens" not in api_kwargs:
@@ -781,14 +1434,25 @@ class OpenAIProvider(BaseProvider):
             if stream:
 
                 async def stream_wrapper():
-                    async for chunk in resp:  # type: ignore
-                        if self.log_raw_payloads_enabled and logger.isEnabledFor(logging.DEBUG):
-                            logger.debug(
-                                "RAW STREAM CHUNK (%s): %s",
-                                self.get_name(),
-                                chunk.model_dump_json(),
-                            )
-                        yield chunk.model_dump(exclude_none=True)
+                    try:
+                        async for chunk in resp:  # type: ignore
+                            if self.log_raw_payloads_enabled and logger.isEnabledFor(logging.DEBUG):
+                                logger.debug(
+                                    "RAW STREAM CHUNK (%s): %s",
+                                    self.get_name(),
+                                    chunk.model_dump_json(),
+                                )
+                            yield chunk.model_dump(exclude_none=True)
+                    except OpenAIError as e:
+                        # The SDK raises from inside iteration; without this a
+                        # raw openai exception reached the caller mid-stream.
+                        raise ProviderError(
+                            self.get_name(),
+                            f"Stream error: {e}",
+                            model_name=model_name,
+                            status_code=getattr(e, "status_code", None),
+                            original_exception=e,
+                        ) from e
 
                 return stream_wrapper()
             else:
@@ -804,25 +1468,26 @@ class OpenAIProvider(BaseProvider):
         except OpenAIAPIStatusError as e:
             status = e.status_code
             msg = str(e)
-            logger.error(f"OpenAI status error ({status}): {msg}", exc_info=True)
-            if status == 400 and "context_length" in msg.lower():
+            code = getattr(e, "code", None)
+            # Debug, not error: the caller gets the exception, and a rejected
+            # parameter is often adapted and retried (param_policy).
+            logger.debug("%s status error (%s): %s", self.get_name(), status, msg)
+            if self._is_context_overflow(status, msg, code):
                 raise ContextLengthError(
                     model_name=model_name,
                     limit=self.get_max_context_length(model_name),
                     actual=0,
                     message=msg,
-                )
+                ) from e
             # Detect model-not-found errors and provide actionable info.
             # Different providers use different phrasing:
             #   DeepSeek: "Model Not Exist"
             #   OpenAI:   "does not exist" / "model_not_found"
-            if status == 400 and any(
-                phrase in msg.lower()
-                for phrase in (
-                    "model not exist",
-                    "does not exist",
-                    "model_not_found",
-                    "invalid model",
+            if code == "model_not_found" or (
+                status in (400, 404)
+                and any(
+                    phrase in msg.lower()
+                    for phrase in ("model not exist", "does not exist", "model_not_found", "invalid model")
                 )
             ):
                 raise ProviderError(
@@ -832,8 +1497,19 @@ class OpenAIProvider(BaseProvider):
                     f"is '{self.default_model}'. Please verify the model "
                     f"name is correct for this provider's API. "
                     f"Original error: {msg}",
-                )
-            raise ProviderError(self.get_name(), f"API Error ({status}): {msg}")
+                    model_name=model_name,
+                    status_code=status,
+                    retryable=False,
+                    original_exception=e,
+                ) from e
+            raise ProviderError(
+                self.get_name(),
+                f"API Error ({status}): {msg}",
+                model_name=model_name,
+                status_code=status,
+                retryable=None if code != "insufficient_quota" else False,
+                original_exception=e,
+            ) from e
         except OpenAIAPITimeoutError as e:
             logger.error(f"OpenAI timeout: {e}", exc_info=True)
             raise ProviderError(self.get_name(), f"Timeout: {e}")
@@ -955,7 +1631,46 @@ class OpenAIProvider(BaseProvider):
         if pd:
             result["cached_tokens"] = pd.get("cached_tokens")
             result["audio_input_tokens"] = pd.get("audio_tokens")
+            if pd.get("cache_write_tokens") is not None:
+                result["cache_write_tokens"] = pd.get("cache_write_tokens")
+        elif usage.get("cached_tokens") is not None:
+            # Some OpenAI-compatible servers (Together) report it top-level.
+            result["cached_tokens"] = usage.get("cached_tokens")
         return result
+
+    def extract_reasoning_content(self, response: dict[str, Any]) -> str | None:
+        """The model's reasoning text, under whichever key the server uses.
+
+        Responses-routed calls carry the summary as ``reasoning``; OpenAI-
+        compatible servers use ``reasoning`` (Groq, Together, gpt-oss) or
+        ``reasoning_content`` (xAI, DeepSeek-style servers).
+        """
+        try:
+            message = (response.get("choices") or [{}])[0].get("message") or {}
+        except (AttributeError, IndexError, TypeError):
+            return None
+        return message.get("reasoning") or message.get("reasoning_content") or None
+
+    def extract_delta_reasoning_content(self, chunk: dict[str, Any]) -> str | None:
+        """Streaming counterpart of :meth:`extract_reasoning_content`."""
+        try:
+            delta = (chunk.get("choices") or [{}])[0].get("delta") or {}
+        except (AttributeError, IndexError, TypeError):
+            return None
+        return delta.get("reasoning") or delta.get("reasoning_content") or None
+
+    def extract_reasoning_items(self, response: dict[str, Any]) -> list[dict[str, Any]] | None:
+        """Encrypted reasoning items from a Responses-routed answer.
+
+        Put them in the next assistant message's ``metadata["reasoning_items"]``
+        to carry the model's chain of thought across a tool loop.
+        """
+        try:
+            message = (response.get("choices") or [{}])[0].get("message") or {}
+        except (AttributeError, IndexError, TypeError):
+            return None
+        items = message.get("reasoning_items")
+        return list(items) if items else None
 
     async def count_tokens(self, text: str, model: str | None = None) -> int:
         if not text:
@@ -1400,7 +2115,7 @@ class OpenAIProvider(BaseProvider):
         if not self._client:
             raise ProviderError(self.get_name(), "Client not initialized.")
 
-        img_model = model or "gpt-image-1"
+        img_model = model or DEFAULT_IMAGE_MODEL
         api_kwargs: dict[str, Any] = {
             "prompt": prompt,
             "model": img_model,
@@ -1685,14 +2400,17 @@ class OpenAIProvider(BaseProvider):
         if not self._client:
             raise ProviderError(self.get_name(), "Client not initialized.")
 
-        img_model = model or "gpt-image-1"
+        img_model = model or DEFAULT_IMAGE_MODEL
 
         api_kwargs: dict[str, Any] = {
             "prompt": prompt,
             "model": img_model,
             "n": n,
-            "response_format": response_format,
         }
+        if img_model.startswith("dall-e"):
+            # GPT image models always return base64 and reject the field
+            # (live 2026-11-16: "Unknown parameter: 'response_format'").
+            api_kwargs["response_format"] = response_format
         if size is not None:
             api_kwargs["size"] = size
         if quality is not None:

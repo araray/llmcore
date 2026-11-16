@@ -361,11 +361,34 @@ max_retries = 2
   # Example for Groq: base_url = "https://api.groq.com/openai/v1"
   # base_url = "https://api.openai.com/v1"
 
-  # Default model for this provider instance.
-  default_model = "gpt-4o"
+  # Default model for this provider instance. gpt-6-luna is the cheapest
+  # current-generation model; gpt-4o shuts down 2027-01-14.
+  default_model = "gpt-6-luna"
 
   # Request timeout in seconds.
   timeout = 120
+
+  # --- Responses API ---
+  # Which API a call uses. Both return the same response shape.
+  #   "auto"   (default for api.openai.com) - the o-series and GPT-5+ use
+  #            /responses (pro and codex models exist only there, and reasoning
+  #            carries across tool turns only there); gpt-4.x, *-search-api and
+  #            audio models use /chat/completions.
+  #   "always" / "never".
+  # A Chat-only parameter (n, logprobs, seed, stop, ...) keeps a call on Chat
+  # Completions; a Responses-only one (reasoning, text, include, ...) sends it
+  # to /responses. Per call: llm.chat(..., responses=True|False).
+  # OpenAI-compatible endpoints (a non-OpenAI base_url) default to "never".
+  # responses_api = "auto"
+
+  # --- Per-model parameter rules ---
+  # Each OpenAI model accepts a different parameter set (gpt-6-luna rejects
+  # temperature unless effort is "none"; gpt-5 takes effort "minimal" but not
+  # "none"; o3 rejects top_p). With "adapt" (default for api.openai.com) a
+  # rejected parameter is renamed, dropped or moved to the nearest supported
+  # value, the call is retried once, and the rule is remembered for that model.
+  # Each adjustment is logged once. "strict" fails instead.
+  # param_policy = "adapt"
 
   # --- Anthropic Provider ---
   # For Claude models.

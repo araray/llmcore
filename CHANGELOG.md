@@ -7,6 +7,58 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Changed — OpenAI: Responses API, per-model parameter rules, current models
+
+Audited against the live API and `openai` 3.51 (2026-11-16). Several things
+were broken for every current model:
+
+- **Responses API.** `responses_api = "auto"` (the default against OpenAI)
+  sends the o-series and GPT-5+ to `/responses` and keeps gpt-4.x, search and
+  audio models on Chat Completions. `gpt-5-pro`, `gpt-5.x-pro` and
+  `gpt-5.3-codex` exist only on `/responses` and answered 404 before. A
+  Chat-only parameter (`n`, `logprobs`, `seed`, `stop`, …) keeps a call on
+  Chat Completions, a Responses-only one (`reasoning`, `text`, `include`, …)
+  moves it, and `responses=True|False` decides per call. Both routes return the
+  same shape. Encrypted reasoning comes back as `reasoning_items`
+  (`extract_reasoning_items()`) and goes out again from
+  `metadata["reasoning_items"]`, so reasoning survives tool loops.
+- **Parameters are learned per model.** OpenAI models no longer share one
+  parameter set: gpt-6-luna rejects `temperature` unless effort is `none`,
+  gpt-5 takes effort `minimal` but not `none`, o3 rejects `top_p`. With
+  `param_policy = "adapt"` (the default against OpenAI) a rejected parameter is
+  renamed, dropped or moved to the nearest supported effort level, the call is
+  retried once, and the rule is remembered for that model. `strict` fails
+  instead.
+- `max_tokens` is sent as `max_completion_tokens` to OpenAI. GPT-5+ rejected
+  it. Compatible endpoints keep `max_tokens`.
+- `effort=` (llmcore's canonical knob) is accepted, and `reasoning_effort`
+  takes `none` through `max`.
+- `native_search=True` uses the Responses `web_search` tool, which every model
+  has. Chat Completions search works only on `*-search-api` models.
+- Context windows are the **input** limits OpenAI enforces, measured from its
+  own overflow errors: 272K for gpt-5/5.1/5.2/5.4-mini/5.4-nano, 922K for
+  gpt-5.4/5.5/5.6/6.x, and 1,047,576 for gpt-4.1. gpt-4.1 used to resolve to
+  8,192.
+- `ContextLengthError` is raised by error code on both routes and every
+  wording. It had stopped matching from SDK 3.38, whose error text no longer
+  carries the body.
+- Chat streams ask for usage, so streamed calls now have token counts and
+  cost. Errors raised mid-stream are `ProviderError`, not raw SDK exceptions.
+- Direct transport: `extra_body` is merged into the body instead of being sent
+  as a literal field, and the `OpenAI-Project` header is sent.
+- Images default to `gpt-image-2` (`gpt-image-1` no longer exists), and
+  `response_format` is sent only to DALL-E models (GPT image models reject it).
+- Defaults: `gpt-6-luna` (`gpt-4o` shuts down 2027-01-14). `openai>=3.38`.
+- Reasoning text is extracted from every OpenAI-compatible server
+  (`reasoning` or `reasoning_content`). Cache-write tokens are reported.
+- cardctl: GPT-5+ cards were all-false placeholders (no tools, vision or
+  reasoning) because the adapter knew only `o1`/`o3`/`o4` as reasoning models.
+  The inference is fixed, and 59 existing cards were repaired in place
+  (capabilities only where the block was the placeholder; windows to the
+  measured limits; prices untouched).
+- Command Code's `/responses` lane now uses OpenAIProvider's Responses code
+  instead of its own copy.
+
 ### Added — Command Code provider
 
 `commandcode` (aliases `command_code`, `command-code`) reaches Command Code's

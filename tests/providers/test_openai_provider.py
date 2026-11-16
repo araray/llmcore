@@ -126,8 +126,19 @@ class TestIsReasoningModel:
 
         assert _is_reasoning_model("gpt-4o") is False
         assert _is_reasoning_model("gpt-4o-mini") is False
-        assert _is_reasoning_model("gpt-5.4") is False
         assert _is_reasoning_model("gpt-4.1") is False
+        # Chat-tuned and search variants do not reason.
+        assert _is_reasoning_model("gpt-5-search-api") is False
+        assert _is_reasoning_model("gpt-5.1-chat-latest") is False
+
+    def test_gpt5_and_later_are_reasoning(self):
+        """Every GPT-5+ model reasons: live 2026-11-16, gpt-5-nano, gpt-5.1,
+        gpt-5.4-nano and gpt-6-luna all report reasoning tokens and reject
+        max_tokens."""
+        from llmcore.providers.openai_provider import _is_reasoning_model
+
+        for model in ("gpt-5", "gpt-5.4", "gpt-5.4-nano", "gpt-5.6-sol", "gpt-6-luna", "gpt-6.1-sol"):
+            assert _is_reasoning_model(model) is True, model
 
 
 class TestNeedsDeveloperRole:
@@ -144,7 +155,7 @@ class TestNeedsDeveloperRole:
         from llmcore.providers.openai_provider import _needs_developer_role
 
         assert _needs_developer_role("gpt-4o") is False
-        assert _needs_developer_role("gpt-5.4") is False
+        assert _needs_developer_role("gpt-4.1-mini") is False
 
 
 class TestContextLengthHeuristics:
@@ -162,14 +173,22 @@ class TestContextLengthHeuristics:
                     return ctx
             return None
 
-        assert resolve("gpt-5.4") == 1050000
-        assert resolve("gpt-5.4-pro") == 1050000
-        assert resolve("gpt-5.4-mini") == 400000
-        assert resolve("gpt-5.2-pro") == 400000
-        assert resolve("gpt-5.2") == 400000
-        assert resolve("gpt-5.1") == 400000
-        assert resolve("gpt-5") == 400000
-        assert resolve("gpt-5-mini") == 200000
+        # Maximum INPUT tokens, measured live 2026-11-16 from OpenAI's own
+        # overflow errors. The GPT-5 line's advertised "400K" is 272K in +
+        # 128K out; the "1.05M" models take 922K in.
+        assert resolve("gpt-6-luna") == 922000
+        assert resolve("gpt-6.1-sol") == 922000
+        assert resolve("gpt-5.6-terra") == 922000
+        assert resolve("gpt-5.5") == 922000
+        assert resolve("gpt-5.4") == 922000
+        assert resolve("gpt-5.4-pro") == 922000
+        assert resolve("gpt-5.4-mini") == 272000
+        assert resolve("gpt-5.4-nano") == 272000
+        assert resolve("gpt-5.2-pro") == 272000
+        assert resolve("gpt-5.2") == 272000
+        assert resolve("gpt-5.1") == 272000
+        assert resolve("gpt-5") == 272000
+        assert resolve("gpt-5-mini") == 272000
 
     def test_o_series(self):
         from llmcore.providers.openai_provider import (
@@ -199,9 +218,10 @@ class TestContextLengthHeuristics:
                     return ctx
             return None
 
-        assert resolve("gpt-4.1") == 1048576
-        assert resolve("gpt-4.1-mini") == 1048576
-        assert resolve("gpt-4.1-nano") == 1048576
+        # Measured live 2026-11-16: "maximum context length is 1047576 tokens".
+        assert resolve("gpt-4.1") == 1047576
+        assert resolve("gpt-4.1-mini") == 1047576
+        assert resolve("gpt-4.1-nano") == 1047576
 
     def test_unknown_returns_none(self):
         from llmcore.providers.openai_provider import (
@@ -773,7 +793,11 @@ class TestGetSupportedParameters:
     def test_reasoning_effort_enum_includes_xhigh(self):
         provider = self._make_provider_stub()
         params = provider.get_supported_parameters()
-        assert params["reasoning_effort"]["enum"] == ["low", "medium", "high", "xhigh"]
+        # Accepted levels vary by model (gpt-5: minimal..high; gpt-5.1: none..high;
+        # gpt-5.4+/6: none..xhigh; o3: low..xhigh), so the schema lists them all
+        # and param_policy moves a rejected one to the model's nearest.
+        assert params["reasoning_effort"]["enum"] == [
+            "none", "minimal", "low", "medium", "high", "xhigh", "max"]
 
     def test_has_new_parameters(self):
         provider = self._make_provider_stub()
