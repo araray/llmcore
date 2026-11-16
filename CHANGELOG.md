@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Verified — vLLM against a live server (Colab L4, Qwen3-4B-Instruct-2507)
+
+- **Both transports:**
+  - model discovery and context (8192 from the served `max_model_len`);
+  - plain and streaming chat;
+  - `structured_outputs` with a JSON schema;
+  - the legacy `guided_json` / `guided_choice`, translated to
+    `structured_outputs` and enforced (exact JSON, and "yes"), with the
+    deprecation warning;
+  - token counting.
+- **Tool calls** need the server started with
+  `--enable-auto-tool-choice --tool-call-parser <name>`. Without them vLLM
+  answers 400 even for `required` and named tool choices. Its message
+  states the flags, and llmcore passes it through as a `ProviderError`.
+  Restarting the server with those flags through `colab exec` failed twice
+  (the exec channel dropped), so the tool path was not exercised on vLLM; it
+  is the shared OpenAI-compatible path verified live with several other
+  vendors.
+
 ### Fixed — Gemini on Vertex, verified live (project `araray-org`)
 
 - **Imagen is gone from Vertex:** no `imagen-*` model is listed on `global`
