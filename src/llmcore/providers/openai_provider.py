@@ -2286,6 +2286,8 @@ class OpenAIProvider(BaseProvider):
             "asr",
             # Realtime transcription session (wss /v1/realtime?intent=transcription).
             "asr_stream",
+            # Realtime speech-to-speech agent (open_voice_agent).
+            "voice_agent",
         }
     )
 
@@ -2304,7 +2306,9 @@ class OpenAIProvider(BaseProvider):
         """
         from ..media.models import MediaCapability, MediaExecution
 
-        if capability in (MediaCapability.TTS_STREAM, MediaCapability.ASR_STREAM):
+        if capability in (
+            MediaCapability.TTS_STREAM, MediaCapability.ASR_STREAM, MediaCapability.VOICE_AGENT
+        ):
             return MediaExecution.STREAM
         return MediaExecution.REQUEST_RESPONSE
 
@@ -2402,6 +2406,89 @@ class OpenAIProvider(BaseProvider):
             yield stream
         finally:
             await stream.close()
+
+    # --- realtime voice agent ---
+
+    @asynccontextmanager
+    async def open_voice_agent(
+        self,
+        *,
+        model: str | None = None,
+        prompt: str | None = None,
+        functions: list[Any] | None = None,
+        greeting: str | None = None,
+        voice: str | None = None,
+        transcribe_user: bool = True,
+        settings: dict[str, Any] | None = None,
+        **kwargs: Any,
+    ) -> "AsyncIterator[OpenAIVoiceAgentSession]":
+        """Open a Realtime speech-to-speech agent (``voice_agent``).
+
+        The same session surface as Deepgram's voice agent: ``send_audio``
+        (16-bit 24 kHz PCM), ``inject_user_message``, ``inject_agent_message``,
+        ``update_prompt``, ``respond_to_function_call``, and iteration of
+        :class:`VoiceAgentEvent` (``audio`` chunks, ``conversation_text`` for
+        both sides, ``function_call_request``, ``user_started_speaking``,
+        ``agent_started_speaking`` / ``agent_audio_done``, ``error``).
+
+        Args:
+            model: Realtime model (default ``gpt-realtime-2.1-mini``).
+            prompt: Instructions for the agent.
+            functions: Tools: llmcore ``Tool`` objects or dicts with
+                ``name`` / ``description`` / ``parameters``.
+            greeting: Spoken first, before the user talks.
+            voice: Output voice (``marin``, ``cedar``, ``alloy`` ...).
+            transcribe_user: Emit the user's words as ``conversation_text``
+                (input transcription with ``gpt-4o-transcribe``).
+            settings: Deep-merged into the ``session`` object last.
+        """
+        try:
+            from websockets.asyncio.client import connect as ws_connect
+        except ImportError as exc:  # pragma: no cover
+            raise ProviderError(self.get_name(), "Voice agents need the 'websockets' package.") from exc
+
+        used_model = model or "gpt-realtime-2.1-mini"
+        audio_input: dict[str, Any] = {
+            "format": {"type": "audio/pcm", "rate": 24000},
+            "turn_detection": {"type": "server_vad"},
+        }
+        if transcribe_user:
+            audio_input["transcription"] = {"model": "gpt-4o-transcribe"}
+        session: dict[str, Any] = {
+            "type": "realtime",
+            "output_modalities": ["audio"],
+            "audio": {"input": audio_input, "output": {"format": {"type": "audio/pcm", "rate": 24000}}},
+        }
+        if voice:
+            session["audio"]["output"]["voice"] = voice
+        if prompt:
+            session["instructions"] = prompt
+        if functions:
+            session["tools"] = [_realtime_tool(f) for f in functions]
+            session["tool_choice"] = "auto"
+        session.update(kwargs)
+        if settings:
+            session = _deep_merge(session, settings)
+
+        base = str(self.base_url or "https://api.openai.com/v1").rstrip("/")
+        url = base.replace("https://", "wss://").replace("http://", "ws://") + f"/realtime?model={used_model}"
+        try:
+            websocket = await ws_connect(url, additional_headers={"Authorization": f"Bearer {self.api_key}"})
+        except Exception as exc:
+            status = getattr(getattr(exc, "response", None), "status_code", None)
+            raise ProviderError(
+                self.get_name(), f"OpenAI realtime handshake failed: {exc}", model_name=used_model,
+                status_code=status, retryable=status is None or status >= 500,
+            ) from exc
+        agent = OpenAIVoiceAgentSession(websocket)
+        try:
+            await websocket.send(json.dumps({"type": "session.update", "session": session}))
+            if greeting:
+                await websocket.send(json.dumps({"type": "response.create", "response": {
+                    "instructions": f"Say exactly: {greeting}"}}))
+            yield agent
+        finally:
+            await agent.close()
 
     # --- image ---
 
@@ -2937,3 +3024,141 @@ class OpenAITranscriptionStream:
                     "conversation.item.done", "input_audio_buffer.cleared"):
             return None  # bookkeeping
         return event(StreamEventType.OTHER)
+
+
+def _realtime_tool(function: Any) -> dict[str, Any]:
+    """A Realtime ``function`` tool from an llmcore Tool or a plain dict."""
+    if isinstance(function, Mapping):
+        data = dict(function.get("function") or function)
+    else:
+        data = {
+            "name": getattr(function, "name", None),
+            "description": getattr(function, "description", None),
+            "parameters": getattr(function, "parameters", None),
+        }
+        params = data["parameters"]
+        if hasattr(params, "model_dump"):
+            data["parameters"] = params.model_dump(exclude_none=True)
+    tool = {"type": "function", "name": data.get("name"), "description": data.get("description") or ""}
+    tool["parameters"] = data.get("parameters") or {"type": "object", "properties": {}}
+    return tool
+
+
+def _deep_merge(base: dict[str, Any], extra: Mapping[str, Any]) -> dict[str, Any]:
+    out = dict(base)
+    for key, value in extra.items():
+        if isinstance(value, Mapping) and isinstance(out.get(key), dict):
+            out[key] = _deep_merge(out[key], value)
+        else:
+            out[key] = value
+    return out
+
+
+class OpenAIVoiceAgentSession:
+    """A Realtime speech-to-speech session with Deepgram's agent surface."""
+
+    def __init__(self, websocket: Any) -> None:
+        self._ws = websocket
+        self._speaking: set[str] = set()
+
+    async def _send(self, event: dict[str, Any]) -> None:
+        await self._ws.send(json.dumps(event))
+
+    async def send_audio(self, chunk: bytes) -> None:
+        """Microphone audio: 16-bit little-endian PCM, 24 kHz mono."""
+        import base64
+
+        await self._send({"type": "input_audio_buffer.append",
+                          "audio": base64.b64encode(bytes(chunk)).decode("ascii")})
+
+    async def inject_user_message(self, content: str) -> None:
+        """Add a typed user turn and ask for a reply."""
+        await self._send({"type": "conversation.item.create", "item": {
+            "type": "message", "role": "user", "content": [{"type": "input_text", "text": content}]}})
+        await self._send({"type": "response.create"})
+
+    async def inject_agent_message(self, message: str) -> None:
+        """Have the agent say *message* now."""
+        await self._send({"type": "response.create", "response": {"instructions": f"Say exactly: {message}"}})
+
+    async def update_prompt(self, prompt: str) -> None:
+        """Replace the agent's instructions mid-session."""
+        await self._send({"type": "session.update", "session": {"type": "realtime", "instructions": prompt}})
+
+    async def respond_to_function_call(self, function_call_id: str, output: Any, name: str | None = None) -> None:
+        """Return a tool result and let the agent continue."""
+        await self._send({"type": "conversation.item.create", "item": {
+            "type": "function_call_output", "call_id": function_call_id,
+            "output": output if isinstance(output, str) else json.dumps(output)}})
+        await self._send({"type": "response.create"})
+
+    async def interrupt(self) -> None:
+        """Stop the agent's current reply (barge-in)."""
+        await self._send({"type": "response.cancel"})
+
+    async def keepalive(self) -> None:
+        """No-op: the Realtime API needs no keepalive message."""
+
+    async def close(self) -> None:
+        """Close the WebSocket (idempotent)."""
+        try:
+            await self._ws.close()
+        except Exception:  # noqa: BLE001
+            pass
+
+    async def __aiter__(self) -> "AsyncIterator[Any]":
+        async for message in self._ws:
+            try:
+                raw = json.loads(message)
+            except (TypeError, ValueError):
+                continue
+            for event in self._map(raw):
+                yield event
+
+    def _map(self, raw: dict[str, Any]) -> list[Any]:
+        import base64
+
+        from ..models_multimodal import VoiceAgentEvent, VoiceAgentEventType, VoiceAgentFunctionCall
+
+        kind = str(raw.get("type") or "")
+
+        def event(type_: Any, **fields: Any) -> Any:
+            return VoiceAgentEvent(type=type_, provider="openai", raw=raw, **fields)
+
+        response_id = str(raw.get("response_id") or "")
+        if kind == "response.output_audio.delta":
+            out = []
+            if response_id not in self._speaking:
+                self._speaking.add(response_id)
+                out.append(event(VoiceAgentEventType.AGENT_STARTED_SPEAKING))
+            out.append(VoiceAgentEvent(type=VoiceAgentEventType.AUDIO, provider="openai",
+                                       audio=base64.b64decode(raw.get("delta") or ""), raw={"type": kind}))
+            return out
+        if kind == "response.output_audio.done":
+            self._speaking.discard(response_id)
+            return [event(VoiceAgentEventType.AGENT_AUDIO_DONE)]
+        if kind == "response.output_audio_transcript.done":
+            return [event(VoiceAgentEventType.CONVERSATION_TEXT, role="assistant", content=raw.get("transcript"))]
+        if kind == "conversation.item.input_audio_transcription.completed":
+            return [event(VoiceAgentEventType.CONVERSATION_TEXT, role="user", content=raw.get("transcript"))]
+        if kind == "input_audio_buffer.speech_started":
+            return [event(VoiceAgentEventType.USER_STARTED_SPEAKING)]
+        if kind == "response.created":
+            return [event(VoiceAgentEventType.AGENT_THINKING)]
+        if kind == "response.function_call_arguments.done":
+            try:
+                arguments = json.loads(raw.get("arguments") or "{}")
+            except ValueError:
+                arguments = {"_raw": raw.get("arguments")}
+            call = VoiceAgentFunctionCall(id=str(raw.get("call_id") or ""), name=str(raw.get("name") or ""),
+                                          arguments=arguments)
+            return [event(VoiceAgentEventType.FUNCTION_CALL_REQUEST, function_call=call)]
+        if kind == "session.created":
+            return [event(VoiceAgentEventType.WELCOME)]
+        if kind == "session.updated":
+            return [event(VoiceAgentEventType.SETTINGS_APPLIED)]
+        if kind == "error":
+            detail = raw.get("error") or {}
+            return [event(VoiceAgentEventType.ERROR,
+                          content=str(detail.get("message") if isinstance(detail, dict) else detail))]
+        return []

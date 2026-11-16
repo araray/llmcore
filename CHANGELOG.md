@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added — OpenAI: Realtime voice agent (`voice_agent`)
+
+- `open_voice_agent()` opens a Realtime speech-to-speech session with
+  Deepgram's agent surface: `send_audio`, `inject_user_message`,
+  `inject_agent_message`, `update_prompt`, `respond_to_function_call`, plus
+  `interrupt` for barge-in. It emits `VoiceAgentEvent`s (audio, both sides'
+  transcripts, function calls, speaking markers, errors), and takes tools,
+  a greeting, a voice and `settings` overrides.
+- Verified live on `gpt-realtime-2.1-mini`. A full tool loop ran
+  (preamble → `get_weather({"city": "Lisbon"})` → result → spoken answer),
+  with about 8 s of 24 kHz audio.
+
 ### Added — OpenAI: realtime transcription (`asr_stream`)
 
 - `open_transcription_session()` uses the Realtime API in transcription mode
