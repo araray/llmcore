@@ -268,7 +268,7 @@ Which provider serves what (default configuration, 2026-11-16):
 | Provider | Media capabilities |
 |---|---|
 | OpenAI | `image_generate`, `image_edit`, `tts`, `tts_stream`, `asr`, `asr_stream` and `voice_agent` (Realtime) |
-| Gemini | `image_generate`, `tts`; on the Developer API also `asr`, `asr_stream` and `voice_agent` (Live API) and `music` (Lyria); on Vertex also `image_edit`, `image_upscale`, `video_generate`. Typed decisions via `create_decision()` / `system_one()` |
+| Gemini | `image_generate`, `image_edit` (Gemini image models), `tts`, `asr`, `asr_stream`, `voice_agent` (Live) in both modes; `music` (Lyria) on the Developer API; `video_generate` (Veo) on Vertex. Typed decisions via `create_decision()` / `system_one()` (Developer API) |
 | Mistral | `tts`, `asr`, `asr_stream`, `ocr` |
 | DeepSeek | `tts`, `tts_stream`, `asr`, `ocr` (tool APIs) |
 | Z.ai | `tts`, `asr`, `ocr`, `image_generate`, `video_generate` (job) |

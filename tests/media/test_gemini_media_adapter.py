@@ -53,7 +53,12 @@ def provider():
 
 @pytest.fixture
 def vertex_provider():
-    """A GeminiProvider in Vertex AI mode, where Imagen's endpoints exist."""
+    """A GeminiProvider in Vertex AI mode with Imagen named explicitly.
+
+    Vertex lists no imagen-* model any more (2026-11-16); the default image
+    path is the Gemini image models. A project that still has Imagen names it
+    in config, which is what this fixture does so the Imagen path stays tested.
+    """
     with patch("llmcore.providers.gemini_provider.genai") as genai_mod:
         genai_mod.Client.return_value = MagicMock()
         from llmcore.providers.gemini_provider import GeminiProvider
@@ -64,6 +69,7 @@ def vertex_provider():
                 "project": "p",
                 "location": "us-central1",
                 "_instance_name": "gemini",
+                "default_image_model": "imagen-4.0-generate-001",
             }
         )
 
@@ -124,6 +130,7 @@ class TestConformance:
         assert provider.media_capabilities() == frozenset(
             {
                 MediaCapability.IMAGE_GENERATE,
+                MediaCapability.IMAGE_EDIT,  # Gemini image models edit via generate_content
                 MediaCapability.TTS,
                 MediaCapability.ASR,
                 MediaCapability.ASR_STREAM,  # Live API: gemini-3.5-transcribe-live
@@ -137,9 +144,12 @@ class TestConformance:
             {
                 MediaCapability.IMAGE_GENERATE,
                 MediaCapability.IMAGE_EDIT,
-                MediaCapability.IMAGE_UPSCALE,
                 MediaCapability.TTS,
                 MediaCapability.VIDEO_GENERATE,
+                # verified on Vertex 2026-11-16 (music and decisions are not)
+                MediaCapability.ASR,
+                MediaCapability.ASR_STREAM,
+                MediaCapability.VOICE_AGENT,
             }
         )
 
@@ -170,7 +180,7 @@ class TestConformance:
         """
         assert provider._vertex_ai is False
         caps = provider.media_capabilities()
-        assert MediaCapability.IMAGE_EDIT not in caps
+        assert MediaCapability.IMAGE_EDIT in caps  # through the Gemini image models now
         assert MediaCapability.IMAGE_UPSCALE not in caps
         # ...but the capabilities that DO work in both modes are present.
         assert MediaCapability.IMAGE_GENERATE in caps
@@ -178,10 +188,11 @@ class TestConformance:
         # Veo is Vertex-only now (Developer API previews shut down 2026-10-22).
         assert MediaCapability.VIDEO_GENERATE not in caps
 
-    def test_vertex_mode_exposes_the_full_image_surface(self, vertex_provider):
+    def test_vertex_mode_image_surface(self, vertex_provider):
+        """Imagen (and its upscaler) is gone from Vertex; editing remains."""
         caps = vertex_provider.media_capabilities()
         assert MediaCapability.IMAGE_EDIT in caps
-        assert MediaCapability.IMAGE_UPSCALE in caps
+        assert MediaCapability.IMAGE_UPSCALE not in caps
 
     def test_model_defaults_are_configurable(self):
         with patch("llmcore.providers.gemini_provider.genai") as genai_mod:
@@ -575,9 +586,10 @@ class TestRouting:
     def test_developer_api_does_not_offer_video(self, provider):
         assert MediaManager({"gemini": provider}).who_can(MediaCapability.VIDEO_GENERATE) == []
 
-    def test_gemini_claims_asr_on_the_developer_api_only(self, provider, vertex_provider):
+    def test_gemini_claims_asr_in_both_modes_and_music_on_the_developer_api(self, provider, vertex_provider):
         assert MediaManager({"gemini": provider}).who_can(MediaCapability.ASR) == ["gemini"]
-        assert MediaManager({"gemini": vertex_provider}).who_can(MediaCapability.ASR) == []
+        assert MediaManager({"gemini": vertex_provider}).who_can(MediaCapability.ASR) == ["gemini"]
+        assert MediaManager({"gemini": vertex_provider}).who_can(MediaCapability.MUSIC) == []
 
     async def test_image_routes_through_the_router(self, provider):
         part = MagicMock(inline_data=MagicMock(data=b"P", mime_type="image/png"))
@@ -587,6 +599,38 @@ class TestRouting:
         media = MediaManager({"gemini": provider})
         assert (await media.images.generate("x")).provider == "gemini"
 
-    def test_developer_mode_does_not_route_image_edit(self, provider):
+    def test_developer_mode_routes_image_edit(self, provider):
+        """Editing goes through the Gemini image models now (live-verified)."""
         media = MediaManager({"gemini": provider})
-        assert media.who_can(MediaCapability.IMAGE_EDIT) == []
+        assert media.who_can(MediaCapability.IMAGE_EDIT) == ["gemini"]
+
+
+
+class TestGeminiImageModelsOnBothModes:
+    """Live 2026-11-16: Vertex gemini-3.1-flash-image and Developer API
+    gemini-nano-banana-2.1 both generated and edited an image."""
+
+    def _vertex_default(self):
+        with patch("llmcore.providers.gemini_provider.genai") as genai_mod:
+            genai_mod.Client.return_value = MagicMock()
+            from llmcore.providers.gemini_provider import GeminiProvider
+
+            return GeminiProvider({"vertex_ai": True, "project": "p", "location": "global"})
+
+    async def test_vertex_default_uses_generate_content(self):
+        p = self._vertex_default()
+        part = MagicMock(inline_data=MagicMock(data=b"P", mime_type="image/png"))
+        p._client.aio.models.generate_content = AsyncMock(
+            return_value=MagicMock(candidates=[MagicMock(content=MagicMock(parts=[part]))]))
+        p._client.aio.models.generate_images = AsyncMock()
+        result = await p.generate_image_media("x")
+        assert result.model == "gemini-3.1-flash-image"
+        p._client.aio.models.generate_images.assert_not_called()
+
+    async def test_edit_sends_the_image_with_the_prompt(self, provider):
+        part = MagicMock(inline_data=MagicMock(data=b"E", mime_type="image/png"))
+        provider._client.aio.models.generate_content = AsyncMock(
+            return_value=MagicMock(candidates=[MagicMock(content=MagicMock(parts=[part]))]))
+        result = await provider.edit_image_media("make it green", image=MediaRef.from_bytes(b"IMG", mime_type="image/png"))
+        contents = provider._client.aio.models.generate_content.await_args.kwargs["contents"]
+        assert contents[1] == "make it green" and result.capability is MediaCapability.IMAGE_EDIT

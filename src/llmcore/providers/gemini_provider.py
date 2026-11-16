@@ -1854,7 +1854,14 @@ class GeminiProvider(BaseProvider):
     # timeout and cancellation policy — this adapter only reports state.
 
     #: Capabilities available on BOTH the Gemini Developer API and Vertex AI.
-    _MEDIA_CAPABILITIES: frozenset[str] = frozenset({"image_generate", "tts"})
+    #: asr / asr_stream / voice_agent verified on both (Vertex 2026-11-16:
+    #: transcription on location "global", the Live agent model on
+    #: "us-central1" -- model availability differs per Vertex location).
+    _MEDIA_CAPABILITIES: frozenset[str] = frozenset(
+        # image_edit: the Gemini image models edit an image given with the
+        # prompt (generate_content), in both modes.
+        {"image_generate", "image_edit", "tts", "asr", "asr_stream", "voice_agent"}
+    )
 
     #: Capabilities that exist ONLY on Vertex AI. Verified live: the Developer
     #: API rejects ``models.generate_images`` / ``edit_image`` / ``upscale_image``
@@ -1865,22 +1872,25 @@ class GeminiProvider(BaseProvider):
         # Veo is Vertex-only too: the Developer API shut its Veo previews down
         # on 2026-10-22 (models 404), and google-genai 3.x refuses
         # generate_videos outside Vertex before sending anything.
-        {"image_edit", "image_upscale", "video_generate"}
+        # Imagen (generate_images / edit_image / upscale_image) is gone from
+        # Vertex: no imagen-* model is listed on global or us-central1
+        # (2026-11-16), so image_upscale is no longer declared. Images go
+        # through the Gemini image models instead; Veo remains.
+        {"video_generate"}
     )
 
     #: Developer-API-only capabilities: ``gemini-3.5-transcribe`` is listed and
     #: verified there (generateContent, 2026-11-16); its Vertex availability
     #: is unverified, so it is not declared in Vertex mode.
     _DEV_ONLY_MEDIA_CAPABILITIES: frozenset[str] = frozenset(
-        # Live API (bidiGenerateContent) sessions, verified on the Developer
-        # API: gemini-3.5-transcribe-live (asr_stream) and gemini-3.8-live
-        # (voice_agent).
-        # music: Lyria (generateContent, MP3 out), verified 2026-11-16.
-        {"asr", "asr_stream", "voice_agent", "music"}
+        # music: Lyria (generateContent, MP3 out). Vertex answers 404 for
+        # lyria-3.5 on both global and us-central1 (2026-11-16), and has no
+        # createDecision method either.
+        {"music"}
     )
 
     #: Default models per media capability, overridable per call and via config.
-    _DEFAULT_IMAGE_MODEL = "imagen-4.0-generate-001"        # Vertex only
+    _DEFAULT_IMAGE_MODEL = "gemini-3.1-flash-image"         # Vertex (Imagen is gone)
     _DEFAULT_DEV_IMAGE_MODEL = "gemini-nano-banana-2.1"     # Developer API (GA)
     _DEFAULT_VIDEO_MODEL = "veo-3.1-generate-001"           # Vertex only
     _DEFAULT_TTS_MODEL = "gemini-3.8-flash-tts"
@@ -1936,6 +1946,15 @@ class GeminiProvider(BaseProvider):
             "music": self._DEFAULT_MUSIC_MODEL,
             "embed": self._DEFAULT_EMBED_MODEL,
         }[capability]
+
+    @staticmethod
+    async def _ref_bytes(ref: "MediaRef") -> bytes:
+        """The bytes behind *ref*, fetching a remote one."""
+        if ref.is_remote:
+            from ..media.artifacts import default_fetcher
+
+            return await default_fetcher()(ref.url or "")
+        return ref.read_bytes()
 
     @staticmethod
     async def _to_genai_image(ref: "MediaRef") -> Any:
@@ -2009,10 +2028,12 @@ class GeminiProvider(BaseProvider):
                 prompt, image=reference_images[0], model=model, n=n, size=size, **kwargs
             )
 
-        if not self._vertex_ai:
-            # Developer API: Imagen's dedicated endpoint is unavailable, but the
-            # image-capable Gemini models generate through generate_content with
-            # an IMAGE response modality. Same capability, different transport.
+        requested = model or self._media_model_config.get("image")
+        if not (self._vertex_ai and str(requested or "").startswith("imagen")):
+            # The Gemini image models generate through generate_content with an
+            # IMAGE response modality, on both the Developer API and Vertex.
+            # Imagen's generate_images is used only when an imagen-* model is
+            # named explicitly (Vertex lists none any more).
             return await self._generate_image_via_generate_content(
                 prompt, model=model, n=n, size=size, **kwargs
             )
@@ -2080,7 +2101,11 @@ class GeminiProvider(BaseProvider):
             MediaUsage,
         )
 
-        img_model = model or self._media_model_config.get("image") or self._DEFAULT_DEV_IMAGE_MODEL
+        image_ref = kwargs.pop("_edit_image", None)
+        capability_name = kwargs.pop("_capability", "image_generate")
+        img_model = model or self._media_model_config.get("image") or (
+            self._DEFAULT_IMAGE_MODEL if self._vertex_ai else self._DEFAULT_DEV_IMAGE_MODEL
+        )
         if n != 1:
             logger.debug(
                 "The Gemini Developer API image path has no image-count parameter; "
@@ -2101,9 +2126,16 @@ class GeminiProvider(BaseProvider):
         if image_config:
             kwargs["image_config"] = genai_types.ImageConfig(**image_config)
         try:
+            contents: Any = prompt
+            if image_ref is not None:
+                data = await self._ref_bytes(image_ref)
+                contents = [
+                    genai_types.Part.from_bytes(data=data, mime_type=image_ref.mime_type or "image/png"),
+                    prompt,
+                ]
             response = await self._client.aio.models.generate_content(
                 model=img_model,
-                contents=prompt,
+                contents=contents,
                 config=genai_types.GenerateContentConfig(
                     response_modalities=["IMAGE"], **kwargs
                 ),
@@ -2131,7 +2163,7 @@ class GeminiProvider(BaseProvider):
                 )
 
         return MediaResult(
-            capability=MediaCapability.IMAGE_GENERATE,
+            capability=MediaCapability(capability_name),
             provider=self.get_name(),
             model=img_model,
             artifacts=tuple(artifacts),
@@ -2155,10 +2187,25 @@ class GeminiProvider(BaseProvider):
         size: str | None = None,
         **kwargs: Any,
     ) -> "MediaResult":
-        """Edit an image with Imagen's edit surface."""
+        """Edit an image.
+
+        The Gemini image models (Nano Banana) edit the image passed with the
+        prompt through ``generate_content``, on both the Developer API and
+        Vertex. Imagen's mask-based ``edit_image`` is used only when an
+        ``imagen-*`` model is named (Vertex lists none any more); the Gemini
+        path takes no mask, so a mask there is described in the prompt instead.
+        """
         from google.genai import types as genai_types
 
         from ..media.models import MediaCapability, MediaResult, MediaUsage
+
+        if not str(model or self._media_model_config.get("image") or "").startswith("imagen"):
+            if mask is not None:
+                logger.warning("Gemini image editing takes no mask; describe the region in the prompt.")
+            return await self._generate_image_via_generate_content(
+                prompt, model=model, n=n, size=size, _edit_image=image,
+                _capability="image_edit", **kwargs,
+            )
 
         img_model = self._media_model("image", model)
         reference: list[Any] = [
@@ -2540,6 +2587,10 @@ class GeminiProvider(BaseProvider):
         from google.genai import types as genai_types
 
         used = model or "gemini-3.5-transcribe-live"
+        # Vertex refuses a transcription session that may answer in audio
+        # ("Only text modality is supported for Vertex ASR"); text is right on
+        # the Developer API as well.
+        kwargs.setdefault("response_modalities", ["TEXT"])
         config = genai_types.LiveConnectConfig(input_audio_transcription={}, **kwargs)
         if language:
             logger.debug("Gemini Live transcription detects the language itself; hint %s noted.", language)

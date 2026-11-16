@@ -89,6 +89,7 @@ async def test_live_transcription():
         await s.finalize()
         events = [e async for e in s]
     assert seen["model"] == "gemini-3.5-transcribe-live"
+    assert seen["config"].response_modalities == ["TEXT"]  # Vertex requires text (live)
     blob = session.sent[0][1]["audio"]
     assert blob.mime_type == "audio/pcm;rate=16000" and session.sent[1] == ("realtime", {"audio_stream_end": True})
     assert [(e.type, e.text) for e in events] == [

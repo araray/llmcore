@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Fixed — Gemini on Vertex, verified live (project `araray-org`)
+
+- **Imagen is gone from Vertex:** no `imagen-*` model is listed on `global`
+  or `us-central1`, so the Vertex default (`imagen-4.0-generate-001`)
+  answered 404.
+  - Generation and editing now go through the Gemini image models in both
+    modes: `gemini-3.1-flash-image` on Vertex, `gemini-nano-banana-2.1` on
+    the Developer API. Editing passes the input image with the prompt.
+  - The Developer API gains `image_edit` this way.
+  - `image_upscale` is no longer declared. The Imagen paths remain for an
+    explicitly named `imagen-*` model.
+- **`asr`, `asr_stream` and `voice_agent`** are declared on Vertex too, after
+  live checks. Transcription sessions now request text output, because
+  Vertex refuses audio-capable ASR sessions ("Only text modality is
+  supported for Vertex ASR"). Model availability differs by Vertex location:
+  the transcribe models were found on `global`, the Live agent model on
+  `us-central1`.
+- **Vertex-unavailable features** stay Developer-API only:
+  - music: `lyria-3.5` and `lyria-3-clip-preview` answer 404 and
+    `lyria-002` has zero quota;
+  - decisions: `createDecision` is "Method not found" on Vertex.
+- **Verified live on Vertex:** chat on Gemini 3.8 Flash and Gemini 4
+  Hydrogen, transcription, Live transcription, the Live voice agent, Veo
+  3.1 Fast (a 4 s MP4 through the job poller), and image generation and
+  editing. Generation and editing were also re-verified on the Developer
+  API.
+
 ### Added — Together: media capabilities, vendor TTS defaults; verified live
 
 - The Together profile declared no media, yet Together serves `tts`, `asr`
