@@ -55,13 +55,6 @@
     "url": "https://openrouter.ai/api/v1/models",
     "matched_key": "openrouter/google/gemini-4-carbon",
     "match": "exact key match",
-    "fetched_at": "2026-11-16T09:04:54+00:00",
-    "capabilities": {
-      "feed": "caps:openrouter",
-      "method": "api",
-      "url": "https://openrouter.ai/api/v1/models",
-      "matched_key": "openrouter/google/gemini-4-carbon",
-      "fetched_at": "2026-11-16T09:06:07+00:00"
-    }
+    "fetched_at": "2026-11-17T11:17:00+00:00"
   }
 }
