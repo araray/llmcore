@@ -6,7 +6,7 @@
   "architecture": null,
   "context": {
     "max_input_tokens": 262144,
-    "max_output_tokens": 182520
+    "max_output_tokens": 16384
   },
   "capabilities": {
     "streaming": true,
@@ -33,9 +33,9 @@
   "pricing": {
     "currency": "USD",
     "per_million_tokens": {
-      "input": 0.6,
-      "output": 2.4,
-      "cached_input": 0.12
+      "input": 0.5,
+      "output": 2.2,
+      "cached_input": 0.1
     }
   },
   "lifecycle": {
@@ -54,13 +54,13 @@
     "url": "https://openrouter.ai/api/v1/models",
     "matched_key": "openrouter/nvidia/nemotron-3-ultra-550b-a55b",
     "match": "exact key match",
-    "fetched_at": "2026-11-16T15:17:00+00:00",
+    "fetched_at": "2026-11-17T03:17:00+00:00",
     "capabilities": {
       "feed": "caps:openrouter",
       "method": "api",
       "url": "https://openrouter.ai/api/v1/models",
       "matched_key": "openrouter/nvidia/nemotron-3-ultra-550b-a55b",
-      "fetched_at": "2026-11-16T15:18:44+00:00"
+      "fetched_at": "2026-11-17T03:17:10+00:00"
     }
   }
 }
