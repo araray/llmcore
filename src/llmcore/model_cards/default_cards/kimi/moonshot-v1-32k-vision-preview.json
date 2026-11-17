@@ -26,7 +26,7 @@
     }
   },
   "lifecycle": {
-    "status": "active"
+    "status": "retired"
   },
   "description": "Moonshot V1 vision model: understands image content (32K context).",
   "tags": [

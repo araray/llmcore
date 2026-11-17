@@ -36,7 +36,8 @@
   "lifecycle": {
     "release_date": "2025-01-20",
     "knowledge_cutoff": "2024-11",
-    "status": "active"
+    "status": "retired",
+    "shutdown_date": "2026-07-24"
   },
   "license": "MIT",
   "open_weights": true,

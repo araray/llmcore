@@ -45,12 +45,22 @@ with patch.dict(
     # We need a fresh import
     from llmcore.providers import gemini_provider as gp
 
-    gp.google_genai_available = True
-    gp.genai = mock_genai
-    gp.types = mock_types
-    gp.APIError = Exception
-    gp.PermissionDenied = PermissionError
-    gp.InvalidArgument = ValueError
+    pass
+
+
+@pytest.fixture(autouse=True)
+def _mocked_sdk_module(monkeypatch):
+    """Swap the SDK for mocks for each test, and restore it afterwards.
+
+    These globals used to be assigned at import time and were never restored,
+    so every Gemini test collected after this file ran against a MagicMock SDK.
+    """
+    monkeypatch.setattr(gp, "google_genai_available", True)
+    monkeypatch.setattr(gp, "genai", mock_genai)
+    monkeypatch.setattr(gp, "types", mock_types, raising=False)
+    monkeypatch.setattr(gp, "APIError", Exception, raising=False)
+    monkeypatch.setattr(gp, "PermissionDenied", PermissionError, raising=False)
+    monkeypatch.setattr(gp, "InvalidArgument", ValueError, raising=False)
 
 from llmcore.models import Message  # noqa: E402
 from llmcore.models import Role as LLMCoreRole  # noqa: E402
@@ -88,7 +98,8 @@ def provider(provider_config):
 class TestDefaults:
     def test_default_model_is_current_gen(self):
         """DEFAULT_MODEL should be gemini-3.1-flash-lite-preview."""
-        assert gp.DEFAULT_MODEL == "gemini-3.1-flash-lite-preview"
+        # gemini-3.1-flash-lite-preview is shut down (only aliased).
+        assert gp.DEFAULT_MODEL == "gemini-3.5-flash-lite"
 
     def test_token_limits_include_current_models(self):
         """Token limits table should include Gemini 3.x and 2.5 models."""
@@ -461,7 +472,11 @@ class TestStreamingChatCompletion:
         async for chunk in result:
             chunks.append(chunk)
 
-        assert chunks == [{"choices": [{"delta": {"content": "hello"}}]}]
+        assert chunks[0] == {"choices": [{"delta": {"content": "hello"}}]}
+        # A final chunk now carries the finish reason and usage, which the
+        # stream used to drop entirely.
+        assert chunks[-1]["choices"][0]["delta"] == {"content": ""}
+        assert "finish_reason" in chunks[-1]["choices"][0]
 
 
 # ---------------------------------------------------------------------------

@@ -1,5 +1,5 @@
 {
-  "model_id": "ministral-3-14b",
+  "model_id": "ministral-3:14b",
   "display_name": "Ministral 3 14B",
   "provider": "mistral",
   "model_type": "chat",
@@ -9,7 +9,7 @@
     "architecture_type": "transformer"
   },
   "context": {
-    "max_input_tokens": 131072,
+    "max_input_tokens": 262144,
     "max_output_tokens": 8192
   },
   "capabilities": {
@@ -29,9 +29,16 @@
   },
   "license": "Apache-2.0",
   "open_weights": true,
-  "aliases": ["Mistral-3-14B"],
+  "aliases": [
+    "Mistral-3-14B",
+    "ministral-3-14b"
+  ],
   "description": "Ministral 3 14B is a compact open model offering best-in-class performance among models its size. It has 14 billion parameters and supports both text and vision input, enabling basic image analysis. The model is released under Apache 2.0 with instruction-tuned and reasoning variants available. With a native context length of 128K, Ministral 14B can handle fairly long documents and conversations. It achieves competitive results on reasoning tasks for its weight class (e.g. ~85% on AIME'25 math with a reasoning fine-tune). This model is ideal for edge deployments and applications needing a lighter model while still leveraging advanced capabilities like JSON outputs and tool integration.",
-  "tags": ["open-weights", "edge", "vision"],
+  "tags": [
+    "open-weights",
+    "edge",
+    "vision"
+  ],
   "provider_mistral": {
     "license_type": "apache-2.0",
     "fill_in_middle": false

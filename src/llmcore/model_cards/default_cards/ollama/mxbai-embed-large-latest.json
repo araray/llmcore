@@ -1,8 +1,8 @@
 {
   "model_id": "mxbai-embed-large:latest",
-  "display_name": "Mxbai Embed Large:latest",
+  "display_name": "MxBai Embed Large",
   "provider": "ollama",
-  "model_type": "chat",
+  "model_type": "embedding",
   "architecture": {
     "family": "bert",
     "parameter_count": "334M",
@@ -12,29 +12,30 @@
     "max_input_tokens": 512
   },
   "capabilities": {
-    "streaming": true,
-    "function_calling": false,
-    "tool_use": false,
-    "json_mode": false,
-    "structured_output": false,
-    "vision": false,
-    "audio_input": false,
-    "audio_output": false,
-    "video_input": false,
-    "reasoning": false
+    "streaming": false
   },
   "pricing": null,
   "lifecycle": {
     "status": "active"
   },
-  "license": null,
+  "license": "apache-2.0",
   "open_weights": true,
-  "aliases": [],
-  "description": "Ollama model: mxbai-embed-large:latest",
+  "aliases": [
+    "mxbai-embed-large"
+  ],
+  "description": "Mixed Bread AI mxbai-embed-large — high-quality BERT-based embedding model.",
   "tags": [
-    "local",
     "open-source",
+    "local",
+    "embedding",
     "quant:F16"
   ],
-  "source": "generated"
+  "source": "builtin",
+  "embedding_config": {
+    "dimensions_default": 1024,
+    "supports_matryoshka": false,
+    "similarity_metrics": [
+      "cosine"
+    ]
+  }
 }

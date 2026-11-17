@@ -38,9 +38,9 @@
   "pricing": {
     "currency": "USD",
     "per_million_tokens": {
-      "input": 0.013,
-      "output": 0.05,
-      "cached_input": 0.012
+      "input": 0.15,
+      "output": 0.6,
+      "cached_input": 0.075
     }
   },
   "provider_extension": {
@@ -83,7 +83,7 @@
     "url": "https://openrouter.ai/api/v1/models",
     "matched_key": "openrouter/openai/gpt-oss-120b",
     "match": "exact key match",
-    "fetched_at": "2026-11-08T19:17:00+00:00",
+    "fetched_at": "2026-11-16T09:04:54+00:00",
     "capabilities": {
       "feed": "caps:openrouter",
       "method": "api",

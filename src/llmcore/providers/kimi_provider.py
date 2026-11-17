@@ -9,14 +9,20 @@ Supported features
 ------------------
 - **Chat completion** (text, streaming) via the ``openai`` SDK (AsyncOpenAI)
   pointed at the Moonshot base URL.
-- **Thinking mode** — the Moonshot ``thinking`` request field, a *top-level*
-  body parameter injected through the SDK's ``extra_body``::
+- **Thinking / reasoning**, per family (live-verified 2026-11-16):
 
-      {"type": "enabled" | "disabled", "keep": "all" | null}
+  - K3 (``kimi-k3``, ``kimi-k3.1-pro``, ``-highspeed``): always thinks with
+    Preserved Thinking; depth is ``reasoning_effort`` (low/high/max, default
+    max). The ``thinking`` field is not used.
+  - ``kimi-k2.7-code``: ``thinking.type`` may only be ``"enabled"`` (a
+    ``"disabled"`` is a 400), ``keep`` is always ``"all"``.
+  - ``kimi-k2.6``: ``{"type": "enabled" | "disabled", "keep": "all" | null}``.
 
-  ``type`` toggles whether the model emits ``reasoning_content`` this turn;
-  ``keep`` (``kimi-k2.6`` only) enables *Preserved Thinking* — historical
-  ``reasoning_content`` is forwarded to the model across turns.
+  llmcore's ``effort`` maps onto each family (``"none"`` disables thinking
+  where that is possible). Thinking is carried across turns by sending each
+  assistant turn's ``reasoning_content`` back:
+  :meth:`assistant_replay_metadata` returns it (streams included). Without
+  it, a K3 tool loop stops reasoning after the first call (measured).
 - **Reasoning content** — the ``reasoning_content`` field on assistant
   messages (both streaming delta and non-streaming message), exposed via
   :meth:`extract_reasoning_content` / :meth:`extract_delta_reasoning_content`.
@@ -31,6 +37,11 @@ Supported features
   assistant message (supplied through ``metadata["partial"]``).
 - **Tool calling** — OpenAI-compatible ``tools`` / ``tool_choice`` with
   ``reasoning_content`` preservation for multi-step tool loops under thinking.
+- **Responses API** — ``responses_api = "always"`` routes chat through
+  Moonshot's ``/v1/responses``.
+- **Dynamic tools** (K3) — a system message whose ``metadata["tools"]`` holds
+  tools becomes ``{"role": "system", "tools": [...]}``, declaring tools for the
+  turns that follow.
 - **Accurate token counting** via the Moonshot
   ``POST /v1/tokenizers/estimate-token-count`` endpoint (tiktoken fallback).
 - **Dynamic model discovery** via ``GET /v1/models`` which, unlike vanilla
@@ -60,6 +71,10 @@ References
 - https://platform.kimi.ai/docs/api/list-models
 - https://platform.kimi.ai/docs/guide/use-kimi-k2-thinking-model
 - https://platform.kimi.ai/docs/guide/use-kimi-vision-model
+
+Kimi Code (coding plan) keys work against ``base_url =
+"https://api.kimi.com/coding/v1"``; with that base URL the key defaults to
+``KIMI_API_KEY``.
 """
 
 from __future__ import annotations
@@ -68,6 +83,7 @@ import asyncio
 import json
 import logging
 import os
+import re
 from collections.abc import AsyncGenerator
 from typing import Any, Literal
 
@@ -119,7 +135,9 @@ from ..exceptions import ConfigError, ContextLengthError, ProviderError
 from ..model_cards.registry import get_model_card_registry
 from ..models import Message, ModelDetails, Tool, ToolCall
 from ..models import Role as LLMCoreRole
-from .base import BaseProvider, ContextPayload
+from . import openai_responses as rsp
+from .base import BaseProvider, ContextPayload, carry_replay_to_tail
+from .openai_provider import nearest_effort
 
 logger = logging.getLogger(__name__)
 
@@ -132,29 +150,32 @@ logger = logging.getLogger(__name__)
 #: **not** interchangeable — mixing them yields a 401.
 _BASE_URL_DEFAULT = "https://api.moonshot.ai/v1"
 
-#: Default model when none configured.  ``kimi-k2.6`` is the current flagship
-#: multimodal (text+image+video) model with thinking enabled by default.
-_DEFAULT_MODEL = "kimi-k2.6"
+#: Default model when none configured: the K3.1 Pro flagship (multimodal,
+#: 1M context, always-on reasoning).
+_DEFAULT_MODEL = "kimi-k3.1-pro"
 
-#: Hardcoded context-length fallback map (used only when dynamic discovery and
-#: the model-card registry do not provide a value).
+#: Context-length fallback, from the live GET /v1/models (2026-11-16). The
+#: moonshot-v1 series and the kimi-k2 previews are no longer listed.
 _CONTEXT_LENGTHS: dict[str, int] = {
+    "kimi-k3.1-pro": 1_048_576,
+    "kimi-k2.7-code": 262_144,
+    "kimi-k3.1-pro-highspeed": 1_048_576,
     "kimi-k2.6": 262_144,
-    "kimi-k2.5": 262_144,
-    "moonshot-v1-8k": 8_192,
-    "moonshot-v1-32k": 32_768,
-    "moonshot-v1-128k": 131_072,
-    "moonshot-v1-auto": 131_072,
-    "moonshot-v1-8k-vision-preview": 8_192,
-    "moonshot-v1-32k-vision-preview": 32_768,
-    "moonshot-v1-128k-vision-preview": 131_072,
-    # Deprecated (retired 2026-05-25) — kept for graceful error reporting.
-    "kimi-k2-0905-preview": 262_144,
-    "kimi-k2-0711-preview": 131_072,
-    "kimi-k2-turbo-preview": 262_144,
-    "kimi-k2-thinking": 262_144,
-    "kimi-k2-thinking-turbo": 262_144,
+    "kimi-k2.7-code-highspeed": 262_144,
+    "kimi-k3": 1_048_576,
+    "kimi-for-coding": 262_144,  # Kimi Code (api.kimi.com/coding)
 }
+
+#: Host of the Kimi Code (coding plan) endpoint; its keys default to
+#: KIMI_API_KEY instead of MOONSHOT_API_KEY.
+_KIMI_CODE_HOST = "api.kimi.com"
+
+#: Effort levels K3 reasoning_effort takes (GET /v1/models, 2026-11-16).
+_K3_EFFORTS = ("low", "high", "max")
+
+#: "invalid temperature: only 1 is allowed for this model": a value this model
+#: fixes. The parameter is dropped and the request retried (measured live).
+_RX_ONLY_ALLOWED = re.compile(r"invalid ([a-z_]+): only .*? allowed for this model", re.I)
 
 #: Valid thinking mode types.
 ThinkingType = Literal["enabled", "disabled"]
@@ -163,8 +184,8 @@ ThinkingType = Literal["enabled", "disabled"]
 ThinkingKeep = Literal["all"]
 
 #: Sampling parameters that are *fixed* (and rejected when overridden) by the
-#: ``kimi-k2.5`` / ``kimi-k2.6`` model families.  They are silently stripped for
-#: those models to avoid ``invalid_request_error``.
+#: K3, k2.7 and k2.5/k2.6 families ("invalid temperature: only 1 is allowed",
+#: "invalid top_p: only 0.95 is allowed"). Stripped for those models.
 _FIXED_SAMPLING_KEYS = frozenset(
     {"temperature", "top_p", "n", "presence_penalty", "frequency_penalty"}
 )
@@ -177,10 +198,14 @@ def _model_family(model: str) -> str:
         model: The model identifier.
 
     Returns:
-        One of ``"k2.6"``, ``"k2.5"``, ``"k2-thinking"``, ``"k2"``,
-        ``"moonshot-v1"``, or ``"unknown"``.
+        One of ``"k3"``, ``"k2.7"``, ``"k2.6"``, ``"k2.5"``, ``"k2-thinking"``,
+        ``"k2"``, ``"moonshot-v1"``, or ``"unknown"``.
     """
     m = model.lower()
+    if m.startswith("kimi-k3"):
+        return "k3"
+    if m.startswith(("kimi-k2.7", "kimi-for-coding")):
+        return "k2.7"
     if m.startswith("kimi-k2.6"):
         return "k2.6"
     if m.startswith("kimi-k2.5"):
@@ -197,11 +222,11 @@ def _model_family(model: str) -> str:
 def _model_supports_thinking_param(model: str) -> bool:
     """Whether the ``thinking`` request field is accepted by *model*.
 
-    Only the ``kimi-k2.5`` and ``kimi-k2.6`` families accept the ``thinking``
-    parameter.  ``kimi-k2-thinking*`` always reasons (no toggle) and the
-    ``moonshot-v1`` series has no thinking mode.
+    ``kimi-k2.5``/``kimi-k2.6`` take it with both types; ``kimi-k2.7-code``
+    only with ``"enabled"``. K3 "does not use the ``thinking`` parameter"
+    (its depth is ``reasoning_effort``); ``moonshot-v1`` has no thinking.
     """
-    return _model_family(model) in ("k2.5", "k2.6")
+    return _model_family(model) in ("k2.5", "k2.6", "k2.7")
 
 
 def _model_supports_thinking_keep(model: str) -> bool:
@@ -219,7 +244,7 @@ def _model_has_fixed_sampling(model: str) -> bool:
     return ``invalid_request_error`` if these are supplied with non-default
     values.
     """
-    return _model_family(model) in ("k2.5", "k2.6", "k2-thinking")
+    return _model_family(model) in ("k3", "k2.7", "k2.5", "k2.6", "k2-thinking")
 
 
 class KimiProvider(BaseProvider):
@@ -238,7 +263,12 @@ class KimiProvider(BaseProvider):
       (default: ``"enabled"``).  Applied only to thinking-capable models.
     - ``thinking_keep`` — Default Preserved-Thinking setting: ``"all"`` or
       ``null`` (default: ``null``).  Applied only to ``kimi-k2.6``.
+    - ``responses_api`` — ``"never"`` (default) or ``"always"`` (Moonshot's
+      ``/v1/responses``).
     """
+
+    #: Parameters a model refused ("only X is allowed"), learned per model.
+    _REJECTED_PARAMS: dict[str, set[str]] = {}
 
     default_model: str
     _client: AsyncOpenAI | None
@@ -269,11 +299,13 @@ class KimiProvider(BaseProvider):
             )
 
         # --- API key ---
+        base_url_cfg = str(config.get("base_url") or _BASE_URL_DEFAULT)
+        default_env = "KIMI_API_KEY" if _KIMI_CODE_HOST in base_url_cfg else "MOONSHOT_API_KEY"
         api_key = config.get("api_key") or os.environ.get(
-            config.get("api_key_env_var", "MOONSHOT_API_KEY")
+            config.get("api_key_env_var", default_env)
         )
         if not api_key:
-            api_key = os.environ.get("MOONSHOT_API_KEY")
+            api_key = os.environ.get(default_env)
         if not api_key:
             raise ConfigError(
                 "Kimi (Moonshot) API key not found. Set MOONSHOT_API_KEY or "
@@ -300,6 +332,15 @@ class KimiProvider(BaseProvider):
         else:
             logger.warning("Invalid thinking_keep value '%s'; defaulting to null.", keep_raw)
             self._default_keep = None
+
+        responses_api = str(config.get("responses_api", "never")).lower()
+        if responses_api not in ("never", "always"):
+            raise ConfigError(
+                f"Kimi responses_api must be 'never' or 'always', not {responses_api!r}."
+            )
+        self.responses_api = responses_api
+        #: model id -> valid reasoning efforts, from GET /v1/models
+        self._discovered_efforts: dict[str, list[str]] = {}
 
         # --- Base URL (normalize to ensure a single trailing /v1) ---
         base_url = config.get("base_url", _BASE_URL_DEFAULT)
@@ -408,6 +449,11 @@ class KimiProvider(BaseProvider):
                 continue
 
             ctx = m.get("context_length") or self.get_max_context_length(mid)
+            efforts = ((m.get("reasoning") or {}).get("effort") or {}).get("valid") or (
+                m.get("reasoning_efforts") or {}
+            ).get("valid_efforts")
+            if efforts:
+                self._discovered_efforts[mid] = list(efforts)
             supports_vision = bool(m.get("supports_image_in", False))
             supports_video = bool(m.get("supports_video_in", False))
             supports_reasoning = bool(m.get("supports_reasoning", False))
@@ -440,6 +486,9 @@ class KimiProvider(BaseProvider):
                         "created": m.get("created"),
                         "supports_video_in": supports_video,
                         "supports_thinking": _model_supports_thinking_param(mid),
+                        "reasoning_efforts": efforts or [],
+                        "thinking_type": (m.get("reasoning") or {}).get("type"),
+                        "dynamic_tools": bool((m.get("tools") or {}).get("dynamic_load")),
                     },
                 )
             )
@@ -459,7 +508,19 @@ class KimiProvider(BaseProvider):
             "response_format": {"type": "object"},
             "stream_options": {"type": "object"},
             "prompt_cache_key": {"type": "string"},
+            "prompt_cache_options": {"type": "object"},
             "safety_identifier": {"type": "string"},
+            "logprobs": {"type": "boolean"},
+            "top_logprobs": {"type": "integer", "minimum": 0, "maximum": 20},
+            "prediction": {"type": "object"},
+            "parallel_tool_calls": {"type": "boolean"},
+            # llmcore's cross-provider knob, mapped per family.
+            "effort": {
+                "type": "string",
+                "enum": ["none", "minimal", "low", "medium", "high", "xhigh", "max"],
+            },
+            # K3 reasoning depth, sent as given.
+            "reasoning_effort": {"type": "string", "enum": ["none", "low", "medium", "high", "max"]},
             # Kimi/Moonshot-specific
             "thinking": {
                 "type": "object",
@@ -493,7 +554,9 @@ class KimiProvider(BaseProvider):
 
         # Family-based heuristic.
         fam = _model_family(model_name)
-        if fam in ("k2.5", "k2.6", "k2", "k2-thinking"):
+        if fam == "k3":
+            return 1_048_576
+        if fam in ("k2.7", "k2.5", "k2.6", "k2", "k2-thinking"):
             return 262_144
         if fam == "moonshot-v1":
             return 131_072
@@ -556,6 +619,10 @@ class KimiProvider(BaseProvider):
 
         if t_type not in ("enabled", "disabled"):
             logger.warning("Invalid thinking.type '%s'; using 'enabled'.", t_type)
+            t_type = "enabled"
+        if t_type == "disabled" and _model_family(model_name) == "k2.7":
+            # "invalid thinking: only type=enabled is allowed for this model"
+            logger.warning("Model '%s' always thinks; thinking='disabled' ignored.", model_name)
             t_type = "enabled"
 
         # Explicit per-request keep override.
@@ -629,6 +696,20 @@ class KimiProvider(BaseProvider):
         """
         role_str = msg.role.value if hasattr(msg.role, "value") else str(msg.role)
         metadata = msg.metadata or {}
+
+        # K3 dynamic tools: a system message that declares tools for the turns
+        # that follow ({"role": "system", "tools": [...]}, no content).
+        if role_str == "system" and metadata.get("tools"):
+            declared = []
+            for t in metadata["tools"]:
+                if isinstance(t, Tool):
+                    declared.append({"type": "function", "function": t.model_dump()})
+                else:
+                    declared.append(dict(t))
+            out: dict[str, Any] = {"role": "system", "tools": declared}
+            if msg.content:
+                out["content"] = msg.content
+            return out
 
         # --- Resolve content (string or multimodal array) ---
         content: Any = msg.content
@@ -744,6 +825,14 @@ class KimiProvider(BaseProvider):
         if tools:
             tools_payload = [{"type": "function", "function": t.model_dump()} for t in tools]
 
+        kwargs = dict(kwargs)
+        self._apply_effort(model_name, kwargs)
+
+        if self.responses_api == "always":
+            return await self._responses_completion(
+                context, model_name, stream=stream, tools=tools, tool_choice=tool_choice, params=kwargs
+            )
+
         # --- Build API kwargs ---
         api_kwargs: dict[str, Any] = {}
         extra_body: dict[str, Any] = {}
@@ -753,17 +842,23 @@ class KimiProvider(BaseProvider):
         if thinking_obj is not None:
             extra_body["thinking"] = thinking_obj
 
-        # Strip fixed sampling params for k2.5/k2.6 families.
+        # max_tokens is deprecated in favour of max_completion_tokens.
+        if "max_tokens" in kwargs and "max_completion_tokens" not in kwargs:
+            kwargs["max_completion_tokens"] = kwargs.pop("max_tokens")
+
+        # Strip fixed sampling params for the K3 / k2.x families.
         strip_sampling = _model_has_fixed_sampling(model_name)
+        rejected = self._REJECTED_PARAMS.get(model_name, set())
         for key, val in kwargs.items():
             if strip_sampling and key in _FIXED_SAMPLING_KEYS:
                 logger.debug(
                     "Skipping '%s' (fixed/ignored for model '%s').", key, model_name
                 )
                 continue
-            # prompt_cache_key / safety_identifier are Moonshot extensions; the
-            # OpenAI SDK does not type them, so route via extra_body.
-            if key in ("prompt_cache_key", "safety_identifier"):
+            if key in rejected:
+                continue
+            # Moonshot extensions the OpenAI SDK does not type go via extra_body.
+            if key in ("prompt_cache_key", "safety_identifier", "prompt_cache_options", "reasoning_effort"):
                 extra_body[key] = val
             else:
                 api_kwargs[key] = val
@@ -796,90 +891,226 @@ class KimiProvider(BaseProvider):
                 ),
             )
 
-        # --- API call ---
+        # --- API call (a parameter the model fixes is dropped and retried) ---
+        while True:
+            try:
+                resp = await self._client.chat.completions.create(
+                    model=model_name,
+                    messages=messages_payload,
+                    stream=stream,
+                    **api_kwargs,
+                )  # type: ignore[arg-type]
+                break
+            except OpenAIAPIStatusError as e:
+                if not self._learn_rejection(e, api_kwargs, model_name):
+                    raise self._map_error(e, model_name) from e
+            except OpenAIError as e:
+                raise self._map_error(e, model_name) from e
+            except Exception as e:
+                logger.error("Unexpected Kimi error: %s", e, exc_info=True)
+                raise ProviderError(self.get_name(), f"Unexpected error: {e}") from e
+
+        if stream:
+            return self._stream_chunks(resp, model_name)
+
+        response_dict = resp.model_dump(exclude_none=True)  # type: ignore[union-attr]
+        if self.log_raw_payloads_enabled and logger.isEnabledFor(logging.DEBUG):
+            logger.debug(
+                "RAW KIMI RESPONSE: %s",
+                json.dumps(response_dict, indent=2, default=str),
+            )
+        return response_dict
+
+    async def _stream_chunks(self, resp: Any, model_name: str) -> AsyncGenerator[dict[str, Any], None]:
+        """Chunk dicts; the finish chunk also carries the whole turn's
+        reasoning as ``replay_reasoning_content`` (for assistant_replay_metadata)."""
+        reasoning: list[str] = []
         try:
-            resp = await self._client.chat.completions.create(
-                model=model_name,
-                messages=messages_payload,
-                stream=stream,
-                **api_kwargs,
-            )  # type: ignore[arg-type]
-
-            if stream:
-
-                async def stream_wrapper() -> AsyncGenerator[dict[str, Any], None]:
-                    async for chunk in resp:  # type: ignore[union-attr]
-                        chunk_dict = chunk.model_dump(exclude_none=True)
-                        if self.log_raw_payloads_enabled and logger.isEnabledFor(
-                            logging.DEBUG
-                        ):
-                            logger.debug(
-                                "RAW KIMI STREAM CHUNK: %s",
-                                json.dumps(chunk_dict, default=str),
-                            )
-                        yield chunk_dict
-
-                return stream_wrapper()
-
-            response_dict = resp.model_dump(exclude_none=True)  # type: ignore[union-attr]
-            if self.log_raw_payloads_enabled and logger.isEnabledFor(logging.DEBUG):
-                logger.debug(
-                    "RAW KIMI RESPONSE: %s",
-                    json.dumps(response_dict, indent=2, default=str),
-                )
-            return response_dict
-
-        except OpenAIAPIStatusError as e:
-            status = e.status_code
-            msg = str(e)
-            logger.error("Kimi status error (%d): %s", status, msg, exc_info=True)
-
-            low = msg.lower()
-            if status == 400 and (
-                "token limit" in low
-                or "context" in low
-                or "token length too long" in low
-            ):
-                raise ContextLengthError(
-                    model_name=model_name,
-                    limit=self.get_max_context_length(model_name),
-                    actual=0,
-                    message=msg,
-                )
-            if status == 404 and ("not found" in low or "model" in low):
-                raise ProviderError(
-                    self.get_name(),
-                    f"Model '{model_name}' not found on Kimi (or no access). "
-                    f"Current models: kimi-k2.6, kimi-k2.5, moonshot-v1-8k/32k/128k "
-                    f"(+ -vision-preview). The kimi-k2-* preview series retired "
-                    f"2026-05-25. Original error: {msg}",
-                )
-            if status == 429 and ("quota" in low or "balance" in low or "suspended" in low):
-                raise ProviderError(
-                    self.get_name(),
-                    f"Kimi quota/balance issue. Check balance at "
-                    f"https://platform.kimi.ai/console. Error: {msg}",
-                )
-            if status == 401:
-                raise ProviderError(
-                    self.get_name(),
-                    f"Kimi authentication failed. Verify MOONSHOT_API_KEY and that "
-                    f"the key matches the platform of base_url "
-                    f"({self._base_url}). Keys from platform.kimi.ai and "
-                    f"platform.kimi.com are not interchangeable. Error: {msg}",
-                )
-            raise ProviderError(self.get_name(), f"API Error ({status}): {msg}")
-        except OpenAIAPITimeoutError as e:
-            raise ProviderError(self.get_name(), f"Timeout: {e}")
-        except OpenAIAPIConnectionError as e:
-            raise ProviderError(self.get_name(), f"Connection error: {e}")
-        except OpenAIAPIError as e:
-            raise ProviderError(self.get_name(), f"API Error: {e}")
+            _replay_tail: dict[str, Any] = {}
+            async for chunk in resp:
+                chunk_dict = chunk.model_dump(exclude_none=True)
+                if self.log_raw_payloads_enabled and logger.isEnabledFor(logging.DEBUG):
+                    logger.debug("RAW KIMI STREAM CHUNK: %s", json.dumps(chunk_dict, default=str))
+                for choice in chunk_dict.get("choices") or []:
+                    if choice.get("index", 0) != 0:
+                        continue
+                    delta = choice.setdefault("delta", {})
+                    if delta.get("reasoning_content"):
+                        reasoning.append(delta["reasoning_content"])
+                    if choice.get("finish_reason") and reasoning:
+                        delta["replay_reasoning_content"] = "".join(reasoning)
+                carry_replay_to_tail(chunk_dict, _replay_tail)
+                yield chunk_dict
         except OpenAIError as e:
-            raise ProviderError(self.get_name(), f"Error: {e}")
-        except Exception as e:
-            logger.error("Unexpected Kimi error: %s", e, exc_info=True)
-            raise ProviderError(self.get_name(), f"Unexpected error: {e}")
+            raise self._map_error(e, model_name) from e
+
+    def _apply_effort(self, model_name: str, kwargs: dict[str, Any]) -> None:
+        """Map llmcore's ``effort`` onto this model family.
+
+        K3: ``reasoning_effort`` within the listed levels (low/high/max);
+        ``"none"`` is passed through (it turns reasoning off, measured).
+        k2.6: ``"none"`` disables thinking, anything else enables it.
+        k2.7-code: always thinks, so ``effort`` changes nothing.
+        """
+        effort = kwargs.pop("effort", None)
+        if effort is None:
+            return
+        effort = str(effort).strip().lower()
+        family = _model_family(model_name)
+        if family == "k3":
+            if "reasoning_effort" in kwargs:
+                return
+            if effort == "none":
+                kwargs["reasoning_effort"] = "none"
+                return
+            levels = self._discovered_efforts.get(model_name) or list(_K3_EFFORTS)
+            value = effort if effort in levels else nearest_effort(effort, levels)
+            if value:
+                kwargs["reasoning_effort"] = value
+        elif family in ("k2.5", "k2.6") and "thinking" not in kwargs:
+            kwargs["thinking"] = "disabled" if effort == "none" else "enabled"
+        else:
+            logger.debug("Kimi model '%s' has no effort control; effort=%r ignored.", model_name, effort)
+
+    def _learn_rejection(self, error: Exception, api_kwargs: dict[str, Any], model_name: str) -> bool:
+        """Drop a parameter whose value this model fixes; True to retry."""
+        match = _RX_ONLY_ALLOWED.search(str(error))
+        if not match:
+            return False
+        name = match.group(1).lower()
+        extra = api_kwargs.get("extra_body") or {}
+        if name in api_kwargs and name not in ("model", "messages"):
+            api_kwargs.pop(name)
+        elif name in extra:
+            extra.pop(name)
+        else:
+            return False
+        self._REJECTED_PARAMS.setdefault(model_name, set()).add(name)
+        logger.warning(
+            "Kimi model %s fixes '%s'; retrying without it (remembered).", model_name, name
+        )
+        return True
+
+    def _map_error(self, e: Exception, model_name: str) -> ProviderError:
+        """An SDK error as a ProviderError with Moonshot's specific cases."""
+        if isinstance(e, OpenAIAPITimeoutError):
+            return ProviderError(self.get_name(), f"Timeout: {e}", model_name=model_name)
+        if isinstance(e, OpenAIAPIConnectionError):
+            return ProviderError(self.get_name(), f"Connection error: {e}", model_name=model_name)
+        if not isinstance(e, OpenAIAPIStatusError):
+            return ProviderError(self.get_name(), f"API Error: {e}", model_name=model_name)
+        status = e.status_code
+        msg = str(e)
+        low = msg.lower()
+        if status == 400 and (
+            "token limit" in low
+            or "exceeded model token limit" in low
+            or "token length too long" in low
+            or "context length" in low
+        ):
+            return ContextLengthError(
+                model_name=model_name,
+                limit=self.get_max_context_length(model_name),
+                actual=0,
+                message=msg,
+            )
+        if status == 404 and ("not found" in low or "model" in low):
+            return ProviderError(
+                self.get_name(),
+                f"Model '{model_name}' not found on Kimi (or no access). Current models: "
+                f"kimi-k3.1-pro, kimi-k3, kimi-k2.7-code (+ -highspeed), kimi-k2.6. "
+                f"The moonshot-v1 series is no longer listed. Original error: {msg}",
+                model_name=model_name,
+                status_code=status,
+                retryable=False,
+            )
+        if status == 429 and ("quota" in low or "balance" in low or "suspended" in low):
+            return ProviderError(
+                self.get_name(),
+                f"Kimi quota/balance issue. Check balance at "
+                f"https://platform.kimi.ai/console. Error: {msg}",
+                model_name=model_name,
+                status_code=status,
+                retryable=False,
+            )
+        if status == 401:
+            return ProviderError(
+                self.get_name(),
+                f"Kimi authentication failed. Verify the key matches the platform of "
+                f"base_url ({self._base_url}): platform.kimi.ai, platform.moonshot.cn and "
+                f"Kimi Code (api.kimi.com/coding, KIMI_API_KEY) keys are not "
+                f"interchangeable. Error: {msg}",
+                model_name=model_name,
+                status_code=status,
+                retryable=False,
+            )
+        return ProviderError(
+            self.get_name(), f"API Error ({status}): {msg}", model_name=model_name, status_code=status
+        )
+
+    async def _responses_completion(
+        self,
+        context: list[Message],
+        model_name: str,
+        *,
+        stream: bool,
+        tools: list[Tool] | None,
+        tool_choice: Any,
+        params: dict[str, Any],
+    ) -> dict[str, Any] | AsyncGenerator[dict[str, Any], None]:
+        """Chat through Moonshot's ``/v1/responses`` (Chat Completions shape out)."""
+        params = dict(params)
+        for name in ("thinking", "thinking_keep", "stream_options", "prompt_cache_options", "prediction"):
+            params.pop(name, None)
+        if _model_has_fixed_sampling(model_name):
+            for name in _FIXED_SAMPLING_KEYS:
+                params.pop(name, None)
+        body = rsp.build_responses_request(
+            model_name, context, stream=stream, tools=tools, tool_choice=tool_choice, **params
+        )
+        if self.log_raw_payloads_enabled and logger.isEnabledFor(logging.DEBUG):
+            logger.debug("RAW KIMI RESPONSES REQUEST: %s", json.dumps(body, default=str))
+        try:
+            result = await rsp.sdk_create(self._client, body, stream=stream)
+        except OpenAIError as e:
+            raise self._map_error(e, model_name) from e
+        except rsp.ResponsesFailed as exc:
+            raise ProviderError(self.get_name(), f"Response failed: {exc}", model_name=model_name) from None
+        if not stream:
+            return result
+
+        async def _events() -> AsyncGenerator[dict[str, Any], None]:
+            try:
+                async for chunk in result:  # type: ignore[union-attr]
+                    yield chunk
+            except OpenAIError as e:
+                raise self._map_error(e, model_name) from e
+            except rsp.ResponsesFailed as exc:
+                raise ProviderError(
+                    self.get_name(), f"Response failed: {exc}", model_name=model_name
+                ) from None
+
+        return _events()
+
+    def assistant_replay_metadata(self, response: dict[str, Any]) -> dict[str, Any]:
+        """The reasoning to send back with the next assistant turn.
+
+        K3 and k2.7 preserve thinking across turns from each assistant turn's
+        ``reasoning_content``; without it a tool loop stops reasoning after the
+        first call (measured 2026-11-16). On the Responses route, the reasoning
+        items. For a stream, pass the chunk that carries the finish reason.
+        """
+        try:
+            choice = (response.get("choices") or [{}])[0]
+            source = choice.get("message") or choice.get("delta") or {}
+        except (AttributeError, IndexError, TypeError):
+            return {}
+        if source.get("reasoning_items"):
+            return {"reasoning_items": list(source["reasoning_items"])}
+        text = source.get("replay_reasoning_content") or (
+            choice.get("message") or {}
+        ).get("reasoning_content")
+        return {"reasoning_content": text} if text else {}
 
     # =========================================================================
     # Response extraction
@@ -964,19 +1195,23 @@ class KimiProvider(BaseProvider):
         return out
 
     def extract_usage_details(self, response: dict[str, Any]) -> dict[str, Any]:
-        """Extract usage details including Moonshot's ``cached_tokens``.
+        """Usage with Moonshot's cache breakdown.
 
-        Moonshot reports ``cached_tokens`` in the usage object (context-cache
-        hits), useful for cost accounting with prompt caching.
+        ``prompt_tokens_details.cached_tokens`` (cache reads) and
+        ``cache_write_tokens`` (writes) are both included in
+        ``prompt_tokens``; older responses put ``cached_tokens`` top-level.
         """
         usage = response.get("usage", {})
         if not usage:
             return {}
+        details = usage.get("prompt_tokens_details") or {}
         result: dict[str, Any] = {
             "prompt_tokens": usage.get("prompt_tokens"),
             "completion_tokens": usage.get("completion_tokens"),
             "total_tokens": usage.get("total_tokens"),
-            "cached_tokens": usage.get("cached_tokens"),
+            # Cache reads and writes are both part of prompt_tokens (docs).
+            "cached_tokens": details.get("cached_tokens", usage.get("cached_tokens")),
+            "cache_write_tokens": details.get("cache_write_tokens"),
         }
         cd = usage.get("completion_tokens_details", {})
         if cd:

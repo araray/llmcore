@@ -198,18 +198,20 @@ class TestContextLookup:
 
 class TestEmbeddings:
     @pytest.mark.asyncio
-    async def test_embeddings_are_returned_as_plain_lists(self, provider, monkeypatch):
-        http = _Http(post_payload={"data": [{"embedding": [0.1, 0.2]},
-                                            {"embedding": [0.3, 0.4]}]})
+    async def test_embeddings_follow_the_base_contract(self, provider, monkeypatch):
+        # BaseProvider.create_embeddings(input_texts, *, model) -> OpenAI dict;
+        # this used to take `texts` and return bare lists.
+        payload = {"data": [{"embedding": [0.1, 0.2]}, {"embedding": [0.3, 0.4]}]}
+        http = _Http(post_payload=payload)
         monkeypatch.setattr(provider, "_get_http", lambda: http)
-        assert await provider.create_embeddings(["a", "b"]) == [[0.1, 0.2], [0.3, 0.4]]
+        assert await provider.create_embeddings(["a", "b"]) == payload
+        await provider.create_embeddings("c", dimensions=64)
+        assert http.posted[-1][1] == {"model": "gpuai/qwen3-embedding-8b", "input": ["c"], "dimensions": 64}
 
     @pytest.mark.asyncio
-    async def test_encoding_format_is_never_sent(self, provider, monkeypatch):
-        # gpu.ai rejects the *parameter*, not a value:
-        #   Parameter "encoding_format" is not supported in v1.1
-        # The OpenAI SDK injects it, which is why this path builds the
-        # payload itself.
+    async def test_nothing_is_added_to_the_payload(self, provider, monkeypatch):
+        # gpu.ai used to reject encoding_format outright; it accepts it now
+        # (2026-11-16), but the payload still carries only what was asked.
         http = _Http(post_payload={"data": [{"embedding": [0.0]}]})
         monkeypatch.setattr(provider, "_get_http", lambda: http)
         await provider.create_embeddings(["a"])
@@ -221,7 +223,7 @@ class TestEmbeddings:
     async def test_an_empty_input_makes_no_request(self, provider, monkeypatch):
         http = _Http(post_payload={"data": []})
         monkeypatch.setattr(provider, "_get_http", lambda: http)
-        assert await provider.create_embeddings([]) == []
+        assert (await provider.create_embeddings([]))["data"] == []
         assert http.posted == []
 
     @pytest.mark.asyncio
@@ -245,3 +247,42 @@ class TestReasoningBudget:
 
     def test_chat_modality_set_is_narrow(self):
         assert CHAT_MODALITIES == frozenset({"chat"})
+
+
+class TestRefusedSurface:
+    """Live 2026-11-16: tools and array content are 400s on gpu.ai chat."""
+
+    @pytest.mark.asyncio
+    async def test_tools_raise_before_any_request(self, provider):
+        from llmcore.exceptions import ProviderError
+        from llmcore.models import Message, Role, Tool
+
+        tool = Tool(name="f", description="d", parameters={"type": "object", "properties": {}})
+        with pytest.raises(ProviderError, match="tool calling"):
+            await provider.chat_completion([Message(role=Role.USER, content="hi")], tools=[tool])
+
+    def test_text_parts_become_a_string_and_images_raise(self, provider):
+        from llmcore.exceptions import ProviderError
+        from llmcore.models import Message, Role
+
+        msg = Message(role=Role.USER, content="", metadata={"content_parts": [
+            {"type": "text", "text": "a"}, {"type": "text", "text": "b"}]})
+        assert provider._build_message_payload(msg, "m")["content"] == "ab"
+        img = Message(role=Role.USER, content="x", metadata={"inline_images": ["data:image/png;base64,AA=="]})
+        with pytest.raises(ProviderError, match="text only"):
+            provider._build_message_payload(img, "m")
+
+    def test_empty_parameter_lists_still_stream(self):
+        import sys
+        from pathlib import Path
+
+        sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools"))
+        from cardctl.adapters.gpuai_adapter import GpuAiAdapter
+
+        row = {"id": "gpuai/qwen3.8-flash", "modality": "chat", "context_length": 1000000,
+               "supported_parameters": None,
+               "pricing": {"cached_input_per_1m_tokens_cents": 4,
+                           "cached_input_per_1m_tokens_microcents": 4400000}}
+        model = GpuAiAdapter.__new__(GpuAiAdapter)._normalize(row)
+        assert model.supports_streaming is True
+        assert model.raw_api_data["_pricing"]["cached_input"] == 0.044

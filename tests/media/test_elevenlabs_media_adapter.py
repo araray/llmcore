@@ -122,7 +122,7 @@ class TestConstruction:
         p = ElevenLabsProvider({**BASE_CONFIG, "models": {"tts": "eleven_v3"}})
         assert p._model_for("tts", None) == "eleven_v3"
         assert p._model_for("tts", "explicit") == "explicit"
-        assert p._model_for("asr", None) == "scribe_v1"  # untouched default
+        assert p._model_for("asr", None) == "scribe_v3"  # untouched default
 
 
 class TestConformance:
@@ -131,7 +131,7 @@ class TestConformance:
 
     def test_declares_the_voice_spread(self, provider):
         assert {c.value for c in provider.media_capabilities()} == {
-            "tts", "tts_stream", "asr", "sfx", "music", "voice_design",
+            "tts", "tts_stream", "asr", "asr_stream", "sfx", "music", "voice_design",
         }
 
     def test_every_declared_capability_is_backed(self, provider):
@@ -142,11 +142,11 @@ class TestConformance:
         ]
         assert unmet == []
 
-    def test_only_streaming_tts_is_a_stream(self, provider):
+    def test_only_the_streaming_capabilities_are_streams(self, provider):
         for cap in provider.media_capabilities():
             expected = (
                 MediaExecution.STREAM
-                if cap is MediaCapability.TTS_STREAM
+                if cap in (MediaCapability.TTS_STREAM, MediaCapability.ASR_STREAM)
                 else MediaExecution.REQUEST_RESPONSE
             )
             assert provider.media_execution(cap) is expected
@@ -312,7 +312,7 @@ class TestConsentResolution:
         )
         result = await provider.generate_sfx_media("a creaking door")
         assert result.artifacts[0].provenance.consent is None
-        assert result.artifacts[0].provenance.generator == "eleven_text_to_sound_v2"
+        assert result.artifacts[0].provenance.generator == "eleven_text_to_sound_v3"
         await provider.close()
 
 
@@ -435,7 +435,7 @@ class TestTranscription:
         from urllib.parse import parse_qs
 
         body = parse_qs(route.calls[0].request.content.decode())
-        assert body["cloud_storage_url"] == ["https://example.invalid/a.mp3"]
+        assert body["source_url"] == ["https://example.invalid/a.mp3"]
         assert "multipart" not in route.calls[0].request.headers["content-type"]
         await provider.close()
 
@@ -703,7 +703,7 @@ class TestDiscovery:
         """A model-list outage should not take down a whole session."""
         respx.get(f"{API}/v1/models").mock(side_effect=httpx.ConnectError("down"))
         details = await provider.get_models_details()
-        assert {d.id for d in details} >= {"eleven_v4", "scribe_v1"}
+        assert {d.id for d in details} >= {"eleven_v4", "scribe_v3"}
         await provider.close()
 
     def test_routing_prefers_elevenlabs_for_voice(self, provider):

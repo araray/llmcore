@@ -1,0 +1,44 @@
+{
+  "model_id": "black-forest-labs/flux-3-image-klein",
+  "display_name": "Black Forest Labs: FLUX 3 Image Klein",
+  "provider": "openrouter",
+  "model_type": "multimodal",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 46864,
+    "max_output_tokens": 42177
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false,
+    "image_generation": false,
+    "image_edit": false,
+    "image_upscale": false,
+    "video_generation": false,
+    "video_interpolation": false,
+    "speech_synthesis": false,
+    "transcription": false,
+    "music_generation": false,
+    "sfx_generation": false,
+    "voice_design": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active",
+    "release_date": "2026-10-15"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "FLUX 3 Image Klein is an open-weights image generation and editing model from Black Forest Labs. It is suited for text-to-image, multi-reference editing that keeps characters and subjects consistent across...",
+  "tags": [],
+  "source": "generated"
+}

@@ -182,7 +182,8 @@ src/llmcore/model_cards/default_cards/
 ├── openai/
 ├── qwen/
 ├── typesafe/
-│   └── jev-1.13.0.json      # model_type "decision"; aliases jev-latest, jev-preview
+│   ├── jev-1.13.0.json      # model_type "decision"
+│   └── jev-1.14.0.json      # model_type "decision"; aliases jev-latest, jev-preview
 └── xai/
 ```
 
@@ -497,10 +498,23 @@ Each provider can have a dedicated extension object for provider-specific fields
       "cache_write_1h_multiplier": 2.0,
       "cache_read_multiplier": 0.1
     },
-    "beta_features": ["context-1m-2025-08-07"]
+    "beta_features": ["context-1m-2025-08-07"],
+    "thinking_types": ["adaptive", "disabled"],
+    "effort_levels": ["low", "medium", "high", "xhigh", "max"],
+    "batch_api": true,
+    "citations": true,
+    "pdf_input": true,
+    "code_execution": true,
+    "context_management": true,
+    "server_tools": ["code_execution", "web_search"],
+    "lifecycle": "active"
   }
 }
 ```
+
+The fields from `thinking_types` onward mirror the Models API capability
+block (`GET /v1/models/{id}`). A `*search*` entry in `server_tools` makes
+`model_supports_native_search()` true for the card.
 
 #### GoogleExtension (`provider_google`)
 

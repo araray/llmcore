@@ -69,7 +69,26 @@
       "cache_write_1h_multiplier": 2.0,
       "cache_read_multiplier": 0.1
     },
-    "beta_features": []
+    "beta_features": [],
+    "thinking_types": [
+      "disabled",
+      "enabled"
+    ],
+    "effort_levels": [
+      "low",
+      "medium",
+      "high"
+    ],
+    "batch_api": true,
+    "citations": true,
+    "pdf_input": true,
+    "code_execution": true,
+    "context_management": true,
+    "server_tools": [
+      "code_execution",
+      "web_search"
+    ],
+    "lifecycle": "active"
   },
   "source": "builtin",
   "x_pricewatch": {

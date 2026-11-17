@@ -263,6 +263,23 @@ them. Polling remains the fallback, so no public ingress is required.
 | **Audio** | `tts`, `tts_stream`, `asr`, `asr_stream`, `music`, `sfx`, `voice_design`, `voice_agent` |
 | **Document** | `ocr` |
 
+Which provider serves what (default configuration, 2026-11-16):
+
+| Provider | Media capabilities |
+|---|---|
+| OpenAI | `image_generate`, `image_edit`, `tts`, `tts_stream`, `asr`, `asr_stream` and `voice_agent` (Realtime) |
+| Gemini | `image_generate`, `image_edit` (Gemini image models), `tts`, `asr`, `asr_stream`, `voice_agent` (Live) in both modes; `music` (Lyria) on the Developer API; `video_generate` (Veo) on Vertex. Typed decisions via `create_decision()` / `system_one()` (Developer API) |
+| Mistral | `tts`, `asr`, `asr_stream`, `ocr` |
+| DeepSeek | `tts`, `tts_stream`, `asr`, `ocr` (tool APIs) |
+| Z.ai | `tts`, `asr`, `ocr`, `image_generate`, `video_generate` (job) |
+| DeepInfra, Hugging Face | `image_generate`, `tts`, `asr` |
+| Together | `tts`, `asr`, `image_generate` (images need third-party data sharing enabled in the Together org) |
+| ElevenLabs | `tts`, `tts_stream`, `asr`, `asr_stream`, `sfx`, `music`, `voice_design` |
+| Deepgram | `tts`, `tts_stream`, `asr`, `asr_stream`, `voice_agent` |
+| fal | `image_generate`, `image_edit`, `image_upscale`, `video_generate`, `video_interpolate`, `sfx`, `music`, `tts`, `asr` |
+| Replicate | `image_generate`, `image_edit`, `image_upscale`, `video_generate`, `music`, `tts`, `asr` |
+| Higgsfield | `image_generate`, `video_generate` |
+
 Artifacts carry bytes or a URI, checksums, dimensions/duration, usage, and
 provenance. A content-addressed store can materialize remote artifacts before
 vendor URLs expire. For synthetic speech, provenance includes a `VoiceConsent`
@@ -587,7 +604,7 @@ responses_api = "openai"              # GPT over the Responses API; "all" | "nev
 [providers.typesafe]
 # TypeSafe.ai System One (typed judgments, NOT chat). API key via TYPESAFE_API_KEY.
 # Use provider.system_one(state, questions) or llm.chat(..., provider_name="typesafe", questions={...}).
-default_model = "jev-latest"    # alias -> jev-1.13.0; pin the version if you tune thresholds
+default_model = "jev-latest"    # alias -> jev-1.14.0; pin the version if you tune thresholds
 timeout = 30
 max_retries = 2                 # 408/429/5xx/529 retried, honours Retry-After
 
@@ -659,16 +676,16 @@ the provider support matrix.
 |---|---|---|---|
 | **OpenAI** | `gpt-6-sol`, `gpt-6-astra`, `gpt-5.6-terra`, `gpt-5.5-pro`, `gpt-5.4`, `o4-mini` | direct + SDK | Streaming, tools, vision, images, TTS/ASR, embeddings, native search |
 | **Anthropic** | `claude-opus-5-5`, `claude-opus-5`, `claude-sonnet-5-5`, `claude-opus-4-8`, `claude-haiku-4-5-20251001` | SDK + direct | Streaming, tools, vision, extended thinking |
-| **Google Gemini** | `gemini-3.8-flash`, `gemini-3.7-flash`, `gemini-3.1-pro`, `gemini-2.5-pro` | SDK + direct | Tools, vision, Imagen, **Veo video**, native TTS, embeddings |
+| **Google Gemini** | `gemini-4-carbon`, `gemini-4-argon`, `gemini-4-hydrogen`, `gemini-3.8-flash`, Gemma 4 | SDK + direct | Tools, vision, Imagen, **Veo video** (Vertex), native TTS, transcription, Lyria music, Live voice agents, typed decisions, embeddings |
 | **xAI** | `grok-4.1-20251117`, `grok-4-heavy` | direct + SDK | Streaming, tools, Live Search |
-| **DeepSeek** | `deepseek-v4-pro`, `deepseek-v4-flash`, `deepseek-v3.2`, `deepseek-reasoner` | direct only¹ | Reasoning-content extraction, cache usage |
-| **Kimi (Moonshot)** | `kimi-k3`, `kimi-k2.7-code`, `kimi-k2.6`, `kimi-k2-thinking` | direct only¹ | Reasoning, exact tokenizer |
+| **DeepSeek** | `deepseek-v4-pro`, `deepseek-flash`, `deepseek-v3.2` (`deepseek-chat`/`-reasoner` retired 2026-07-24) | direct only¹ | Reasoning replay, effort low/high/max, web search, balance, cache usage |
+| **Kimi (Moonshot)** | `kimi-k3.1-pro`, `kimi-k3`, `kimi-k2.7-code`, `kimi-k2.6` | direct only¹ | Reasoning replay, per-family effort, Responses lane, exact tokenizer |
 | **Z.ai (GLM)** | `glm-5.3`, `glm-5.2`, `glm-5.1`, `glm-4.7`, `glm-5.3-flash` | SDK → direct | Tools, vision, image/video, TTS/ASR/OCR, embeddings, web search |
 | **Mistral** | `mistral-large-3`, `mistral-large-2512`, `magistral-medium-latest`, `magistral-small-latest` | direct + SDK | Tools, vision, FIM, OCR, embeddings, audio |
 | **Qwen** | `qwen3-max`, `qwen3-coder-480b` | direct | Streaming, tools |
 | **Groq** | Llama, Qwen, Whisper, Kimi on LPU hardware | direct + SDK | Low-latency inference |
 | **Together** | Open-weights catalog (Llama, Qwen, DeepSeek, FLUX) | direct + SDK | Chat, images, embeddings |
-| **FriendliAI** | `zai-org/GLM-5.3`, `deepseek-ai/DeepSeek-V3.2` + your dedicated endpoints | direct → SDK | Reasoning effort/budget, regex-constrained output, exact tokenizer |
+| **FriendliAI** | `zai-org/GLM-5.3`, `zai-org/GLM-5.3-Flash`, `google/gemma-4-31B-it` + your dedicated endpoints | direct → SDK | Reasoning effort/budget, regex-constrained output, exact tokenizer |
 | **DeepInfra** | `Qwen3-235B-A22B`, DeepSeek, Llama, FLUX, Whisper, Kokoro | direct + SDK | Chat, vision, TTS/ASR, images, embeddings |
 | **OpenRouter** | 620 cards spanning most vendors | direct + SDK | One key, many vendors |
 | **Command Code** | `claude-opus-5-5`, `gpt-6-sol`, `moonshotai/Kimi-K3`, `zai-org/GLM-5.3`, `deepseek/deepseek-v4.1-flash` + 93 more | direct + SDK | One key; Messages / Responses / Chat Completions routed per model, ZDR, self-healing routes, Jev via `system_one()` |
@@ -689,7 +706,7 @@ client, which llmcore already speaks. Verified against PyPI rather than assumed.
 | **fal** | 9 capabilities: FLUX image gen/edit/upscale, video, FILM interpolation, SFX, music, TTS, ASR | direct + SDK |
 | **Replicate** | One generic prediction adapter driven by each model's published schema | direct + SDK |
 | **Higgsfield** | Soul image generation, plus hosted Kling and MiniMax Hailuo video | direct + SDK |
-| **TypeSafe.ai** | `jev-1.13.0` (alias `jev-latest`) — typed judgments: `noul` (yes/no probability), `choice`, `score` | direct + SDK |
+| **TypeSafe.ai** | `jev-1.14.0` (aliases `jev-latest`, `jev-preview`) — typed judgments: `noul` (yes/no probability), `choice`, `score`, `box` (locate in an image); PNG/JPEG image assets | direct + SDK |
 
 > **Model names move fast.** The table shows what is in the bundled card
 > registry at this release. `cardctl generate <provider>` refreshes it from the

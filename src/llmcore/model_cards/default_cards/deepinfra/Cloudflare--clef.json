@@ -1,0 +1,64 @@
+{
+  "model_id": "Cloudflare/clef",
+  "display_name": "clef",
+  "provider": "deepinfra",
+  "model_type": "chat",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 65537
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false,
+    "image_generation": false,
+    "image_edit": false,
+    "image_upscale": false,
+    "video_generation": false,
+    "video_interpolation": false,
+    "speech_synthesis": false,
+    "transcription": false,
+    "music_generation": false,
+    "sfx_generation": false,
+    "voice_design": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.24,
+      "output": 0.0
+    }
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": true,
+  "aliases": [],
+  "description": "Clef is a 27B multimodal model that turns a state and a schema of typed questions into decisions.",
+  "tags": [
+    "text",
+    "output:decisions"
+  ],
+  "source": "generated",
+  "provider_extension": {
+    "hugging_face_id": "Cloudflare/clef",
+    "quantization": "fp8",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "decisions"
+    ],
+    "datacenters": [
+      "US"
+    ]
+  }
+}

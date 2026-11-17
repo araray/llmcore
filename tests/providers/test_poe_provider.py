@@ -17,34 +17,19 @@ Validates:
 All tests use mocking — no live API calls.
 """
 
-import json
-import sys
-from types import SimpleNamespace
-from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-# Mock openai and tiktoken before importing the provider
-mock_openai = MagicMock()
-mock_tiktoken = MagicMock()
-mock_tiktoken.encoding_for_model.return_value = MagicMock()
+from llmcore.exceptions import ProviderError
 
-with patch.dict(
-    sys.modules,
-    {
-        "openai": mock_openai,
-        "tiktoken": mock_tiktoken,
-    },
-):
-    mock_openai.AsyncOpenAI = MagicMock
-    from llmcore.providers.poe_provider import (
-        _POE_IGNORED_PARAMS,
-        DEFAULT_POE_MODEL,
-        POE_BASE_URL,
-        POE_MODELS_URL,
-        PoeProvider,
-    )
+# Plain imports: importing inside patch.dict(sys.modules) re-imported fresh
+# module copies once the block exited, so patches could miss the classes in use.
+pytest.importorskip("openai")
+from llmcore.providers.poe_provider import (  # noqa: E402
+    POE_BASE_URL,
+    PoeProvider,
+)
 
 from llmcore.models import Message, ModelDetails
 from llmcore.models import Role as LLMCoreRole
@@ -249,8 +234,8 @@ class TestPoeModelDiscovery:
         # No HTTP call should be made when cache is populated
 
     @pytest.mark.asyncio
-    async def test_fetch_models_error_returns_empty(self, provider):
-        """Should return empty list on API error."""
+    async def test_fetch_models_error_is_reported(self, provider):
+        """A failed listing raises (it used to look like "Poe has no bots")."""
         with patch("llmcore.providers.poe_provider.httpx.AsyncClient") as mock_client_cls:
             mock_client = AsyncMock()
             mock_client.get = AsyncMock(side_effect=Exception("Connection failed"))
@@ -258,8 +243,8 @@ class TestPoeModelDiscovery:
             mock_client.__aexit__ = AsyncMock(return_value=False)
             mock_client_cls.return_value = mock_client
 
-            result = await provider._fetch_models()
-            assert result == []
+            with pytest.raises(ProviderError, match="Connection failed"):
+                await provider.get_models_details()
 
 
 # ---------------------------------------------------------------------------

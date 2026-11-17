@@ -12,7 +12,7 @@
     "max_output_tokens": 65536
   },
   "capabilities": {
-    "streaming": false,
+    "streaming": true,
     "function_calling": true,
     "tool_use": true,
     "json_mode": true,
@@ -21,7 +21,7 @@
     "audio_input": false,
     "audio_output": false,
     "video_input": false,
-    "reasoning": false,
+    "reasoning": true,
     "image_generation": false,
     "image_edit": false,
     "image_upscale": false,
@@ -48,7 +48,9 @@
   "open_weights": false,
   "aliases": [],
   "description": "Gemini 3.6 Flash",
-  "tags": [],
+  "tags": [
+    "reasoning"
+  ],
   "source": "generated",
   "x_pricewatch": {
     "feed": "scrape:google",

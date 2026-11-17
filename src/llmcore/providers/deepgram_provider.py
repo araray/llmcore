@@ -44,7 +44,7 @@ Design notes
 * **Configuration**: every capability is wired through ``[providers.deepgram]``
   in ``config/default_config.toml`` with safe defaults and per-call overrides.
 
-Tested against ``deepgram-sdk`` v7.3.1.
+Audited against ``deepgram-sdk`` v7.19.0 and the live API (2026-11-16).
 
 References:
     * Deepgram docs: https://developers.deepgram.com/ (append ``.md`` for Markdown)
@@ -132,6 +132,7 @@ try:
     from deepgram.core.api_error import ApiError as _DeepgramApiError
     from deepgram.environment import DeepgramClientEnvironment
     from deepgram.speak.v1.types.speak_v1text import SpeakV1Text
+    from deepgram.speak.v2.types.speak_v2speak import SpeakV2Speak
 
     deepgram_available = True
 except ImportError:  # pragma: no cover - exercised only when SDK is absent
@@ -139,6 +140,7 @@ except ImportError:  # pragma: no cover - exercised only when SDK is absent
     AsyncDeepgramClient = None  # type: ignore[assignment,misc]
     DeepgramClientEnvironment = None  # type: ignore[assignment,misc]
     SpeakV1Text = None  # type: ignore[assignment,misc]
+    SpeakV2Speak = None  # type: ignore[assignment,misc]
     AgentV1Settings = None  # type: ignore[assignment,misc]
     AgentV1UpdatePrompt = None  # type: ignore[assignment,misc]
     AgentV1UpdateThink = None  # type: ignore[assignment,misc]
@@ -156,7 +158,7 @@ except ImportError:  # pragma: no cover - exercised only when SDK is absent
 
 
 # ---------------------------------------------------------------------------
-# Constants (verified against deepgram-sdk v7.3.1)
+# Constants (verified against deepgram-sdk v7.19.0)
 # ---------------------------------------------------------------------------
 
 #: Environment variables searched (in order) for the API key.
@@ -272,10 +274,20 @@ _STT_BATCH_PARAMS = frozenset(
         "utt_split",
         "version",
         "mip_opt_out",
+        # Since SDK 7.15 / 7.19: repeatable language_hint (nova-3 multi), and
+        # redact_usage.
+        "language_hint",
+        "redact_usage",
+        # Raw-audio framing. Only the direct transport can send these: the
+        # SDK's transcribe_file/transcribe_url have no such parameters (a
+        # TypeError, measured on 7.11 and 7.19).
         "channels",
         "sample_rate",
     }
 )
+
+#: Batch STT params the SDK transport cannot send (see above).
+_STT_BATCH_DIRECT_ONLY = frozenset({"channels", "sample_rate"})
 
 #: Accepted keyword params for batch TTS (``speak.v1.audio.generate``).
 _TTS_BATCH_PARAMS = frozenset(
@@ -325,12 +337,31 @@ _STT_STREAM_PARAMS = frozenset(
         "utterance_end_ms",
         "vad_events",
         "version",
+        "diarize_model",
+        "language_hint",
+        "redact_usage",
     }
 )
+
+#: Flux TTS (``speak.v2.audio.generate`` / ``POST /v2/speak``, GA 2026-08-12):
+#: the v1 set plus expressivity, normalize_volume and priority.
+_TTS_V2_PARAMS = _TTS_BATCH_PARAMS | frozenset({"expressivity", "normalize_volume", "priority"})
+
+
+def _is_flux_tts(model: str | None) -> bool:
+    """Flux TTS voices are ``flux-<voice>-<lang>``; ``flux-general-*`` is STT."""
+    return bool(model) and model.startswith("flux-") and not model.startswith("flux-general")
+
 
 #: Accepted keyword params for streaming TTS (``speak.v1.connect``).
 _TTS_STREAM_PARAMS = frozenset(
     {"encoding", "mip_opt_out", "model", "sample_rate", "speed"}
+)
+
+#: Accepted keyword params for Flux TTS over the WebSocket (``speak.v2.connect``).
+_TTS_V2_STREAM_PARAMS = frozenset(
+    {"encoding", "expressivity", "mip_opt_out", "model", "normalize_volume", "sample_rate",
+     "speed", "tag"}
 )
 
 #: Accepted keyword params for Flux / v2 streaming STT (``listen.v2.connect``).
@@ -347,6 +378,11 @@ _FLUX_PARAMS = frozenset(
         "language_hint",
         "mip_opt_out",
         "tag",
+        # listen.v2.connect (SDK 7.19)
+        "numerals",
+        "profanity_filter",
+        "redact",
+        "redact_usage",
     }
 )
 
@@ -649,13 +685,13 @@ class DeepgramProvider(BaseProvider):
         return _wrap_json(resp.json())
 
     async def _direct_speak(self, text: str, params: dict[str, Any]) -> AsyncIterator[bytes]:
-        """POST ``/v1/speak`` and yield audio bytes, like the SDK generator."""
+        """POST ``/v1/speak`` (``/v2/speak`` for Flux TTS) and yield audio bytes."""
         query = {k: v for k, v in params.items() if v is not None}
         model = query.get("model")
         client = self._get_http()
         async with client.stream(
             "POST",
-            "/v1/speak",
+            "/v2/speak" if _is_flux_tts(model) else "/v1/speak",
             params=query,
             json={"text": text},
             headers={"Content-Type": "application/json"},
@@ -1163,15 +1199,22 @@ class DeepgramProvider(BaseProvider):
                 response = await self._direct_transcribe(
                     params=params, audio_bytes=request_bytes, url=url
                 )
-            elif url is not None:
-                response = await self._client.listen.v1.media.transcribe_url(
-                    url=url, **params
-                )
             else:
-                request_bytes = self._coerce_audio_bytes(audio_data)
-                response = await self._client.listen.v1.media.transcribe_file(
-                    request=request_bytes, **params
-                )
+                sdk_params = {k: v for k, v in params.items() if k not in _STT_BATCH_DIRECT_ONLY}
+                if len(sdk_params) != len(params):
+                    logger.debug(
+                        "Deepgram SDK transport cannot send channels/sample_rate; "
+                        "use backend = 'httpx' for raw audio framing."
+                    )
+                if url is not None:
+                    response = await self._client.listen.v1.media.transcribe_url(
+                        url=url, **sdk_params
+                    )
+                else:
+                    request_bytes = self._coerce_audio_bytes(audio_data)
+                    response = await self._client.listen.v1.media.transcribe_file(
+                        request=request_bytes, **sdk_params
+                    )
         except _DeepgramApiError as exc:
             raise self._map_api_error(exc, model=used_model) from exc
         except (ConfigError, ProviderError, FileNotFoundError):
@@ -1376,7 +1419,7 @@ class DeepgramProvider(BaseProvider):
             self._tts_defaults,
             explicit,
             kwargs,
-            allowed=_TTS_BATCH_PARAMS,
+            allowed=_TTS_V2_PARAMS if _is_flux_tts(resolved_model) else _TTS_BATCH_PARAMS,
             model=resolved_model,
             default_model=self.default_tts_model,
         )
@@ -1385,11 +1428,7 @@ class DeepgramProvider(BaseProvider):
 
         try:
             chunks: list[bytes] = []
-            source = (
-                self._direct_speak(text, params)
-                if self._use_direct_for("speak")
-                else self._client.speak.v1.audio.generate(text=text, **params)
-            )
+            source = self._speak_source(text, params)
             async for chunk in source:
                 if chunk:
                     chunks.append(chunk)
@@ -1413,6 +1452,14 @@ class DeepgramProvider(BaseProvider):
             voice=used_model,  # voice is encoded in the model id
             metadata={"bytes": len(audio)},
         )
+
+    def _speak_source(self, text: str, params: dict[str, Any]) -> AsyncIterator[bytes]:
+        """The audio byte stream for one REST synthesis (v1 Aura, v2 Flux)."""
+        if self._use_direct_for("speak"):
+            return self._direct_speak(text, params)
+        if _is_flux_tts(params.get("model")):
+            return self._client.speak.v2.audio.generate(text=text, **params)
+        return self._client.speak.v1.audio.generate(text=text, **params)
 
     # ------------------------------------------------------------------
     # Shared serialization helper
@@ -1867,15 +1914,13 @@ class DeepgramProvider(BaseProvider):
                 self._tts_defaults,
                 explicit,
                 kwargs,
-                allowed=_TTS_BATCH_PARAMS,
+                allowed=_TTS_V2_PARAMS if _is_flux_tts(resolved_model) else _TTS_BATCH_PARAMS,
                 model=resolved_model,
                 default_model=self.default_tts_model,
             )
             used_model = params.get("model", resolved_model)
             try:
-                async for chunk in self._client.speak.v1.audio.generate(
-                    text=text, **params
-                ):
+                async for chunk in self._speak_source(text, params):
                     if chunk:
                         yield chunk
             except _DeepgramApiError as exc:
@@ -1891,7 +1936,10 @@ class DeepgramProvider(BaseProvider):
                 ) from exc
             return
 
-        # WebSocket path (incremental text in, audio out).
+        # WebSocket path (incremental text in, audio out). Flux voices speak
+        # speak.v2 (Speak / Flush / Interrupt / Close, typed Error frames);
+        # Aura speaks speak.v1.
+        flux = _is_flux_tts(resolved_model)
         explicit = {
             "encoding": response_format,
             "sample_rate": sample_rate,
@@ -1902,23 +1950,27 @@ class DeepgramProvider(BaseProvider):
             self._tts_stream_defaults,
             explicit,
             kwargs,
-            allowed=_TTS_STREAM_PARAMS,
+            allowed=_TTS_V2_STREAM_PARAMS if flux else _TTS_STREAM_PARAMS,
             model=resolved_model,
             default_model=self.default_tts_model,
         )
         used_model = params.get("model", resolved_model)
         producer_error: dict[str, BaseException] = {}
+        speak_api = self._client.speak.v2 if flux else self._client.speak.v1
 
         try:
-            async with self._client.speak.v1.connect(**params) as socket:
+            async with speak_api.connect(**params) as socket:
 
                 async def _pump() -> None:
                     try:
                         async for piece in text:
                             if piece:
-                                await socket.send_text(
-                                    SpeakV1Text(type="Speak", text=piece)
-                                )
+                                if flux:
+                                    await socket.send_speak(SpeakV2Speak(type="Speak", text=piece))
+                                else:
+                                    await socket.send_text(
+                                        SpeakV1Text(type="Speak", text=piece)
+                                    )
                         await socket.send_flush()
                     except asyncio.CancelledError:
                         raise
@@ -1935,7 +1987,10 @@ class DeepgramProvider(BaseProvider):
                     async for message in socket:
                         if isinstance(message, (bytes, bytearray)):
                             yield bytes(message)
-                        # Control frames (Metadata/Flushed/Cleared/Warning) skipped.
+                            continue
+                        # Control frames (Metadata/Flushed/Cleared/Warning) are
+                        # skipped; a speak.v2 Error frame ends the stream.
+                        _raise_speak_error(message, used_model)
                 finally:
                     if not pump_task.done():
                         pump_task.cancel()
@@ -1997,19 +2052,22 @@ class DeepgramProvider(BaseProvider):
             "sample_rate": sample_rate,
             "speed": speed,
         }
+        resolved = model or self._tts_defaults.get("model") or self.default_tts_model
+        flux = _is_flux_tts(resolved)
         params = self._merge_params(
             self._tts_defaults,
             self._tts_stream_defaults,
             explicit,
             kwargs,
-            allowed=_TTS_STREAM_PARAMS,
+            allowed=_TTS_V2_STREAM_PARAMS if flux else _TTS_STREAM_PARAMS,
             model=model,
             default_model=self.default_tts_model,
         )
         used_model = params.get("model", self.default_tts_model)
+        speak_api = self._client.speak.v2 if flux else self._client.speak.v1
         try:
-            async with self._client.speak.v1.connect(**params) as socket:
-                yield DeepgramSpeechStream(socket)
+            async with speak_api.connect(**params) as socket:
+                yield DeepgramSpeechStream(socket, flux=flux, model=used_model)
         except _DeepgramApiError as exc:
             raise self._map_api_error(exc, model=used_model) from exc
 
@@ -2886,13 +2944,18 @@ class DeepgramSpeechStream:
     audio ``bytes`` as they are produced.
     """
 
-    def __init__(self, socket: Any) -> None:
+    def __init__(self, socket: Any, *, flux: bool = False, model: str | None = None) -> None:
         """Bind to an open SDK socket.
 
         Args:
-            socket: The raw ``AsyncV1SocketClient`` (speak).
+            socket: The raw speak socket (``speak.v1`` for Aura, ``speak.v2``
+                for Flux voices).
+            flux: Whether the socket speaks ``speak.v2``.
+            model: Voice id, for error messages.
         """
         self._socket = socket
+        self._flux = flux
+        self._model = model
 
     async def send_text(self, text: str) -> None:
         """Queue a piece of text for synthesis."""
@@ -2900,30 +2963,58 @@ class DeepgramSpeechStream:
             raise ProviderError(
                 "deepgram", "Deepgram SDK not available.", retryable=False
             )
-        await self._socket.send_text(SpeakV1Text(type="Speak", text=text))
+        if self._flux:
+            await self._socket.send_speak(SpeakV2Speak(type="Speak", text=text))
+        else:
+            await self._socket.send_text(SpeakV1Text(type="Speak", text=text))
 
     async def flush(self) -> None:
         """Flush queued text so the server synthesizes it now (``Flush``)."""
         await self._socket.send_flush()
 
     async def clear(self) -> None:
-        """Discard any unsynthesized buffered text (``Clear``)."""
-        await self._socket.send_clear()
+        """Discard unsynthesized text: ``Clear`` (Aura) or ``Interrupt`` (Flux)."""
+        if self._flux:
+            await self._socket.send_interrupt()
+        else:
+            await self._socket.send_clear()
 
     async def close(self) -> None:
         """Close the synthesis stream (``Close``)."""
         await self._socket.send_close()
 
     async def __aiter__(self) -> AsyncIterator[bytes]:
-        """Yield audio ``bytes`` chunks (control frames are skipped)."""
+        """Yield audio ``bytes`` chunks (control frames are skipped; a
+        ``speak.v2`` Error frame raises :class:`ProviderError`)."""
         async for message in self._socket:
             if isinstance(message, (bytes, bytearray)):
                 yield bytes(message)
+            else:
+                _raise_speak_error(message, self._model)
 
     @property
     def socket(self) -> Any:
         """The underlying raw SDK socket (escape hatch)."""
         return self._socket
+
+
+def _raise_speak_error(message: Any, model: str | None) -> None:
+    """Raise for a speak socket ``Error`` frame; ignore other control frames.
+
+    ``speak.v2`` reports failures in-band (e.g. ``DATA-0002`` for an invalid
+    inline control) instead of only closing the socket.
+    """
+    data = _to_plain_dict(message)
+    if data.get("type") != "Error":
+        return
+    code = data.get("code") or data.get("err_code")
+    description = data.get("description") or data.get("err_msg") or data
+    raise ProviderError(
+        "deepgram",
+        f"Deepgram TTS stream error {code}: {description}",
+        model_name=model,
+        retryable=str(code or "").startswith(("NET", "UNAVAILABLE")),
+    )
 
 
 # ---------------------------------------------------------------------------

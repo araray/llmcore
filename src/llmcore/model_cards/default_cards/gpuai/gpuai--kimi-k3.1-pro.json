@@ -1,0 +1,60 @@
+{
+  "model_id": "gpuai/kimi-k3.1-pro",
+  "display_name": "Kimi K3.1 Pro",
+  "provider": "gpuai",
+  "model_type": "chat",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 1048576
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false,
+    "image_generation": false,
+    "image_edit": false,
+    "image_upscale": false,
+    "video_generation": false,
+    "video_interpolation": false,
+    "speech_synthesis": false,
+    "transcription": false,
+    "music_generation": false,
+    "sfx_generation": false,
+    "voice_design": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 2.2,
+      "output": 11.0,
+      "cached_input": 0.22
+    }
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Gpuai model: gpuai/kimi-k3.1-pro",
+  "tags": [],
+  "source": "generated",
+  "provider_extension": {
+    "author": "Moonshot AI"
+  },
+  "x_pricewatch": {
+    "feed": "gpuai",
+    "method": "api",
+    "url": "https://api.gpu.ai/v1/models",
+    "matched_key": "gpuai/gpuai/kimi-k3.1-pro",
+    "match": "exact key match",
+    "fetched_at": "2026-11-16T09:04:56+00:00"
+  }
+}

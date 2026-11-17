@@ -188,9 +188,7 @@ class ModelCapabilities(BaseModel):
     image_edit: bool = Field(False, description="Can edit a supplied image")
     image_upscale: bool = Field(False, description="Can upscale a supplied image")
     video_generation: bool = Field(False, description="Can generate video")
-    video_interpolation: bool = Field(
-        False, description="Can interpolate between existing frames"
-    )
+    video_interpolation: bool = Field(False, description="Can interpolate between existing frames")
     speech_synthesis: bool = Field(False, description="Text-to-speech (TTS)")
     transcription: bool = Field(False, description="Speech-to-text (ASR)")
     music_generation: bool = Field(False, description="Can generate music")
@@ -262,22 +260,14 @@ class UnitPricing(BaseModel):
     """
 
     per_image: float | None = Field(None, description="Price per generated image")
-    per_megapixel: float | None = Field(
-        None, description="Price per megapixel of generated image"
-    )
+    per_megapixel: float | None = Field(None, description="Price per megapixel of generated image")
     per_video: float | None = Field(None, description="Price per generated video")
-    per_video_second: float | None = Field(
-        None, description="Price per second of generated video"
-    )
+    per_video_second: float | None = Field(None, description="Price per second of generated video")
     per_audio_minute: float | None = Field(
         None, description="Price per minute of audio processed or produced"
     )
-    per_character: float | None = Field(
-        None, description="Price per character (speech synthesis)"
-    )
-    per_second: float | None = Field(
-        None, description="Price per second of compute or output"
-    )
+    per_character: float | None = Field(None, description="Price per character (speech synthesis)")
+    per_second: float | None = Field(None, description="Price per second of compute or output")
     per_request: float | None = Field(
         None, description="Flat price per request, regardless of size"
     )
@@ -319,9 +309,7 @@ class UnitPricing(BaseModel):
     def unpriced_units(self, quantities: Mapping[str, float]) -> list[str]:
         """Quantities supplied that this model states no rate for."""
         priced = {kw for f, kw in self.UNITS.items() if getattr(self, f) is not None}
-        return sorted(
-            kw for kw, amount in quantities.items() if amount and kw not in priced
-        )
+        return sorted(kw for kw, amount in quantities.items() if amount and kw not in priced)
 
 
 class ContextTier(BaseModel):
@@ -499,9 +487,7 @@ class ModelPricing(BaseModel):
             # Nothing is priced per token here. Only the unit rates apply,
             # and a caller passing token counts to such a model is asking
             # a question the card cannot answer.
-            unit_only = (
-                self.per_unit.cost_for(units) if self.per_unit and units else 0.0
-            )
+            unit_only = self.per_unit.cost_for(units) if self.per_unit and units else 0.0
             if batch and self.batch_discount_percent:
                 unit_only *= max(0.0, 1.0 - self.batch_discount_percent / 100.0)
             return unit_only
@@ -524,9 +510,7 @@ class ModelPricing(BaseModel):
         # card can say so explicitly when the vendor publishes it.
         write_cost = 0.0
         if cache_write_tokens > 0:
-            write_rate = (
-                rates.cache_write if rates.cache_write is not None else rates.input
-            )
+            write_rate = rates.cache_write if rates.cache_write is not None else rates.input
             write_cost = (cache_write_tokens / 1_000_000) * write_rate
 
         # Reasoning tokens are a subset of the output and may carry their
@@ -537,9 +521,7 @@ class ModelPricing(BaseModel):
         output_cost = (plain_output / 1_000_000) * rates.output
         if reasoning:
             reasoning_rate = (
-                rates.reasoning_output
-                if rates.reasoning_output is not None
-                else rates.output
+                rates.reasoning_output if rates.reasoning_output is not None else rates.output
             )
             output_cost += (reasoning / 1_000_000) * reasoning_rate
 
@@ -673,6 +655,25 @@ class AnthropicExtension(BaseModel):
         description="Prompt caching multipliers (cache_write_5m, cache_write_1h, cache_read)",
     )
     beta_features: list[str] | None = Field(None, description="Available beta features")
+    # Capability fields from the Models API (``GET /v1/models/{id}``,
+    # API 2026-10-21); see providers/anthropic_provider.py.
+    thinking_types: list[str] | None = Field(
+        None, description="Accepted thinking modes (adaptive, enabled, disabled)"
+    )
+    effort_levels: list[str] | None = Field(
+        None, description="Accepted output_config.effort values (low … max)"
+    )
+    batch_api: bool | None = Field(None, description="Message Batches API supported")
+    citations: bool | None = Field(None, description="Document citations supported")
+    pdf_input: bool | None = Field(None, description="PDF document input supported")
+    code_execution: bool | None = Field(None, description="Code-execution server tool supported")
+    context_management: bool | None = Field(
+        None, description="Server-side context management (clearing/compaction) supported"
+    )
+    server_tools: list[str] | None = Field(
+        None, description="Available server-side tools (web_search, code_execution, …)"
+    )
+    lifecycle: str | None = Field(None, description="Vendor lifecycle label (active, deprecated)")
 
 
 class GoogleExtension(BaseModel):
@@ -917,8 +918,12 @@ class ModelCard(BaseModel):
         """
         if self.pricing:
             return self.pricing.get_cost(
-                input_tokens, output_tokens, cached_tokens, cache_write_tokens,
-                reasoning_tokens, batch,
+                input_tokens,
+                output_tokens,
+                cached_tokens,
+                cache_write_tokens,
+                reasoning_tokens,
+                batch,
             )
         return None
 
@@ -977,6 +982,7 @@ def model_supports_native_search(card: ModelCard | None) -> bool:
       flag);
     * the xAI extension advertises a search server-tool (``server_tools``
       containing a ``*search*`` entry) or a ``live_search`` config;
+    * the Anthropic extension lists a ``*search*`` server tool;
     * the Google extension advertises ``grounding.google_search``.
 
     Args:
@@ -998,6 +1004,12 @@ def model_supports_native_search(card: ModelCard | None) -> bool:
             return True
         if xai.live_search:
             return True
+
+    anthropic = card.provider_anthropic
+    if anthropic is not None and any(
+        "search" in str(tool).lower() for tool in (anthropic.server_tools or [])
+    ):
+        return True
 
     google = card.provider_google
     if google is not None and isinstance(google.grounding, dict):

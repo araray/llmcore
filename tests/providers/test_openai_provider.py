@@ -126,8 +126,19 @@ class TestIsReasoningModel:
 
         assert _is_reasoning_model("gpt-4o") is False
         assert _is_reasoning_model("gpt-4o-mini") is False
-        assert _is_reasoning_model("gpt-5.4") is False
         assert _is_reasoning_model("gpt-4.1") is False
+        # Chat-tuned and search variants do not reason.
+        assert _is_reasoning_model("gpt-5-search-api") is False
+        assert _is_reasoning_model("gpt-5.1-chat-latest") is False
+
+    def test_gpt5_and_later_are_reasoning(self):
+        """Every GPT-5+ model reasons: live 2026-11-16, gpt-5-nano, gpt-5.1,
+        gpt-5.4-nano and gpt-6-luna all report reasoning tokens and reject
+        max_tokens."""
+        from llmcore.providers.openai_provider import _is_reasoning_model
+
+        for model in ("gpt-5", "gpt-5.4", "gpt-5.4-nano", "gpt-5.6-sol", "gpt-6-luna", "gpt-6.1-sol"):
+            assert _is_reasoning_model(model) is True, model
 
 
 class TestNeedsDeveloperRole:
@@ -144,7 +155,7 @@ class TestNeedsDeveloperRole:
         from llmcore.providers.openai_provider import _needs_developer_role
 
         assert _needs_developer_role("gpt-4o") is False
-        assert _needs_developer_role("gpt-5.4") is False
+        assert _needs_developer_role("gpt-4.1-mini") is False
 
 
 class TestContextLengthHeuristics:
@@ -162,14 +173,22 @@ class TestContextLengthHeuristics:
                     return ctx
             return None
 
-        assert resolve("gpt-5.4") == 1050000
-        assert resolve("gpt-5.4-pro") == 1050000
-        assert resolve("gpt-5.4-mini") == 400000
-        assert resolve("gpt-5.2-pro") == 400000
-        assert resolve("gpt-5.2") == 400000
-        assert resolve("gpt-5.1") == 400000
-        assert resolve("gpt-5") == 400000
-        assert resolve("gpt-5-mini") == 200000
+        # Maximum INPUT tokens, measured live 2026-11-16 from OpenAI's own
+        # overflow errors. The GPT-5 line's advertised "400K" is 272K in +
+        # 128K out; the "1.05M" models take 922K in.
+        assert resolve("gpt-6-luna") == 922000
+        assert resolve("gpt-6.1-sol") == 922000
+        assert resolve("gpt-5.6-terra") == 922000
+        assert resolve("gpt-5.5") == 922000
+        assert resolve("gpt-5.4") == 922000
+        assert resolve("gpt-5.4-pro") == 922000
+        assert resolve("gpt-5.4-mini") == 272000
+        assert resolve("gpt-5.4-nano") == 272000
+        assert resolve("gpt-5.2-pro") == 272000
+        assert resolve("gpt-5.2") == 272000
+        assert resolve("gpt-5.1") == 272000
+        assert resolve("gpt-5") == 272000
+        assert resolve("gpt-5-mini") == 272000
 
     def test_o_series(self):
         from llmcore.providers.openai_provider import (
@@ -199,9 +218,10 @@ class TestContextLengthHeuristics:
                     return ctx
             return None
 
-        assert resolve("gpt-4.1") == 1048576
-        assert resolve("gpt-4.1-mini") == 1048576
-        assert resolve("gpt-4.1-nano") == 1048576
+        # Measured live 2026-11-16: "maximum context length is 1047576 tokens".
+        assert resolve("gpt-4.1") == 1047576
+        assert resolve("gpt-4.1-mini") == 1047576
+        assert resolve("gpt-4.1-nano") == 1047576
 
     def test_unknown_returns_none(self):
         from llmcore.providers.openai_provider import (
@@ -773,7 +793,11 @@ class TestGetSupportedParameters:
     def test_reasoning_effort_enum_includes_xhigh(self):
         provider = self._make_provider_stub()
         params = provider.get_supported_parameters()
-        assert params["reasoning_effort"]["enum"] == ["low", "medium", "high", "xhigh"]
+        # Accepted levels vary by model (gpt-5: minimal..high; gpt-5.1: none..high;
+        # gpt-5.4+/6: none..xhigh; o3: low..xhigh), so the schema lists them all
+        # and param_policy moves a rejected one to the model's nearest.
+        assert params["reasoning_effort"]["enum"] == [
+            "none", "minimal", "low", "medium", "high", "xhigh", "max"]
 
     def test_has_new_parameters(self):
         provider = self._make_provider_stub()
@@ -1065,7 +1089,7 @@ class TestNativeSearch:
         assert self._make_provider_stub("xai").supports_native_search("grok-4") is True
 
     def test_supports_native_search_false_for_other_instances(self):
-        for name in ("groq", "together", "deepseek"):
+        for name in ("together", "deepseek"):
             assert self._make_provider_stub(name).supports_native_search() is False
 
     @pytest.mark.asyncio
@@ -1107,17 +1131,25 @@ class TestNativeSearch:
         assert "extra_body" not in call_kwargs
 
     @pytest.mark.asyncio
-    async def test_xai_native_search_attaches_live_search_extra_body(self):
+    async def test_xai_native_search_uses_responses_tools(self):
+        """xAI retired Live Search (search_parameters answers HTTP 410); search
+        is now the web_search and x_search tools on its Responses API."""
         from llmcore.models import Message
 
-        provider = self._make_provider_stub("xai", default_model="grok-4")
+        provider = self._make_provider_stub("xai", default_model="grok-4.7")
+        resp = MagicMock()
+        resp.model_dump.return_value = {
+            "status": "completed",
+            "output": [{"type": "message", "content": [{"type": "output_text", "text": "ok"}]}],
+        }
+        provider._client.responses.create = AsyncMock(return_value=resp)
         await provider.chat_completion(
             [Message(role="user", content="what happened today?")], native_search=True
         )
-
-        call_kwargs = provider._client.chat.completions.create.call_args.kwargs
-        assert call_kwargs["extra_body"]["search_parameters"] == {"mode": "auto"}
-        assert "web_search_options" not in call_kwargs
+        provider._client.chat.completions.create.assert_not_called()
+        kwargs = provider._client.responses.create.call_args.kwargs
+        assert kwargs["tools"] == [{"type": "web_search"}, {"type": "x_search"}]
+        assert "search_parameters" not in repr(kwargs)
 
     @pytest.mark.asyncio
     async def test_unsupported_instance_native_search_is_noop(self):
@@ -1134,16 +1166,21 @@ class TestNativeSearch:
         assert "web_search_options" not in call_kwargs
         assert "extra_body" not in call_kwargs
 
-    def test_apply_native_search_preserves_existing_extra_body(self):
-        # Direct helper check: merging must not clobber caller extra_body keys.
+    def test_xai_chat_path_adds_nothing(self):
+        """Nothing is attached on xAI's Chat Completions path any more: its
+        search lives on /responses, where chat_completion routes it."""
         provider = self._make_provider_stub("xai")
         api_kwargs = {"extra_body": {"foo": "bar"}}
-        provider._apply_native_search(api_kwargs)
-        assert api_kwargs["extra_body"]["foo"] == "bar"
-        assert api_kwargs["extra_body"]["search_parameters"] == {"mode": "auto"}
+        provider._apply_native_search(api_kwargs, "grok-4.7")
+        assert api_kwargs == {"extra_body": {"foo": "bar"}}
 
-    def test_apply_native_search_does_not_override_existing_search_parameters(self):
-        provider = self._make_provider_stub("xai")
-        api_kwargs = {"extra_body": {"search_parameters": {"mode": "on"}}}
-        provider._apply_native_search(api_kwargs)
-        assert api_kwargs["extra_body"]["search_parameters"] == {"mode": "on"}
+    def test_groq_browser_search_only_on_gpt_oss(self):
+        provider = self._make_provider_stub("groq")
+        assert provider.supports_native_search("openai/gpt-oss-120b") is True
+        assert provider.supports_native_search("llama-3.1-8b-instant") is False
+        kwargs: dict = {}
+        provider._apply_native_search(kwargs, "openai/gpt-oss-120b")
+        assert kwargs["tools"] == [{"type": "browser_search"}]
+        kwargs = {}
+        provider._apply_native_search(kwargs, "llama-3.1-8b-instant")
+        assert kwargs == {}

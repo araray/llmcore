@@ -1,0 +1,43 @@
+{
+  "model_id": "minimax/hailuo-2.3",
+  "display_name": "MiniMax Hailuo 2.3 (Replicate)",
+  "provider": "replicate",
+  "model_type": "video-generation",
+  "architecture": null,
+  "context": null,
+  "capabilities": {
+    "streaming": false,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false,
+    "image_generation": false,
+    "image_edit": false,
+    "image_upscale": false,
+    "video_generation": true,
+    "video_interpolation": false,
+    "speech_synthesis": false,
+    "transcription": false,
+    "music_generation": false,
+    "sfx_generation": false,
+    "voice_design": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Text- or image-to-video (first_frame_image); duration 6 or 10 s, 768p or 1080p. Supersedes video-01 as llmcore's default.",
+  "tags": [
+    "video",
+    "curated"
+  ],
+  "source": "generated"
+}

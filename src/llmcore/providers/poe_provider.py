@@ -13,16 +13,21 @@ Poe's API offers two connectivity modes, both supported here:
 The provider **subclasses OpenAIProvider** for (1) and wraps the
 ``fastapi_poe`` async client for (2), falling back transparently between them.
 
-Key characteristics of the Poe API:
-- Uses **bot names** as model IDs (e.g., ``Claude-Sonnet-4.6``, ``GPT-5.4``).
+Key characteristics of the Poe API (live, 2026-11-16):
+- Uses **bot names** as model IDs, lowercase since 2026 (``gpt-5.4-mini``,
+  ``claude-haiku-4.5``; matching is case-insensitive).
+- ``/v1/models`` lists each bot's context window, reasoning support, custom
+  ``parameters`` (with JSON schemas), supported features and endpoints.
+- ``effort=`` maps onto whichever reasoning parameter a bot declares:
+  ``reasoning_effort`` / ``output_effort`` / ``thinking_level`` (enums),
+  ``thinking_budget`` (scaled within its range) or ``enable_thinking``.
+  ``native_search=True`` sets a bot's ``web_search`` parameter.
 - Point-based billing; per-token pricing exposed via ``/v1/models``.
 - Rate limit: 500 RPM (request-based, no token-based limits).
-- Supports: streaming, tools, vision (base64), file uploads,
-  web search (Responses API), video generation.
-- Some OpenAI parameters are ignored (response_format, seed,
-  frequency_penalty, presence_penalty).
+- Ignored parameters (response_format, seed, penalties, store, ...) are
+  stripped; a 413 is a context overflow; 529 means overloaded.
 
-Tested against Poe API as of April 2026 / fastapi_poe v0.0.83.
+Audited against the live API and fastapi_poe 0.0.83 on 2026-11-16.
 
 References:
     https://creator.poe.com/api-reference/overview
@@ -31,8 +36,6 @@ References:
 
 from __future__ import annotations
 
-import asyncio
-import json
 import logging
 import os
 from collections.abc import AsyncGenerator
@@ -71,13 +74,12 @@ except ImportError:
 
 from ..exceptions import ConfigError, ProviderError
 from ..model_cards.registry import get_model_card_registry
-from ..models import Message, ModelDetails, Tool
-from ..models import Role as LLMCoreRole
-from .base import BaseProvider, ContextPayload, flatten_tool_messages_for_text_protocol
+from ..models import ModelDetails, Tool
+from .base import ContextPayload, flatten_tool_messages_for_text_protocol
 
 # Inherit from OpenAIProvider for the OpenAI-compatible path.
 try:
-    from .openai_provider import OpenAIProvider, openai_available
+    from .openai_provider import OpenAIProvider, nearest_effort, openai_available
 except ImportError:
     OpenAIProvider = None  # type: ignore[assignment, misc]
     openai_available = False
@@ -90,7 +92,12 @@ POE_BASE_URL = "https://api.poe.com/v1"
 POE_MODELS_URL = "https://api.poe.com/v1/models"
 POE_BALANCE_URL = "https://api.poe.com/usage/current_balance"
 POE_NATIVE_BASE_URL = "https://api.poe.com/bot/"
-DEFAULT_POE_MODEL = "GPT-4o-Mini"
+DEFAULT_POE_MODEL = "gpt-5.4-mini"
+
+#: Reasoning parameters a bot may declare, in the order effort= prefers them.
+_EFFORT_PARAMS = ("reasoning_effort", "output_effort", "thinking_level", "thinking_budget", "enable_thinking")
+#: Share of a thinking_budget range each effort level gets.
+_BUDGET_SHARE = {"none": 0.0, "minimal": 0.05, "low": 0.25, "medium": 0.5, "high": 0.75, "xhigh": 0.9, "max": 1.0}
 
 # Poe ignores these OpenAI parameters — strip them before forwarding to
 # avoid confusion in raw payload logs and potential future validation.
@@ -105,6 +112,10 @@ _POE_IGNORED_PARAMS = frozenset(
         "service_tier",
         "audio",
         "modalities",
+        # Also documented as ignored (2026-11).
+        "store",
+        "metadata",
+        "prediction",
     }
 )
 
@@ -126,7 +137,7 @@ class PoeProvider(OpenAIProvider):
         [providers.poe]
         type = "poe"
         api_key_env_var = "POE_API_KEY"
-        default_model = "GPT-4o-Mini"
+        default_model = "gpt-5.4-mini"
         # Optional:
         backend = "openai"          # "openai" (default) or "native"
         timeout = 120
@@ -151,7 +162,7 @@ class PoeProvider(OpenAIProvider):
             config: Configuration dictionary from ``[providers.poe]``.
                 Required: ``api_key`` or ``api_key_env_var`` or env ``POE_API_KEY``.
                 Optional:
-                    ``default_model``: Default bot name (default: ``GPT-4o-Mini``).
+                    ``default_model``: Default bot name (default: ``gpt-5.4-mini``).
                     ``backend``: ``"openai"`` (default) or ``"native"``.
                     ``timeout``: Request timeout in seconds (default: 120).
             log_raw_payloads: Whether to log raw request/response payloads.
@@ -217,7 +228,7 @@ class PoeProvider(OpenAIProvider):
     # Supported Parameters (override to strip Poe-ignored params)
     # ------------------------------------------------------------------
 
-    def get_supported_parameters(self, model: str | None = None) -> dict[str, Any]:
+    def _poe_parameters(self, model: str | None = None) -> dict[str, Any]:
         """Return supported parameters, adding ``extra_body`` and removing
         parameters that Poe silently ignores.
 
@@ -259,24 +270,37 @@ class PoeProvider(OpenAIProvider):
                 pricing = model.get("pricing", {}) or {}
                 input_mods = architecture.get("input_modalities", [])
                 output_mods = architecture.get("output_modalities", [])
+                window = model.get("context_window") or {}
+                features = model.get("supported_features") or []
 
                 supports_vision = "image" in input_mods
-                supports_tools = True  # Poe passes tools through
+                supports_tools = "tools" in features
 
                 # Parse pricing (per-token strings)
                 input_price_per_token = float(pricing.get("prompt", "0") or "0")
                 output_price_per_token = float(pricing.get("completion", "0") or "0")
 
+                created = model.get("created")
                 details = ModelDetails(
                     id=model_id,
-                    display_name=model.get("description", model_id)[:120],
+                    display_name=(model.get("metadata") or {}).get("display_name")
+                    or (model.get("description") or model_id)[:120],
                     context_length=self.get_max_context_length(model_id),
+                    max_output_tokens=window.get("max_output_tokens"),
                     supports_streaming=True,
                     supports_tools=supports_tools,
                     supports_vision=supports_vision,
+                    supports_reasoning=bool(model.get("reasoning")),
                     provider_name=self.get_name(),
                     metadata={
                         "owned_by": model.get("owned_by"),
+                        # Poe reports milliseconds.
+                        "created": int(created) // 1000 if isinstance(created, (int, float)) else created,
+                        "description": model.get("description"),
+                        "reasoning": model.get("reasoning"),
+                        "parameters": model.get("parameters") or [],
+                        "supported_features": features,
+                        "supported_endpoints": model.get("supported_endpoints") or [],
                         "input_modalities": input_mods,
                         "output_modalities": output_mods,
                         "modality": architecture.get("modality"),
@@ -310,32 +334,38 @@ class PoeProvider(OpenAIProvider):
         if self._models_cache is not None:
             return self._models_cache
 
-        try:
-            async with httpx.AsyncClient(timeout=30) as client:
-                resp = await client.get(
-                    POE_MODELS_URL,
-                    headers={"Authorization": f"Bearer {self._poe_api_key}"},
-                )
-                resp.raise_for_status()
-                data = resp.json()
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await client.get(
+                POE_MODELS_URL,
+                headers={"Authorization": f"Bearer {self._poe_api_key}"},
+            )
+            resp.raise_for_status()
+            data = resp.json()
 
-            models = data.get("data", [])
-            self._models_cache = models
-            logger.debug("Fetched %d models from Poe /v1/models.", len(models))
-            return models
-        except Exception as e:
-            logger.error("Failed to fetch Poe models: %s", e)
-            return []
+        models = data.get("data", [])
+        self._models_cache = models
+        logger.debug("Fetched %d models from Poe /v1/models.", len(models))
+        return models
+
+    def _listed(self, bot: str) -> dict[str, Any] | None:
+        """The cached listing entry for ``bot`` (ids are lowercase)."""
+        wanted = bot.lower()
+        for entry in self._models_cache or []:
+            if str(entry.get("id", "")).lower() == wanted:
+                return entry
+        return None
 
     # ------------------------------------------------------------------
     # Balance Checking (Poe-specific)
     # ------------------------------------------------------------------
 
     async def get_balance(self) -> int:
-        """Fetch the current point balance from Poe.
+        """The current point balance (see :meth:`get_balance_details`)."""
+        return int((await self.get_balance_details()).get("current_point_balance", 0))
 
-        Returns:
-            Current point balance as an integer.
+    async def get_balance_details(self) -> dict[str, Any]:
+        """``GET /usage/current_balance``: points by source, USD values,
+        the next daily grant and auto-recharge settings.
 
         Raises:
             ProviderError: If the balance check fails.
@@ -347,8 +377,7 @@ class PoeProvider(OpenAIProvider):
                     headers={"Authorization": f"Bearer {self._poe_api_key}"},
                 )
                 resp.raise_for_status()
-                data = resp.json()
-            return int(data.get("current_point_balance", 0))
+                return dict(resp.json())
         except Exception as e:
             raise ProviderError(
                 self.get_name(),
@@ -396,7 +425,14 @@ class PoeProvider(OpenAIProvider):
         except Exception:
             pass
 
-        # 2. Fallback
+        # 2. The live listing's context window
+        listed = self._listed(model_name)
+        window = (listed or {}).get("context_window") or {}
+        known = window.get("context_length") or (listed or {}).get("context_length")
+        if known:
+            return int(known)
+
+        # 3. Fallback
         return 128000
 
     # ------------------------------------------------------------------
@@ -440,6 +476,7 @@ class PoeProvider(OpenAIProvider):
         for p in list(kwargs.keys()):
             if p in _POE_IGNORED_PARAMS:
                 kwargs.pop(p)
+        kwargs = self._bot_parameters(model or self.default_model, kwargs)
 
         if self._backend == "native" and _fastapi_poe_available:
             return await self._chat_completion_native(
@@ -448,6 +485,77 @@ class PoeProvider(OpenAIProvider):
 
         # Default: OpenAI-compatible path via parent
         return await super().chat_completion(context, model, stream, tools, tool_choice, **kwargs)
+
+    def _bot_parameters(self, bot: str, kwargs: dict[str, Any]) -> dict[str, Any]:
+        """Map ``effort`` and ``native_search`` onto the bot's own parameters.
+
+        Each bot declares its custom parameters with a JSON schema in
+        ``/v1/models``. ``effort`` goes to the first reasoning parameter the bot
+        has (enum values snap to the nearest; a ``thinking_budget`` is scaled
+        within its range); ``native_search`` sets ``web_search``. Unlisted
+        bots get ``reasoning_effort``, which Poe honours (measured: "minimal"
+        0 reasoning tokens, "high" 52 on gpt-5.4-nano). Both travel in
+        ``extra_body``.
+        """
+        kwargs = dict(kwargs)
+        effort = kwargs.pop("effort", None)
+        search = kwargs.pop("native_search", False)
+        if effort is None and not search:
+            return kwargs
+        listed = self._listed(bot)
+        params = {p.get("name"): p for p in (listed or {}).get("parameters") or [] if isinstance(p, dict)}
+        extra = dict(kwargs.get("extra_body") or {})
+        if effort is not None:
+            requested = str(effort).strip().lower()
+            if listed is None:
+                extra.setdefault("reasoning_effort", requested)
+            for name in _EFFORT_PARAMS:
+                spec = params.get(name)
+                if spec is None or name in extra:
+                    continue
+                schema = spec.get("schema") or {}
+                if schema.get("enum"):
+                    extra[name] = requested if requested in schema["enum"] else nearest_effort(requested, schema["enum"])
+                elif schema.get("type") == "number":
+                    low = float(schema.get("minimum", 0))
+                    high = float(schema.get("maximum", low))
+                    extra[name] = int(low + (high - low) * _BUDGET_SHARE.get(requested, 0.5))
+                elif schema.get("type") == "boolean":
+                    extra[name] = requested != "none"
+                break
+            else:
+                if listed is not None:
+                    logger.debug("Poe bot %s declares no reasoning parameter; effort ignored.", bot)
+        if search:
+            if listed is None or "web_search" in params:
+                extra["web_search"] = True
+            else:
+                logger.debug("Poe bot %s has no web_search parameter; native_search ignored.", bot)
+        if extra:
+            kwargs["extra_body"] = extra
+        return kwargs
+
+    def supports_native_search(self, model: str | None = None) -> bool:
+        """True for bots that declare a ``web_search`` parameter."""
+        listed = self._listed(model or self.default_model)
+        return bool(listed) and any(
+            p.get("name") == "web_search" for p in listed.get("parameters") or [] if isinstance(p, dict)
+        )
+
+    def get_supported_parameters(self, model: str | None = None) -> dict[str, Any]:  # type: ignore[override]
+        params = self._poe_parameters(model)
+        params["effort"] = {
+            "type": "string",
+            "enum": ["none", "minimal", "low", "medium", "high", "xhigh", "max"],
+        }
+        params["native_search"] = {"type": "boolean"}
+        return params
+
+    def _is_context_overflow(self, status: int | None, text: str, code: str | None) -> bool:
+        """Poe answers an over-long request with 413 ``request_too_large``."""
+        if status == 413 or code == "request_too_large":
+            return True
+        return super()._is_context_overflow(status, text, code)
 
     # ------------------------------------------------------------------
     # Native fastapi_poe Backend
@@ -483,33 +591,40 @@ class PoeProvider(OpenAIProvider):
         # (R-2 fallback). The OpenAI-compatible path maps them natively.
         context = flatten_tool_messages_for_text_protocol(list(context))
 
-        # Convert LLMCore messages → Poe ProtocolMessages
-        poe_messages: list[Any] = []
-        for msg in context:
-            role_str = msg.role if isinstance(msg.role, str) else msg.role.value
-            poe_msg = PoeProtocolMessage(role=role_str, content=msg.content)
-            poe_messages.append(poe_msg)
-
-        # Convert tools to Poe format
-        poe_tools = None
-        if tools:
-            poe_tools = [
-                PoeToolDefinition(
-                    type="function",
-                    function={
-                        "name": t.name,
-                        "description": t.description,
-                        "parameters": t.parameters,
-                    },
-                )
-                for t in tools
-            ]
-
         try:
+            # The native protocol's roles are system/user/bot/tool: an
+            # "assistant" turn failed validation before the fallback could run.
+            poe_messages: list[Any] = []
+            for msg in context:
+                role_str = msg.role if isinstance(msg.role, str) else msg.role.value
+                if role_str == "assistant":
+                    role_str = "bot"
+                parameters = (kwargs.get("extra_body") or {}) if role_str == "user" else {}
+                poe_messages.append(
+                    PoeProtocolMessage(role=role_str, content=msg.content, parameters=parameters)
+                )
+
+            poe_tools = None
+            if tools:
+                poe_tools = [
+                    PoeToolDefinition(
+                        type="function",
+                        function={
+                            "name": t.name,
+                            "description": t.description,
+                            "parameters": t.parameters,
+                        },
+                    )
+                    for t in tools
+                ]
+
             if stream:
-                return self._native_stream_wrapper(poe_messages, bot_name, poe_tools, **kwargs)
-            else:
-                return await self._native_non_stream(poe_messages, bot_name, poe_tools, **kwargs)
+                # Pull the first chunk now: an error inside a lazy generator
+                # would escape the fallback below.
+                return await self._primed(
+                    await self._native_stream_wrapper(poe_messages, bot_name, poe_tools, **kwargs)
+                )
+            return await self._native_non_stream(poe_messages, bot_name, poe_tools, **kwargs)
         except Exception as e:
             logger.warning(
                 "Poe native backend error: %s. Falling back to OpenAI mode.",
@@ -536,6 +651,7 @@ class PoeProvider(OpenAIProvider):
             api_key=self._poe_api_key,
             tools=tools,
             temperature=kwargs.get("temperature"),
+            stop_sequences=kwargs.get("stop"),
             base_url=POE_NATIVE_BASE_URL,
         ):
             if hasattr(partial, "is_suggested_reply") and partial.is_suggested_reply:
@@ -579,12 +695,17 @@ class PoeProvider(OpenAIProvider):
                 api_key=self._poe_api_key,
                 tools=tools,
                 temperature=kwargs.get("temperature"),
+                stop_sequences=kwargs.get("stop"),
                 base_url=POE_NATIVE_BASE_URL,
             ):
                 if hasattr(partial, "is_suggested_reply") and partial.is_suggested_reply:
                     continue
+                if getattr(partial, "is_replace_response", False):
+                    # The bot replaced everything said so far; a stream can
+                    # only say so, not unsay it.
+                    logger.debug("Poe bot %s replaced its response mid-stream.", bot_name)
                 yield {
-                    "id": f"poe-native-stream",
+                    "id": "poe-native-stream",
                     "object": "chat.completion.chunk",
                     "model": bot_name,
                     "choices": [
@@ -597,7 +718,7 @@ class PoeProvider(OpenAIProvider):
                 }
             # Final done chunk
             yield {
-                "id": f"poe-native-stream",
+                "id": "poe-native-stream",
                 "object": "chat.completion.chunk",
                 "model": bot_name,
                 "choices": [

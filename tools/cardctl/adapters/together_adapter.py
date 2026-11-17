@@ -24,7 +24,7 @@ class TogetherAdapter(OpenAICompatAdapter):
 
     provider_name = "together"
     api_key_env_var = "TOGETHER_API_KEY"
-    base_url = "https://api.together.xyz/v1"
+    base_url = "https://api.together.ai/v1"
 
     async def fetch_models(self) -> list[NormalizedModel]:
         """Fetch Together's catalog.

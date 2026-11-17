@@ -4,10 +4,12 @@
   "provider": "huggingface",
   "model_type": "embedding",
   "architecture": {
-    "parameter_count": "23M"
+    "family": "bert",
+    "architecture_type": "transformer",
+    "parameter_count": "22M"
   },
   "context": {
-    "max_input_tokens": 128000
+    "max_input_tokens": 512
   },
   "capabilities": {
     "streaming": false,
@@ -18,30 +20,30 @@
     "vision": false,
     "audio_input": false,
     "audio_output": false,
-    "video_input": false,
-    "reasoning": false,
-    "image_generation": false,
-    "image_edit": false,
-    "image_upscale": false,
-    "video_generation": false,
-    "video_interpolation": false,
-    "speech_synthesis": false,
-    "transcription": false,
-    "music_generation": false,
-    "sfx_generation": false,
-    "voice_design": false
+    "reasoning": false
   },
-  "pricing": null,
   "lifecycle": {
+    "release_date": "2022-03-01",
     "status": "active"
   },
-  "license": null,
+  "license": "apache-2.0",
   "open_weights": true,
   "aliases": [],
-  "description": "Huggingface model: sentence-transformers/all-MiniLM-L6-v2",
+  "description": "all-MiniLM-L6-v2: compact sentence embedding model (384 dimensions). Ideal for semantic search and similarity.",
   "tags": [
     "open-weights",
-    "embedding"
+    "embedding",
+    "sentence-transformer"
   ],
-  "source": "generated"
+  "provider_huggingface": {
+    "embedding_dimensions": 384
+  },
+  "source": "builtin",
+  "x_pricewatch": {
+    "feed": "specs:huggingface",
+    "method": "api",
+    "url": "https://huggingface.co/<repo>/config.json",
+    "matched_key": "sentence-transformers/all-MiniLM-L6-v2",
+    "fetched_at": "2026-10-12T01:52:17+00:00"
+  }
 }

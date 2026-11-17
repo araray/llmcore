@@ -361,11 +361,34 @@ max_retries = 2
   # Example for Groq: base_url = "https://api.groq.com/openai/v1"
   # base_url = "https://api.openai.com/v1"
 
-  # Default model for this provider instance.
-  default_model = "gpt-4o"
+  # Default model for this provider instance. gpt-6-luna is the cheapest
+  # current-generation model; gpt-4o shuts down 2027-01-14.
+  default_model = "gpt-6-luna"
 
   # Request timeout in seconds.
   timeout = 120
+
+  # --- Responses API ---
+  # Which API a call uses. Both return the same response shape.
+  #   "auto"   (default for api.openai.com) - the o-series and GPT-5+ use
+  #            /responses (pro and codex models exist only there, and reasoning
+  #            carries across tool turns only there); gpt-4.x, *-search-api and
+  #            audio models use /chat/completions.
+  #   "always" / "never".
+  # A Chat-only parameter (n, logprobs, seed, stop, ...) keeps a call on Chat
+  # Completions; a Responses-only one (reasoning, text, include, ...) sends it
+  # to /responses. Per call: llm.chat(..., responses=True|False).
+  # OpenAI-compatible endpoints (a non-OpenAI base_url) default to "never".
+  # responses_api = "auto"
+
+  # --- Per-model parameter rules ---
+  # Each OpenAI model accepts a different parameter set (gpt-6-luna rejects
+  # temperature unless effort is "none"; gpt-5 takes effort "minimal" but not
+  # "none"; o3 rejects top_p). With "adapt" (default for api.openai.com) a
+  # rejected parameter is renamed, dropped or moved to the nearest supported
+  # value, the call is retried once, and the rule is remembered for that model.
+  # Each adjustment is logged once. "strict" fails instead.
+  # param_policy = "adapt"
 
   # --- Anthropic Provider ---
   # For Claude models.
@@ -374,43 +397,63 @@ max_retries = 2
   # Environment Variable: LLMCORE_PROVIDERS__ANTHROPIC__API_KEY or ANTHROPIC_API_KEY
   # api_key = "sk-ant-..."
 
-  # Default model for this provider instance.
-  # Use the dash format (canonical API model IDs), not dot format.
-  # Current models (April 2026):
-  #   claude-opus-4-6, claude-sonnet-4-6          (Claude 4.6 family)
-  #   claude-opus-4-5, claude-sonnet-4-5           (Claude 4.5 family)
-  #   claude-haiku-4-5, claude-haiku-4-5-20251001  (Claude 4.5 Haiku)
-  #   claude-opus-4-1, claude-opus-4-0, claude-sonnet-4-0
-  # Dated variants (e.g., claude-sonnet-4-5-20250929) are also accepted.
-  default_model = "claude-sonnet-4-6"
+  # Default model for this provider instance (exact API ids, dash format).
+  # Current models (Models API, 2026-11-16), all 1M context / 128K output
+  # unless noted:
+  #   claude-opus-5-5, claude-sonnet-5-5, claude-haiku-5-5   (Claude 5.5)
+  #   claude-fable-5-2, claude-fable-5-1, claude-fable-5     (Fable)
+  #   claude-opus-5, claude-sonnet-5, claude-opus-4-8, claude-opus-4-7,
+  #   claude-opus-4-6, claude-sonnet-4-6
+  #   claude-opus-4-5-20251101, claude-haiku-4-5-20251001     (200K / 64K)
+  # claude-sonnet-4-5-20250929 is deprecated and retires 2026-11-30.
+  default_model = "claude-sonnet-5-5"
 
   # Request timeout in seconds.
-  # Extended thinking responses can take 30-90s; 120s accommodates this.
+  # Thinking responses can take minutes on hard tasks.
   timeout = 120
 
   # Default max_tokens for responses (Anthropic requires this parameter).
   # Override per-request via chat_completion(max_tokens=...).
   # max_tokens = 4096
 
-  # --- Extended Thinking ---
-  # Claude 4.x models support extended thinking for step-by-step reasoning.
-  # Configure via chat_completion(thinking={...}) per-request, or set a default:
-  # thinking_type = "adaptive"    # "enabled", "adaptive", or "disabled"
-  # thinking_budget_tokens = 8192 # Only for type="enabled"; must be >= 1024
+  # Transport: "sdk" (official anthropic SDK, default) or "httpx" (direct).
+  # Both speak API version 2026-10-21.
+  # backend = "sdk"
+
+  # --- Thinking and effort ---
+  # Pass effort= (none | minimal | low | medium | high | xhigh | max). It is
+  # sent in the form each model accepts, read from the Models API
+  # (capability_lookup, on by default): "none" becomes thinking disabled,
+  # between_tools (Sonnet 5.5), or the lowest effort on models with no off
+  # switch (Opus 5.5, Fable). xhigh is kept where the model has it.
+  # thinking_display = "summarized" returns readable thinking (Claude 4.7+
+  # and 5.x omit the text by default).
+  # capability_lookup = true
+  #
+  # temperature / top_p / top_k are dropped with a warning: API version
+  # 2026-10-21 rejects them on every model.
+
+  # --- Tools ---
+  # A forced tool_choice ("any" or a tool name) is sent as "auto" on models
+  # that reject it (Opus 5.5, Sonnet 5.5, Fable), with a warning.
+  # native_search = True adds the web-search server tool:
+  # native_search_tool = { type = "web_search_20250305", name = "web_search" }
+  # Raw server tools (web_fetch, code_execution, ...) via extra_tools=[...].
+  #
+  # Tool loops: put provider.assistant_replay_metadata(response) into the
+  # next assistant Message's metadata. It carries the thinking blocks (with
+  # signatures) and server-tool blocks that must be sent back unchanged.
 
   # --- Prompt Caching ---
-  # Anthropic supports prompt caching to reduce costs on repeated context.
-  # Applied via Message.metadata["cache_control"] = {"type": "ephemeral"}
-  # on system prompts and content blocks. No config-level setting needed.
+  # Message.metadata["cache_control"] = {"type": "ephemeral"} (or with
+  # "ttl": "1h") on system prompts and content blocks.
 
   # --- Vision / Multimodal ---
-  # Claude supports image input (JPEG, PNG, GIF, WebP) and PDF documents.
-  # Pass via Message.metadata["inline_images"] or metadata["inline_documents"].
-  # No config-level setting needed.
+  # Message.metadata["inline_images"] / metadata["inline_documents"].
+  # Documents are accepted in user turns only (API 2026-10-21).
 
   # --- Structured Output ---
-  # JSON schema output via chat_completion(output_config={"format": {"type": "json_schema", "schema": {...}}})
-  # Reasoning effort via chat_completion(output_config={"effort": "high"})
+  # chat_completion(output_config={"format": {"type": "json_schema", "schema": {...}}})
 
   # --- DeepSeek Provider ---
   # Native provider for DeepSeek V4 models with thinking mode support.
@@ -431,25 +474,32 @@ max_retries = 2
   [providers.xai]
   # API key via XAI_API_KEY. base_url defaults to https://api.x.ai/v1
   # api_key = "..."
-  default_model = "grok-4.1-20251117"
+  default_model = "grok-4.7"
   timeout = 120
   # transport = "sdk"   # "sdk" (default) | "httpx" — see [providers.openai]
-  # Native xAI Live Search is reached with native_search=True on chat().
+  # native_search=True uses xAI's server-side web_search and x_search tools on
+  # its Responses API (Live Search / search_parameters was retired: HTTP 410).
+  # xAI recommends /responses for everything; opt in with:
+  # responses_api = "always"
 
   [providers.groq]
   # API key via GROQ_API_KEY. base_url defaults to
   # https://api.groq.com/openai/v1
   # api_key = "..."
-  default_model = "llama-3.3-70b-versatile"
+  # llama-3.3-70b-versatile was shut down for free/dev tiers on 2026-08-16.
+  default_model = "openai/gpt-oss-120b"
   timeout = 120
   # transport = "sdk"
-  # Groq also serves Whisper (ASR) and PlayAI (TTS) on the same endpoint.
+  # Groq also serves Whisper ASR (default whisper-large-v3-turbo). Vendor
+  # parameters reasoning_format / include_reasoning / search_settings are
+  # accepted; native_search=True adds browser_search on the gpt-oss models.
 
   [providers.together]
   # API key via TOGETHER_API_KEY. base_url defaults to
-  # https://api.together.xyz/v1
+  # https://api.together.ai/v1 (api.together.xyz serves chat but not /responses)
   # api_key = "..."
-  default_model = "meta-llama/Llama-3.3-70B-Instruct-Turbo"
+  # Llama 3.3 left Together's serverless catalog on 2026-10-22.
+  default_model = "openai/gpt-oss-120b"
   timeout = 120
   # transport = "sdk"
 
@@ -459,40 +509,48 @@ max_retries = 2
   # api_key = "sk-..."
 
   # Default model for this provider instance.
-  # Current V4 models (April 2026):
-  #   deepseek-v4-pro    — 1.6T total / 49B active, flagship
-  #   deepseek-v4-flash  — 284B total / 13B active, cost-effective
-  # Legacy aliases (retiring 2026-07-24):
-  #   deepseek-chat      → deepseek-v4-flash (non-thinking)
-  #   deepseek-reasoner  → deepseek-v4-flash (thinking)
-  default_model = "deepseek-v4-pro"
+  # Current models (GET /models, 2026-11-16), both with a 1M context:
+  #   deepseek-flash   — DeepSeek-V4.1-Flash: text + image input, built-in
+  #                      web search / URL reading, cheapest
+  #   deepseek-v4-pro  — DeepSeek-V4-Pro, text only, flagship
+  # Retired: deepseek-v4-flash(-vision-exp) (2026-09-10; still accepted and
+  # served by V4.1-Flash), deepseek-chat / deepseek-reasoner (2026-07-24).
+  default_model = "deepseek-flash"
 
   # Request timeout in seconds.
-  # V4 models support 1M-token context and may take longer for large inputs.
+  # 1M-token contexts may take longer for large inputs.
   timeout = 300
 
+  # "never" (default): Chat Completions. "always": DeepSeek's native
+  # /responses (added 2026-08; reasoning items replayed with store=false).
+  # responses_api = "never"
+
   # --- Thinking Mode ---
-  # DeepSeek V4 models support a thinking mode where the model generates
-  # internal reasoning before producing the final answer.
+  # On by default. thinking: "enabled" | "disabled".
+  # reasoning_effort: "low" | "high" | "max" (default "high"). llmcore's
+  # effort= maps as DeepSeek documents: minimal/low -> low,
+  # medium/high/xhigh -> high, max -> max; effort="none" turns thinking off.
   #
-  # thinking: "enabled" or "disabled" (default: "enabled")
-  #   - "enabled": Model generates reasoning_content + content
-  #   - "disabled": Model generates content only (faster, cheaper)
+  # Tool loops: DeepSeek requires every earlier assistant turn's
+  # reasoning_content when tools are in use (400 otherwise). Put
+  # provider.assistant_replay_metadata(response) into that assistant
+  # Message's metadata; for a stream, use the chunk with the finish reason.
   #
-  # reasoning_effort: "high" or "max" (default: "high")
-  #   - "high": Standard reasoning depth
-  #   - "max": Maximum reasoning depth (longer, more thorough)
-  #
-  # Note: When thinking is enabled, temperature/top_p/penalties are ignored.
-  # These can be overridden per-request via chat_completion(thinking=...).
+  # temperature / penalties are ignored in thinking mode (no error).
   thinking = "enabled"
   reasoning_effort = "high"
+
+  # --- Built-in tools (deepseek-flash) ---
+  #   chat_completion(..., native_search=True)            # deepseek_web_search
+  #   chat_completion(..., extra_tools=[{"type": "deepseek_read_url"}])
+  #   chat_completion(..., safety_check={"level": "high"}) # refusal on risk
+  # provider.get_balance() returns GET /user/balance.
 
   # --- Base URL ---
   # Override the stable API URL.
   # base_url = "https://api.deepseek.com"
   #
-  # Beta endpoint (for prefix completion, FIM, strict tools):
+  # Beta endpoint (chat prefix completion, strict tool schemas):
   # beta_base_url = "https://api.deepseek.com/beta"
 
   # --- Z.ai (Zhipu AI / GLM) Provider ---
@@ -526,12 +584,13 @@ max_retries = 2
   # region = "overseas"
 
   # Default model for this provider instance.
-  # Current models (June 2026):
-  #   glm-5.2   — flagship; 1M context, 128K output, thinking + tools
-  #   glm-5.1   — GLM-5 generation; 1M context
-  #   glm-4.7   — GLM-4 generation; 128K context
-  #   glm-4.6v  — vision-language; 64K context
-  default_model = "glm-5.2"
+  # Current models (docs.z.ai, 2026-11-16):
+  #   glm-5.3          — flagship (2026-08-18); 1M context, 128K output,
+  #                      always thinks
+  #   glm-5.3-flash / glm-5.3-flashx (-legal) — vision (image, video, file)
+  #   glm-5.2, glm-5.1 — GLM-5 generation; 1M context, thinking toggle
+  #   glm-4.7, glm-4.6v
+  default_model = "glm-5.3"
 
   # Default models for the optional multimodal media APIs.
   # default_embedding_model = "embedding-3"
@@ -545,16 +604,25 @@ max_retries = 2
   # take longer for large inputs.
   timeout = 300
 
+  # "never" (default): Chat Completions (the full GLM surface). "always":
+  # https://api.z.ai/api/v1/responses (Responses API).
+  # responses_api = "never"
+
   # --- Thinking Mode ---
-  # GLM models support a thinking mode where the model generates internal
-  # reasoning (reasoning_content) before the final answer.
-  #
-  # thinking: "enabled" or "disabled" (default: "enabled")
-  # reasoning_effort: none | minimal | low | medium | high | xhigh | max
-  #                   (default: "high"; effective for glm-5.2 and above)
-  # These can be overridden per-request via chat_completion(thinking=...).
+  # thinking: "enabled" or "disabled" (default: "enabled").
+  # reasoning_effort (or effort=): none | minimal | low | medium | high |
+  #   xhigh | max on glm-5.2; the glm-5.3 family always thinks and takes
+  #   only low | high | max (other values move to the nearest; "disabled"
+  #   is kept enabled - the API answers 400, code 1210).
+  # clear_thinking = false keeps earlier turns' reasoning in context
+  #   ("preserved thinking"); then put provider.assistant_replay_metadata()
+  #   into each assistant Message's metadata - Z.ai requires the full,
+  #   in-order reasoning_content back. Also needed in tool loops.
+  # temperature = 0 is sent as do_sample = false (greedy decoding).
+  # native_search=True adds the built-in web_search tool (search-prime).
   thinking = "enabled"
   reasoning_effort = "high"
+  # clear_thinking = false
 
   # --- Base URL ---
   # Override the endpoint chosen by `region`.
@@ -563,8 +631,8 @@ max_retries = 2
   # --- FriendliAI Provider ---
   # Native provider for FriendliAI's three inference surfaces:
   #   "serverless" — Friendli Model APIs, the hosted pay-per-token catalog
-  #                  (zai-org/GLM-5.3, deepseek-ai/DeepSeek-V3.2,
-  #                  google/gemma-4-31B-it, MiniMaxAI/MiniMax-M2.5, ...)
+  #                  (zai-org/GLM-5.3, GLM-5.3-Flash, GLM-5.2, GLM-5.1,
+  #                  google/gemma-4-31B-it on 2026-11-16)
   #   "dedicated"  — your own GPU deployments; `model` is the ENDPOINT ID
   #                  (or "ENDPOINT_ID:ADAPTER_ROUTE" for Multi-LoRA)
   #   "container"  — a self-hosted Friendli Engine; `base_url` is required
@@ -621,8 +689,12 @@ max_retries = 2
   #   zai-org/GLM-5.2         — 1M context, reasoning toggle
   #   zai-org/GLM-5.1         — 198K context
   #   google/gemma-4-31B-it   — 256K context, text/image in
-  #   deepseek-ai/DeepSeek-V3.2 — 160K context
-  #   MiniMaxAI/MiniMax-M2.5  — 192K context
+  #   (DeepSeek-V3.2 and MiniMax-M2.5 were deprecated in 2026-10.)
+  # effort= is fitted to each model's catalogue reasoning_options: GLM-5.3
+  # low/high/max; GLM-5.2 a toggle + high/max; GLM-5.1 and gemma-4 a toggle
+  # ("none" turns it off). GLM-5.3 preserves thinking by default
+  # (clear_thinking false): put provider.assistant_replay_metadata() into each
+  # assistant Message's metadata so its reasoning_content goes back.
   default_model = "zai-org/GLM-5.3"
 
   # Request timeout in seconds.  1M-context reasoning responses can be slow.
@@ -731,11 +803,11 @@ max_retries = 2
   # image_generate = "fal-ai/flux/schnell"
   # image_edit = "fal-ai/flux-pro/kontext"
   # image_upscale = "fal-ai/clarity-upscaler"
-  # video_generate = "fal-ai/minimax-video"
+  # video_generate = "fal-ai/minimax/hailuo-2.3/standard/text-to-video"  # first_frame -> .../image-to-video
   # video_interpolate = "fal-ai/film"
   # sfx = "fal-ai/mmaudio-v2"
   # music = "fal-ai/stable-audio"
-  # tts = "fal-ai/kokoro"
+  # tts = "fal-ai/kokoro/american-english"
   # asr = "fal-ai/whisper"
 
   # --- Ollama Provider ---
@@ -752,9 +824,9 @@ max_retries = 2
   # api_key_id = "..."
   # api_key_secret = "..."
 
-  # Transport backend: "httpx" (direct REST, default) or "sdk".
-  # Note the published higgsfield-client covers agent sessions and uploads
-  # rather than these generation endpoints, so "httpx" is the real path.
+  # Transport backend: "httpx" (direct REST, default) or "sdk"
+  # (higgsfield-client 0.2: submit/status/result/cancel; both generated a Soul
+  # image live on 2026-11-16). delete_request_data() always uses REST.
   # backend = "httpx"
 
   timeout = 300
@@ -772,9 +844,16 @@ max_retries = 2
   # Other documented video paths:
   #   kling-video/v2.5-turbo/pro/text-to-video
   #   kling-video/v2.5-turbo/pro/image-to-video
-  # Supplying an image to a text-to-video path switches to its image-to-video
-  # counterpart automatically, because Higgsfield splits them into separate
-  # endpoints.
+  # Supplying a first_frame to a text-to-video path switches to its
+  # image-to-video counterpart automatically, because Higgsfield splits them
+  # into separate endpoints.
+  #
+  # Portable arguments are fitted to what the live API enforces:
+  #   - Soul: size="1920x1080" -> resolution "1080p" (720p | 1080p) and the
+  #     nearest aspect ratio (9:16 16:9 4:3 3:4 1:1 2:3 3:2);
+  #   - video: duration_seconds snaps to Hailuo 6|10 or Kling 5|10 s; portable
+  #     args a model does not declare (seed, fps, resolution...) are dropped
+  #     with a warning. Model-specific keyword arguments are sent as given.
 
   # --- Replicate (one generic prediction adapter for the whole catalog) ---
   [providers.replicate]
@@ -796,6 +875,11 @@ max_retries = 2
   # whole catalog. Disable only to send canonical names literally.
   # use_schema = true
 
+  # Maximum runtime per prediction, sent as the Cancel-After header ("30s",
+  # "5m", "1h30m" or seconds; minimum 5 s): a stuck prediction is cancelled
+  # and stops billing. httpx backend only. Per call: cancel_after=...
+  # cancel_after = "10m"
+
   # --- Per-capability models ---
   # References are "owner/name" or "owner/name:version". Replicate's catalog is
   # enormous and moves constantly, so llmcore ships a small starting set rather
@@ -804,7 +888,7 @@ max_retries = 2
   # image_generate = "black-forest-labs/flux-schnell"
   # image_edit = "black-forest-labs/flux-kontext-pro"
   # image_upscale = "nightmareai/real-esrgan"
-  # video_generate = "minimax/video-01"
+  # video_generate = "minimax/hailuo-2.3"
   # asr = "openai/whisper"
   # tts = "jaaari/kokoro-82m"
   # music = "meta/musicgen"
@@ -839,10 +923,11 @@ max_retries = 2
 
   # --- Per-capability models ---
   [providers.elevenlabs.models]
-  # tts = "eleven_v4"                     # GA, 85 languages
-  # tts_stream = "eleven_v4"
-  # asr = "scribe_v1"
-  # sfx = "eleven_text_to_sound_v2"
+  # tts = "eleven_v4"                     # GA, 90+ languages
+  # tts_stream = "eleven_v4_turbo"        # low-latency variant
+  # asr = "scribe_v3"                     # GA 2026-11-09; scribe_v1 is deprecated
+  # asr_stream = "scribe_v2_realtime"     # realtime WebSocket: open_transcription_session()
+  # sfx = "eleven_text_to_sound_v3"       # v2 is removed on 2027-03-01
   # music = "music_v2_5"
   # voice_design = "eleven_ttv_v3"
 
@@ -851,11 +936,37 @@ max_retries = 2
   # The official `ollama` Python library uses this parameter.
   # host = "http://localhost:11434"
 
+  # (OLLAMA_HOST is honoured too, on both backends.)
+
   # Default local model to use. Ensure you have run `ollama pull <model_name>`.
-  default_model = "llama3"
+  # qwen3.5:4b has tools, thinking and vision and fits a 6 GiB GPU; llama3
+  # (the old default) has no tool support.
+  default_model = "qwen3.5:4b"
 
   # Longer timeout is recommended for local models.
   timeout = 240
+
+  # Context window the server allocates for every request. Without it Ollama
+  # uses its own default - 4096 below 24 GiB of VRAM, 32k below 48 GiB, 256k
+  # above - whatever the model was trained for, and truncates longer prompts
+  # SILENTLY. llmcore reads the effective window from /api/ps and warns, but
+  # setting this (or OLLAMA_CONTEXT_LENGTH on the server) is the fix.
+  # num_ctx = 32768
+
+  # Transport: "sdk" (ollama-python, default) or "httpx" (direct REST; it also
+  # reads /api/show fields the SDK drops, such as thinking levels).
+  # backend = "sdk"
+
+  # keep_alive = "5m"          # default keep_alive for requests
+  # models_cache_ttl = 60      # seconds to cache get_models_details()
+  # api_key = "..."            # ollama.com cloud / authenticated proxies
+  #                            # (or OLLAMA_API_KEY)
+  #
+  # effort= maps to think: "none" -> false, otherwise true (or the nearest
+  # level the model lists). Tool loops: put
+  # provider.assistant_replay_metadata(response) into the next assistant
+  # Message's metadata (it carries the thinking back); tool_calls go in
+  # Message.tool_calls.
 
   # Tokenizer for token counting. `tiktoken_cl100k_base` is a good default.
   # Use 'char_div_4' as a rough fallback if tiktoken causes issues with a model.
@@ -869,12 +980,22 @@ max_retries = 2
   # api_key = "..."
 
   # Default model for this provider instance.
-  # Current models (April 2026):
-  #   3.x (preview):  gemini-3.1-pro-preview, gemini-3-flash-preview,
-  #                   gemini-3.1-flash-lite-preview
-  #   2.5 (stable):   gemini-2.5-pro, gemini-2.5-flash, gemini-2.5-flash-lite
-  #   2.0 (deprecated, shutdown June 2026): gemini-2.0-flash, gemini-2.0-flash-lite
-  default_model = "gemini-3.1-flash-lite-preview"
+  # Current models (Developer API, 2026-11-16):
+  #   Gemini 4:   gemini-4-carbon, gemini-4-argon, gemini-4-hydrogen
+  #   3.x GA:     gemini-3.8-flash, gemini-3.6-flash, gemini-3.5-flash-lite,
+  #               gemini-3.1-flash-lite (3.7-flash / 3.5-flash route to newer)
+  #   2.5:        deprecated; auto-routed to 3.x on 2026-12-01
+  default_model = "gemini-3.5-flash-lite"
+
+  # API version for the Developer API. google-genai 3.x defaults to v1, which
+  # lacks TTS, explicit caching, the Live API and the -latest aliases.
+  # api_version = "v1beta"
+
+  # effort= maps to thinking_config (thinking_level on Gemini 3+; Gemini 4 and
+  # 3.8 have no "minimal"); thinking_display = "summarized" returns thought
+  # summaries. Tool loops: put provider.assistant_replay_metadata(response)
+  # into the next assistant Message's metadata - Gemini 3+ rejects a replayed
+  # function call without its thought signature.
   timeout = 120
 
   # Fallback context length when model is not in the card registry or API.
@@ -884,11 +1005,12 @@ max_retries = 2
   # --- Media models (image / video / speech / embeddings) ---
   # Gemini is a media provider through `llm.media` as well as a chat provider.
   # Per-capability model overrides (all optional):
-  # default_image_model = "gemini-2.5-flash-image"   # Developer API image path
+  # default_image_model = "gemini-nano-banana-2.1"   # Developer API image path
   #                       "imagen-4.0-generate-001"  # Vertex AI (Imagen)
-  # default_video_model = "veo-3.1-generate-preview"
-  # default_tts_model = "gemini-2.5-flash-preview-tts"
-  # default_embedding_model = "gemini-embedding-001"
+  # default_video_model = "veo-3.1-generate-001"     # Vertex AI only: the
+  #                       Developer API's Veo previews shut down 2026-10-22
+  # default_tts_model = "gemini-3.8-flash-tts"
+  # default_embedding_model = "gemini-embedding-2"
   #
   # IMPORTANT: image EDITING and UPSCALING use Imagen's dedicated endpoints,
   # which exist only on Vertex AI. With a Developer API key those capabilities
@@ -923,27 +1045,48 @@ max_retries = 2
   # api_key = "sk-or-..."
   api_key_env_var = "OPENROUTER_API_KEY"
 
-  # Default model.  OpenRouter uses "provider/model" format.
-  # Examples: "openai/gpt-4o-mini", "anthropic/claude-sonnet-4.6",
-  #           "google/gemini-3-flash-preview", "deepseek/deepseek-chat"
-  default_model = "openai/gpt-4o-mini"
+  # Default model.  OpenRouter uses "provider/model" format (724 models on
+  # 2026-11-16, every modality; provider.get_models_details() lists them).
+  # Examples: "openai/gpt-5.4-mini", "google/gemini-3-flash-preview",
+  #           "openai/gpt-oss-120b", "anthropic/claude-sonnet-4.6"
+  default_model = "openai/gpt-5.4-mini"
 
-  # Base URL (normally no need to change).
+  # Base URL (normally no need to change). Business/Enterprise regional
+  # endpoints: https://eu.openrouter.ai/api/v1, https://us.openrouter.ai/api/v1
   # base_url = "https://openrouter.ai/api/v1"
 
   timeout = 240
 
   # --- App identification for OpenRouter rankings & dashboard ---
-  # Your app's URL (sent as HTTP-Referer header).
-  # app_url = "https://myapp.example.com"
-  # Your app's display name (sent as X-Title header).
-  # app_title = "My App"
+  # app_url = "https://myapp.example.com"     # HTTP-Referer
+  # app_title = "My App"                      # X-OpenRouter-Title (+ X-Title)
+  # app_categories = "cli-agent"              # X-OpenRouter-Categories
+
+  # --- Routing preferences merged into every request's `provider` ---
+  # (a per-call provider={...} wins key by key)
+  # provider_preferences = { zdr = true, data_collection = "deny" }
+
+  # --- Extensions (kwargs to chat_completion) ---
+  # provider, models (fallbacks), reasoning, plugins, transforms, session_id,
+  # cache_control, prompt_cache_options, top_k, min_p, top_a,
+  # repetition_penalty, verbosity, trace, image_config, modalities, ...
+  # native_search=True adds the "web" plugin. effort= is clamped to the
+  # model's supported efforts once the listing is loaded.
+  #
+  # Tool loops: put provider.assistant_replay_metadata(response) into the next
+  # assistant Message's metadata. It carries reasoning_details (Gemini 3 and
+  # Claude send encrypted reasoning only; OpenRouter requires it back
+  # unmodified and in order); for a stream use the chunk with the finish
+  # reason. Usage includes OpenRouter's cost / cost_details / is_byok.
+  #
+  # responses_api = "always" routes through OpenRouter's stateless
+  # /responses instead of /chat/completions (default "never").
 
   # --- Backend mode ---
-  # "openai"  (default): Uses the `openai` Python SDK with base_url override.
-  #           No extra dependencies beyond `openai`.
-  # "sdk"   : Uses the native `openrouter` Python SDK (pip install openrouter).
-  #           Falls back to "openai" mode if the package is not installed.
+  # "openai"  (default): the `openai` SDK with base_url override
+  #           (transport = "httpx" for direct HTTP).
+  # "sdk"   : the native `openrouter` SDK (pip install openrouter), sending
+  #           the same request body. Falls back to "openai" if not installed.
   backend = "openai"
 
   # --- Poe Provider ---
@@ -967,11 +1110,12 @@ max_retries = 2
   # api_key = "..."
   api_key_env_var = "POE_API_KEY"
 
-  # Default bot to use.  Bot names are case-sensitive as registered on Poe.
-  # Examples: "Claude-Opus-4.6", "Claude-Sonnet-4.6", "GPT-5.4",
-  #           "Gemini-3.1-Pro", "Grok-4", "DeepSeek-V3.2-Exp",
-  #           "Sora-2", "Veo-3.1" (video), "GPT-Image-1.5" (images)
-  default_model = "GPT-4o-Mini"
+  # Default bot. Bot ids are lowercase since 2026 (matching is
+  # case-insensitive); 302 bots on 2026-11-16, listed with context windows,
+  # reasoning support and their custom parameters by get_models_details().
+  # Examples: "gpt-5.4-mini", "claude-haiku-4.5", "gemini-3-flash",
+  #           "kimi-k3.1-pro", "sora-2" (video), "gpt-image-2" (images)
+  default_model = "gpt-5.4-mini"
 
   # Base URL (normally no need to change).
   # base_url = "https://api.poe.com/v1"
@@ -981,25 +1125,29 @@ max_retries = 2
   timeout = 120
 
   # --- Backend mode ---
-  # "openai" (default): Uses the `openai` Python SDK with base_url override.
-  #            All standard OpenAI-compatible features supported.
-  #            No extra dependencies beyond `openai`.
-  # "native" : Uses the native `fastapi_poe` SSE client (pip install fastapi-poe).
-  #            Required for:
-  #              - Poe-specific custom bot parameters not in OpenAI schema
-  #              - File attachments via the Attachment protocol
-  #              - Bot-to-bot invocation (when running as a Poe server bot)
-  #            Falls back to "openai" mode if the package is not installed
-  #            or any request error occurs.
+  # "openai" (default): the `openai` SDK with base_url override.
+  # "native" : the `fastapi_poe` SSE client (pip install fastapi-poe), which
+  #            sends custom bot parameters on the protocol message. Falls
+  #            back to "openai" if the package is missing or a request fails.
   backend = "openai"
 
+  # responses_api = "always" routes through Poe's /v1/responses (offered by
+  # the bots whose supported_endpoints list it; default "never").
+
+  # --- Reasoning and search ---
+  # effort= maps onto the reasoning parameter each bot declares:
+  #   reasoning_effort / output_effort / thinking_level (enums, nearest value),
+  #   thinking_budget (scaled within its range), enable_thinking (bool).
+  # native_search=True sets web_search on bots that declare it.
+  #
   # --- Unsupported parameters (Poe silently ignores these) ---
-  # The PoeProvider strips these automatically before forwarding:
-  #   response_format, seed, frequency_penalty, presence_penalty,
-  #   logit_bias, user, service_tier, audio, modalities.
-  # To pass Poe-specific bot parameters (e.g. reasoning_effort,
-  # thinking_budget, aspect ratio for Sora-2), use `extra_body`:
-  #   chat_completion(model="Sora-2", extra_body={"aspect": "1280x720"})
+  # Stripped before forwarding: response_format, seed, frequency_penalty,
+  # presence_penalty, logit_bias, user, service_tier, audio, modalities,
+  # store, metadata, prediction.
+  # Other bot parameters (aspect, duration, resolution, ...) go in extra_body:
+  #   chat_completion(model="sora-2", extra_body={"aspect": "1280x720"})
+  #
+  # provider.get_balance_details() returns points, USD values and grants.
 
   # --- vLLM Provider ---
   # For self-hosted vLLM inference servers (https://github.com/vllm-project/vllm).
@@ -1007,9 +1155,9 @@ max_retries = 2
   # subclasses OpenAIProvider. It additionally:
   #   - Discovers `max_model_len` from /v1/models (authoritative context
   #     length; kills the 4096 fallback for local models).
-  #   - Accepts vLLM-specific params: structured_outputs, guided_json,
-  #     guided_regex, guided_choice, guided_grammar, prompt_logprobs,
-  #     min_p, top_k, repetition_penalty, kv_transfer_params, and more.
+  #   - Accepts vLLM-specific params: structured_outputs, prompt_logprobs,
+  #     min_p, top_k, repetition_penalty, kv_transfer_params, and more
+  #     (guided_* are translated into structured_outputs).
   #     See `docs/providers/vllm.md` for the full list.
   #   - Strips OpenAI-only params (service_tier, prompt_cache_key,
   #     web_search_options, verbosity) that vLLM ignores.
@@ -1034,7 +1182,21 @@ max_retries = 2
 
   # Default model name — HuggingFace repo id or whatever name you passed
   # to `vllm serve ...`.  Override per-request via chat_completion(model=...).
-  default_model = "meta-llama/Llama-3.1-8B-Instruct"
+  # Left unset, the first model the server lists becomes the default once
+  # get_models_details() has run (a vLLM server usually serves one model).
+  # default_model = "meta-llama/Llama-3.1-8B-Instruct"
+  #
+  # Embeddings default to default_embedding_model, else the served model.
+  # default_embedding_model = "Qwen/Qwen3-Embedding-0.6B"
+  #
+  # Structured output: structured_outputs={"json": schema} (or regex,
+  # choice, grammar, json_object, structural_tag). The old guided_* fields
+  # were removed in vLLM 0.12 and are silently ignored by the server; llmcore
+  # translates them into structured_outputs with a warning.
+  # Also accepted (vLLM 0.34): thinking_token_budget, include_reasoning,
+  # stop_token_ids, truncate_prompt_tokens, bad_words, allowed_token_ids,
+  # cache_salt, priority, media_io_kwargs, documents, vllm_xargs,
+  # repetition_detection, return_token_ids.
 
   # Request timeout in seconds.  Local cold-starts and large models can
   # be slow; 240s covers most practical cases.
@@ -1063,18 +1225,21 @@ max_retries = 2
   api_key_env_var = "MISTRAL_API_KEY"
 
   # Default model.
-  # Current models (April 2026):
-  #   Frontier:   mistral-large-latest (→ mistral-large-2512)
-  #   Medium:     mistral-medium-latest (→ mistral-medium-2508)
-  #   Small:      mistral-small-latest (→ mistral-small-2506)
-  #   Reasoning:  magistral-medium-latest, magistral-small-latest
-  #   Code:       codestral-latest, devstral-2-latest
-  #   Ministral:  ministral-3-14b-latest, ministral-3-8b-latest,
-  #               ministral-3-3b-latest
-  #   Audio STT:  voxtral-mini-latest (transcription)
-  #   OCR:        mistral-ocr-latest
-  #   Embedding:  mistral-embed, codestral-embed-2505
-  default_model = "mistral-large-latest"
+  # Current models (live /v1/models, 2026-11-16):
+  #   General:    mistral-small-latest (Small 4, reasoning + vision, 256k),
+  #               mistral-medium-latest (Medium 3.5, reasoning + vision, 256k),
+  #               mistral-large-4 (where your plan offers it)
+  #   Edge:       ministral-14b-latest, ministral-8b-latest, ministral-3b-latest
+  #   Code / FIM: codestral-latest (alias mistral-code-latest)
+  #   Audio:      voxtral-small-latest (chat with audio input),
+  #               voxtral-mini-transcribe-3 (STT), voxtral-mini-tts-3 (TTS)
+  # tts_model = "voxtral-mini-tts-3"   # default speech model (preset voices + ref_audio)
+  #   OCR:        mistral-ocr-latest (OCR 4)
+  #   Embedding:  mistral-embed, codestral-embed (output_dimension)
+  #   magistral-* ids are now aliases of Small and Medium.
+  # A plan without access to a model gets 429 with a 0 req/min limit;
+  # llmcore reports that as "no quota", not as a retryable rate limit.
+  default_model = "mistral-small-latest"
 
   # Base URL (normally no need to change).
   # base_url = "https://api.mistral.ai/v1"
@@ -1082,19 +1247,75 @@ max_retries = 2
   # Request timeout in seconds.
   timeout = 120
 
-  # --- Mistral-specific parameters ---
-  # safe_prompt: bool — inject Mistral's safety system prompt (default: false)
-  # random_seed: int — for deterministic outputs
-  # prediction: object — for predicted/speculative outputs
-  # guardrails: array — content guardrail configurations
-  # reasoning_effort: "low" | "medium" | "high" — for Magistral models
+  # Transport: "httpx" (direct REST, default) or "sdk" (mistralai 3.x, for
+  # chat, models and embeddings; the rest stays on REST).
+  # backend = "httpx"
+
+  # "never" (default): Chat Completions, Mistral's full surface.
+  # "always": the stateless /v1/responses API (function tools, reasoning,
+  # streaming; no safe_prompt / random_seed / prediction / guardrails).
+  # responses_api = "never"
+
+  # --- Reasoning ---
+  # effort= maps to reasoning_effort within each model's accepted values:
+  #   Small 4 / Medium 3.5: "none" | "high";  Large 4: "low" | "medium" | "high"
+  # Reasoning answers come back as text (content) + thinking
+  # (reasoning_content). For multi-turn and tool loops put
+  # provider.assistant_replay_metadata(response) into the next assistant
+  # Message's metadata: Mistral requires the thinking chunk to be replayed.
   #
-  # These are passed as kwargs to chat_completion():
-  #   chat_completion(model="magistral-medium-latest", reasoning_effort="high")
+  # --- Mistral-specific parameters (kwargs to chat_completion) ---
+  # safe_prompt, random_seed, prediction, guardrails, parallel_tool_calls,
+  # top_k, min_tokens, repetition_penalty, logprobs / top_logprobs,
+  # prompt_cache_key, service_tier ("auto" | "standard_only").
+  # Not every model takes every parameter: one refused with "not enabled for
+  # this model" is dropped, the call retried, and the refusal remembered.
+  #   chat_completion(model="mistral-small-latest", effort="high")
   #   chat_completion(safe_prompt=True)
 
 
   [providers.huggingface]
+  # type = "huggingface"  # auto-detected from section name
+  #
+  # API Key: Set via environment variable for security.
+  # Environment Variable: HF_TOKEN  (also accepts HUGGING_FACE_HUB_TOKEN)
+  # api_key = "hf_..."
+  #
+  # NOTE: scalar keys must come before the [providers.huggingface.*] subtables
+  # below. They used to follow them, so TOML put api_key_env_var,
+  # default_model and timeout inside `endpoints` and they never applied.
+  api_key_env_var = "HF_TOKEN"
+
+  # Default chat model on the router. get_models_details() lists the 132 chat
+  # models actually served (router /v1/models, 2026-11-16), each with its
+  # providers' context window, tools and pricing. Examples:
+  #   openai/gpt-oss-120b            (7 providers, tools, reasoning)
+  #   Qwen/Qwen3.8-27B               (text + image, 262K-1M context)
+  #   deepseek-ai/DeepSeek-V4.1-Flash, moonshotai/Kimi-K3.1-Pro, zai-org/GLM-5.3
+  # Append :fastest, :cheapest, :preferred or :<provider> to pick the route.
+  # Context windows follow the route: the smallest live provider's window
+  # unless one is pinned (Llama-3.3-70B is served at 12K by one provider).
+  default_model = "openai/gpt-oss-120b"
+
+  # Request timeout in seconds (some models can be slow to warm up).
+  timeout = 120
+
+  # --- Routing provider ---
+  # Unset ("auto") lets the router choose. Or pin one of the providers
+  # serving chat today: deepinfra, featherless-ai, novita, zai-org, cohere,
+  # baseten, publicai, ovhcloud, nscale, groq, cerebras, hf-inference.
+  # (sambanova, nebius, hyperbolic, clarifai and nvidia left the router.)
+  # provider = "cerebras"
+
+  # --- Reasoning and parameters ---
+  # effort= / reasoning_effort, top_k, min_p, repetition_penalty and
+  # chat_template_kwargs travel in extra_body. Reasoning comes back as
+  # `reasoning`; for tool loops put provider.assistant_replay_metadata(response)
+  # into the next assistant Message's metadata.
+
+  # --- Billing ---
+  # bill_to: HF organization namespace to bill usage to.
+  # bill_to = "my-org"
 
   # --- Media subsystem (spec phase M8) ---
   # Transport for media calls:
@@ -1122,58 +1343,6 @@ max_retries = 2
   # no model id in the path, and that capability switches to direct HTTP.
   [providers.huggingface.endpoints]
   # asr = "https://xxxxx.us-east-1.aws.endpoints.huggingface.cloud"
-
-  # type = "huggingface"  # auto-detected from section name
-  #
-  # API Key: Set via environment variable for security.
-  # Environment Variable: HF_TOKEN  (also accepts HUGGING_FACE_HUB_TOKEN)
-  # api_key = "hf_..."
-  api_key_env_var = "HF_TOKEN"
-
-  # Default model — any model hosted on the Hugging Face Hub.
-  # The Inference API supports thousands of models.  Popular choices:
-  #
-  #   Chat/Instruct:
-  #     meta-llama/Llama-3.3-70B-Instruct    (128K context)
-  #     meta-llama/Llama-3.1-8B-Instruct     (128K context)
-  #     Qwen/Qwen2.5-72B-Instruct            (128K context)
-  #     mistralai/Mistral-Small-24B-Instruct-2501  (32K context)
-  #     deepseek-ai/DeepSeek-V3-0324          (128K context)
-  #
-  #   Vision (multimodal):
-  #     meta-llama/Llama-3.2-11B-Vision-Instruct
-  #     Qwen/Qwen2-VL-7B-Instruct
-  #
-  #   Code:
-  #     Qwen/Qwen2.5-Coder-32B-Instruct
-  #     bigcode/starcoder2-15b
-  #
-  #   Embeddings:
-  #     sentence-transformers/all-MiniLM-L6-v2
-  #     BAAI/bge-large-en-v1.5
-  #
-  #   TTS:    facebook/mms-tts-eng, OuteAI/OuteTTS-0.3-500M
-  #   ASR:    openai/whisper-large-v3-turbo
-  #   Image:  black-forest-labs/FLUX.1-dev, stabilityai/stable-diffusion-xl-base-1.0
-  default_model = "meta-llama/Llama-3.3-70B-Instruct"
-
-  # Request timeout in seconds (some models can be slow to warm up).
-  timeout = 120
-
-  # --- HF Routing Provider ---
-  # By default, requests go to HF's own Inference API.
-  # Set to route through a third-party provider:
-  #   "hf-inference"  — HF Inference API (default)
-  #   "together"      — Together AI (billed to your HF account)
-  #   "sambanova"     — SambaNova
-  #   "replicate"     — Replicate
-  #   "fireworks-ai"  — Fireworks AI
-  #   "cerebras"      — Cerebras
-  # provider = "hf-inference"
-
-  # --- Billing ---
-  # bill_to: HF organization namespace to bill usage to.
-  # bill_to = "my-org"
 
   # --- Kimi (Moonshot AI) Provider ---
   # Native provider for the Kimi Open Platform (Moonshot AI).  Uses the
@@ -1237,16 +1406,19 @@ max_retries = 2
 
   # Default chat model. Pick any model from https://deepinfra.com/models.
   # Model addressing also supports "MODEL_NAME:VERSION" and "deploy_id:DEPLOY_ID".
-  # Examples (May 2026):
-  #   Chat:       deepseek-ai/DeepSeek-V3, meta-llama/Llama-3.3-70B-Instruct,
-  #               Qwen/Qwen3-235B-A22B, mistralai/Mistral-Small-3.2-24B-Instruct
-  #   Reasoning:  deepseek-ai/DeepSeek-R1 (use reasoning_effort / reasoning)
-  #   Vision:     Qwen/Qwen2.5-VL-32B-Instruct, meta-llama/Llama-3.2-11B-Vision-Instruct
-  #   Embedding:  Qwen/Qwen3-Embedding-8B, BAAI/bge-m3   (see [embedding.deepinfra])
+  # Examples (live /v1/models, 2026-11-16; 178 models):
+  #   Chat:       deepseek-ai/DeepSeek-V4-Flash (1M, reasoning, prompt cache),
+  #               deepseek-ai/DeepSeek-V4-Pro, openai/gpt-oss-120b,
+  #               zai-org/GLM-5.3, moonshotai/Kimi-K3
+  #   Vision:     models tagged "vlm" (get_models_details() reports them)
+  #   Embedding:  Qwen/Qwen3-Embedding-8B (dimensions=), BAAI/bge-m3
   #   TTS:        hexgrad/Kokoro-82M
-  #   STT:        openai/whisper-large
+  #   STT:        openai/whisper-large-v3-turbo (openai/whisper-large is gone)
   #   Image:      black-forest-labs/FLUX-1-schnell
-  default_model = "deepseek-ai/DeepSeek-V3"
+  default_model = "deepseek-ai/DeepSeek-V4-Flash"
+
+  # responses_api = "always" routes chat through DeepInfra's stateless
+  # /v1/openai/responses (function tools and reasoning; default "never").
 
   # Base URL (normally no need to change).
   # OpenAI-compatible surface (chat/embeddings/images): https://api.deepinfra.com/v1/openai
@@ -1264,13 +1436,19 @@ max_retries = 2
   # --- DeepInfra-specific request parameters ---
   # Passed as kwargs to chat_completion() and delivered via the OpenAI SDK
   # extra_body mechanism (version-independent):
-  #   reasoning_effort: "none" | "low" | "medium" | "high"  (reasoning models)
+  #   reasoning_effort: "none" | "minimal" | "low" | "medium" | "high" |
+  #                     "xhigh" | "max"  (reasoning models; effort= maps here)
   #   reasoning:        object  — fine-grained reasoning control
-  #   service_tier:     "default" | "priority"  (priority = +20% surcharge, faster)
+  #   service_tier:     "default" | "priority" | "flex"
   #   prompt_cache_key: str  — session-scoped explicit prompt-cache key
   #   top_k:            int   — top-k sampling
   #   min_p:            float — min-p sampling
   #   repetition_penalty: float
+  #   chat_template_kwargs, prompt_cache_options, cache_salt, fail_fast,
+  #   models (fallbacks), stop_token_ids, media_io_kwargs,
+  #   continue_final_message, ignore_eos
+  # Tool loops: put provider.assistant_replay_metadata(response) into the next
+  # assistant Message's metadata (carries reasoning_content back).
   # Standard OpenAI params (temperature, top_p, max_tokens, response_format,
   # tools, tool_choice, logprobs, top_logprobs, seed, stop, n, ...) are supported.
   #
@@ -1283,7 +1461,7 @@ max_retries = 2
   #
   # --- Speech / Image (provider methods) ---
   #   await provider.generate_speech(text, model="hexgrad/Kokoro-82M", response_format="mp3")
-  #   await provider.transcribe_audio(audio_bytes_or_path, model="openai/whisper-large")
+  #   await provider.transcribe_audio(audio_bytes_or_path, model="openai/whisper-large-v3-turbo")
   #   await provider.translate_audio(audio_bytes_or_path)
   #   await provider.generate_image("an astronaut on Mars", model="black-forest-labs/FLUX-1-schnell")
   #   await provider.create_embeddings(["text"], model="Qwen/Qwen3-Embedding-8B")
@@ -1296,37 +1474,49 @@ max_retries = 2
   #
   # NOTE: Keys from platform.kimi.ai (api.moonshot.ai) and platform.kimi.com
   # (api.moonshot.cn) are NOT interchangeable — mixing them yields a 401.
+  # Kimi Code (coding plan) keys only work with
+  #   base_url = "https://api.kimi.com/coding/v1"  (model "kimi-for-coding");
+  # with that base URL the key defaults to KIMI_API_KEY.
   # api_key_env_var = "MOONSHOT_API_KEY"
 
   # Default model for this provider instance.
-  # Current models (May 2026):
-  #   kimi-k2.6          — flagship; text+image+video, thinking by default, 256K
-  #   kimi-k2.5          — multimodal; thinking toggle, 256K
-  #   moonshot-v1-8k/32k/128k                 — text generation
-  #   moonshot-v1-8k/32k/128k-vision-preview  — image understanding
-  # Deprecated (retired 2026-05-25): kimi-k2-0905/0711-preview,
-  #   kimi-k2-turbo-preview, kimi-k2-thinking[-turbo].
-  default_model = "kimi-k2.6"
+  # Current models (live GET /v1/models, 2026-11-16):
+  #   kimi-k3.1-pro[-highspeed]  — flagship; text+image+video, 1M, always reasons
+  #   kimi-k3                    — 1M, always reasons
+  #   kimi-k2.7-code[-highspeed] — coding; 256K, always thinks
+  #   kimi-k2.6                  — 256K, thinking toggle (deprecated)
+  # The moonshot-v1 series, kimi-k2.5 and the kimi-k2 previews are gone (404).
+  default_model = "kimi-k3.1-pro"
 
   # Request timeout in seconds.  Thinking + multimodal responses can be large;
   # 300s avoids network timeouts on long reasoning streams.
   timeout = 300
 
-  # --- Thinking Mode (kimi-k2.5 / kimi-k2.6 only) ---
-  # Controls whether the model emits internal reasoning (reasoning_content)
-  # before the final answer.  Ignored for moonshot-v1 models.
+  # "never" (default): Chat Completions. "always": Moonshot's /v1/responses.
+  # responses_api = "never"
+
+  # --- Reasoning ---
+  # effort= maps per family:
+  #   K3: reasoning_effort "low" | "high" | "max" (default max); "none" = off
+  #   kimi-k2.6: "none" disables thinking, anything else enables it
+  #   kimi-k2.7-code: always thinks (thinking="disabled" is ignored with a
+  #   warning; the API would answer 400)
+  # K3 and k2.x fix temperature/top_p/n/penalties; those are dropped.
   #
-  # thinking: "enabled" or "disabled" (default: "enabled")
-  #   - "enabled":  Model returns reasoning_content + content.
-  #   - "disabled": Model returns content only (faster, cheaper).
+  # Multi-turn and tool loops: put provider.assistant_replay_metadata(response)
+  # into the next assistant Message's metadata. It carries reasoning_content
+  # back (streams included); without it a K3 tool loop stops reasoning after
+  # the first call.
+  #
+  # K3 dynamic tools: Message(role=SYSTEM, content="", metadata={"tools": [...]})
+  # declares tools for the turns that follow.
+
+  # --- Thinking Mode (kimi-k2.6 / kimi-k2.7-code) ---
+  # thinking: "enabled" or "disabled" (default: "enabled"). Not used by K3.
   thinking = "enabled"
 
-  # --- Preserved Thinking (kimi-k2.6 only) ---
+  # --- Preserved Thinking (kimi-k2.6 only; K3 and k2.7 always preserve) ---
   # thinking_keep: "all" or empty/null (default: null)
-  #   - "all":  Historical reasoning_content is forwarded across turns, so the
-  #             model can continue a prior chain of thought.  Increases context
-  #             cost.  Only effective with thinking = "enabled".
-  #   - null:   Historical reasoning_content is ignored (shorter, cheaper).
   # Per-request override via chat_completion(thinking=..., thinking_keep=...).
   # thinking_keep = "all"
 
@@ -1340,8 +1530,8 @@ max_retries = 2
   #   metadata["inline_images"] = ["data:image/png;base64,...", "ms://<file_id>"]
   #   metadata["inline_videos"] = ["ms://<file_id>"]
   # Large videos should be uploaded first (provider.upload_file(...)) and
-  # referenced as ms://<file_id>.  kimi-k2.6 supports video; moonshot-v1
-  # *-vision-preview models support images only.
+  # referenced as ms://<file_id>.  Every current Kimi model takes images and
+  # video.
 
   # --- Deepgram Provider (speech / audio) ---
   # Deepgram is a real-time VOICE/AUDIO provider, not a text-completion provider.
@@ -1385,11 +1575,18 @@ max_retries = 2
   default_stt_model  = "nova-3"
   default_flux_model = "flux-general-en"
   default_tts_model  = "aura-2-thalia-en"
+  # Flux TTS voices (flux-<voice>-<lang>, e.g. "flux-haley-en"; GA 2026-08)
+  # go to /v2/speak with expressivity (-2..2), normalize_volume and priority.
+  # REST synthesis and REST streaming; WebSocket input is Aura-only for now.
 
   # --- Speech-to-Text: batch + streaming shared defaults ---
   [providers.deepgram.stt]
   model        = "nova-3"
   language     = "en"          # use "multi" for multilingual code-switching (nova-3)
+  # With language = "multi", nova-3 serves a 55-language model since 2026-10-23
+  # (pin the old 10-language one with `version`); hint languages with
+  # language_hint = ["pt", "es"]. channels / sample_rate only reach the API on
+  # backend = "httpx" (the SDK has no such parameters).
   smart_format = true
   punctuate    = true
   # diarize = false
@@ -1524,8 +1721,15 @@ max_retries = 2
   # base_url = "https://api.typesafe.ai"
 
   # Default model (env TYPESAFE_DEFAULT_MODEL is honoured when unset).
-  # Aliases move with releases: jev-latest / jev-preview -> jev-1.13.0 today.
-  # Pin the versioned id (e.g. "jev-1.13.0") if you tuned confidence thresholds.
+  # Aliases move with releases: jev-latest / jev-preview -> jev-1.14.0 today
+  # (since 2026-10-14). Pin the versioned id (e.g. "jev-1.14.0") if you tuned
+  # confidence thresholds.
+  #
+  # Images and Box (1.14): system_one(state, questions, assets={"ref": png_bytes})
+  # with Box(instructions="... `photo` ...") - llmcore adds the
+  # TypeSafe-Danger-Zone-Images header. long_context = true sends the
+  # Long-Context header (64k -> 262k tokens).
+  # long_context = false
   default_model = "jev-latest"
 
   # --- Transport / retries ---
@@ -2556,7 +2760,7 @@ affinity = "session"
   #   Examples: "Qwen/Qwen3-Embedding-8B", "BAAI/bge-m3", "intfloat/e5-large-v2"
   default_model = "Qwen/Qwen3-Embedding-8B"
   # base_url = "https://api.deepinfra.com/v1/openai"
-  # NOTE: DeepInfra supports only encoding_format="float" (no `dimensions`).
+  # dimensions = 256   # Matryoshka models (e.g. Qwen3-Embedding-8B)
 
   [embedding.sentence_transformer]
   # Additional configuration for local `sentence-transformers` models.

@@ -1,0 +1,66 @@
+{
+  "model_id": "moonshotai/kimi-k3.1-pro:batch",
+  "display_name": "MoonshotAI: Kimi K3.1 Pro (batch)",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 1048576,
+    "max_output_tokens": 943718
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": true,
+    "reasoning": true,
+    "image_generation": false,
+    "image_edit": false,
+    "image_upscale": false,
+    "video_generation": false,
+    "video_interpolation": false,
+    "speech_synthesis": false,
+    "transcription": false,
+    "music_generation": false,
+    "sfx_generation": false,
+    "voice_design": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.7,
+      "output": 6.0,
+      "cached_input": 0.1
+    }
+  },
+  "lifecycle": {
+    "status": "active",
+    "release_date": "2026-10-23"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Kimi K3.1 Pro is Moonshot AI's flagship open-weight multimodal reasoning model and a post-trained successor to Kimi K3, with a 1M-token context window. It is built for long-horizon coding, 3D...",
+  "tags": [],
+  "source": "generated",
+  "x_pricewatch": {
+    "feed": "openrouter",
+    "method": "api",
+    "url": "https://openrouter.ai/api/v1/models",
+    "matched_key": "openrouter/moonshotai/kimi-k3.1-pro:batch",
+    "match": "exact key match",
+    "fetched_at": "2026-11-16T09:04:54+00:00",
+    "capabilities": {
+      "feed": "caps:openrouter",
+      "method": "api",
+      "url": "https://openrouter.ai/api/v1/models",
+      "matched_key": "openrouter/moonshotai/kimi-k3.1-pro:batch",
+      "fetched_at": "2026-11-16T09:06:07+00:00"
+    }
+  }
+}

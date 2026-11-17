@@ -96,7 +96,7 @@ class TestEffortIsGenerationAgnostic:
             ("low", "low"),
             ("medium", "medium"),
             ("high", "high"),
-            ("xhigh", "high"),     # folded to the nearest supported rung
+            ("xhigh", "xhigh"),    # real on 4.7+ (Models API, 2026-11-16)
             ("max", "max"),
         ],
     )
@@ -104,6 +104,11 @@ class TestEffortIsGenerationAgnostic:
         thinking, mapped = A._normalize_thinking(None, effort, "claude-opus-5-5")
         assert thinking == {"type": "adaptive"}
         assert mapped == expected
+
+    def test_xhigh_folds_where_the_model_lacks_it(self):
+        # Sonnet 4.6 takes low/medium/high/max, no xhigh.
+        _, mapped = A._normalize_thinking(None, "xhigh", "claude-sonnet-4-6")
+        assert mapped == "high"
 
     @pytest.mark.parametrize(
         ("effort", "minimum"),
@@ -130,11 +135,12 @@ class TestEffortIsGenerationAgnostic:
     @pytest.mark.parametrize(
         ("model", "expected"),
         [
-            # Measured: 4.7+ answers 400 to {"type": "disabled"} and names the
-            # replacement itself -- "send thinking: {type: between_tools}".
-            ("claude-opus-5-5", "between_tools"),
+            # Measured live 2026-11-16 (and stated by the Models API): the
+            # spelling is per model, not per generation. Only Sonnet 5.5 takes
+            # between_tools; Opus 4.7/4.8, Sonnet 5, Haiku 5.5 take disabled.
             ("claude-sonnet-5-5", "between_tools"),
-            ("claude-opus-4-7", "between_tools"),
+            ("claude-haiku-5-5", "disabled"),
+            ("claude-opus-4-7", "disabled"),
             ("claude-sonnet-4-6", "disabled"),
             ("claude-opus-4-1", "disabled"),
         ],
@@ -142,12 +148,20 @@ class TestEffortIsGenerationAgnostic:
     def test_effort_none_turns_thinking_off_however_the_model_spells_it(
         self, model, expected
     ):
-        """"Do not think" has two spellings, and a caller should not have to
-        know which. Returning adaptive-at-low would quietly spend reasoning
-        tokens the caller explicitly asked not to spend."""
+        """"Do not think" has several spellings, and a caller should not have
+        to know which."""
         thinking, mapped = A._normalize_thinking(None, "none", model)
         assert thinking == {"type": expected}
         assert mapped is None
+
+    @pytest.mark.parametrize("model", ["claude-opus-5-5", "claude-fable-5-2"])
+    def test_models_without_an_off_switch_get_the_lowest_effort(self, model):
+        """Opus 5.5 and Fable reject both disabled and between_tools ("Use
+        thinking.type.adaptive and output_config.effort"), so the closest
+        thing to "none" is omitting thinking at effort low."""
+        thinking, mapped = A._normalize_thinking(None, "none", model)
+        assert thinking is None
+        assert mapped == "low"
 
 
 class TestTheThreeMeasuredBoundaries:
@@ -199,7 +213,9 @@ class TestTheThreeMeasuredBoundaries:
         """The older families are the shrinking set."""
         assert A._supports_adaptive_thinking("claude-brand-new") is True
         assert A._rejects_budget_tokens("claude-brand-new") is True
-        assert A._no_thinking_block("claude-brand-new") == {"type": "between_tools"}
+        # No off switch is assumed for an unknown model: omitting thinking is
+        # the one form no model rejects.
+        assert A._no_thinking_block("claude-brand-new") is None
 
 
 class TestBudgetMustFitMaxTokens:

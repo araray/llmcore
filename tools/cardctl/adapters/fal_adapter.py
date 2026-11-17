@@ -49,14 +49,31 @@ class FalAdapter(CuratedAdapter):
             caps=("image_upscale",),
             tags=("image", "upscale"),
         ),
+        # fal-ai/minimax-video is gone (404 on fal's Platform API, 2026-11-16).
         CuratedModel(
-            model_id="fal-ai/minimax-video",
+            model_id="fal-ai/minimax/hailuo-2.3/standard/text-to-video",
             model_type="video-generation",
             capability="video_generate",
-            display_name="MiniMax Video (fal)",
-            description="Text-to-video generation.",
+            display_name="MiniMax Hailuo 2.3 Standard, text-to-video (fal)",
+            description=(
+                "Text-to-video. Duration is \"6\" or \"10\" seconds (a string "
+                "enum; llmcore rounds duration_seconds onto it)."
+            ),
             caps=("video_generation",),
             tags=("video",),
+            owned_by="minimax",
+        ),
+        CuratedModel(
+            model_id="fal-ai/minimax/hailuo-2.3/standard/image-to-video",
+            model_type="video-generation",
+            capability="video_generate",
+            display_name="MiniMax Hailuo 2.3 Standard, image-to-video (fal)",
+            description=(
+                "Image-to-video from a first frame. llmcore routes a "
+                "first_frame request here when the default video endpoint is in use."
+            ),
+            caps=("video_generation",),
+            tags=("video", "image-to-video"),
             owned_by="minimax",
         ),
         CuratedModel(
@@ -76,9 +93,18 @@ class FalAdapter(CuratedAdapter):
             model_type="audio",
             capability="sfx",
             display_name="MMAudio v2 (fal)",
-            description="Sound effects, optionally conditioned on video (foley).",
+            description="Foley: sound effects conditioned on a video (video_url is required).",
             caps=("sfx_generation",),
             tags=("audio", "sfx", "foley"),
+        ),
+        CuratedModel(
+            model_id="fal-ai/mmaudio-v2/text-to-audio",
+            model_type="audio",
+            capability="sfx",
+            display_name="MMAudio v2, text-to-audio (fal)",
+            description="Sound effects from text alone; llmcore's route when no video is given.",
+            caps=("sfx_generation",),
+            tags=("audio", "sfx"),
         ),
         CuratedModel(
             model_id="fal-ai/stable-audio",
@@ -91,11 +117,12 @@ class FalAdapter(CuratedAdapter):
             owned_by="stability-ai",
         ),
         CuratedModel(
-            model_id="fal-ai/kokoro",
+            # The bare fal-ai/kokoro id has no schema; the language variants do.
+            model_id="fal-ai/kokoro/american-english",
             model_type="tts",
             capability="tts",
-            display_name="Kokoro TTS (fal)",
-            description="Text-to-speech.",
+            display_name="Kokoro TTS, American English (fal)",
+            description="Text-to-speech (other languages: fal-ai/kokoro/<language>).",
             caps=("speech_synthesis",),
             tags=("audio", "tts"),
         ),

@@ -1,0 +1,44 @@
+{
+  "model_id": "parallel/decisions-fast",
+  "display_name": "Parallel: Decisions Fast",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 32000,
+    "max_output_tokens": 28800
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false,
+    "image_generation": false,
+    "image_edit": false,
+    "image_upscale": false,
+    "video_generation": false,
+    "video_interpolation": false,
+    "speech_synthesis": false,
+    "transcription": false,
+    "music_generation": false,
+    "sfx_generation": false,
+    "voice_design": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active",
+    "release_date": "2026-11-06"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Decisions Fast is Parallel's web-grounded Decisions model. Instead of generating text, it reads the content passed as `state` (text or JSON), researches the live web, and returns typed answers to...",
+  "tags": [],
+  "source": "generated"
+}

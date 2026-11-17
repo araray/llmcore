@@ -1,0 +1,63 @@
+{
+  "model_id": "gemini-4-argon",
+  "display_name": "Gemini 4 Argon",
+  "provider": "google",
+  "model_type": "chat",
+  "architecture": {
+    "family": "gemini",
+    "architecture_type": "transformer"
+  },
+  "context": {
+    "max_input_tokens": 1048576,
+    "max_output_tokens": 32768
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": true,
+    "structured_output": false,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": true,
+    "image_generation": false,
+    "image_edit": false,
+    "image_upscale": false,
+    "video_generation": false,
+    "video_interpolation": false,
+    "speech_synthesis": false,
+    "transcription": false,
+    "music_generation": false,
+    "sfx_generation": false,
+    "voice_design": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 2.0,
+      "output": 10.0,
+      "cached_input": 0.1
+    }
+  },
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Gemini 4 Argon",
+  "tags": [
+    "reasoning"
+  ],
+  "source": "generated",
+  "x_pricewatch": {
+    "feed": "scrape:google",
+    "method": "scrape",
+    "url": "https://ai.google.dev/gemini-api/docs/pricing",
+    "matched_key": "gemini-4-argon",
+    "match": "display-name slug match",
+    "fetched_at": "2026-11-16T09:04:59+00:00"
+  }
+}

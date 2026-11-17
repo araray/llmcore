@@ -37,15 +37,20 @@ Transport (selectable via ``backend``)
 
 References:
   - https://elevenlabs.io/docs/api-reference
-  - Vendor SDK: elevenlabs-python (v2.70.0)
+  - Vendor SDK: elevenlabs-python (v2.78.0; audited 2026-11-16)
 """
 
 from __future__ import annotations
 
+import inspect
+import json
 import logging
 import os
+import base64
+import contextlib
 from collections.abc import AsyncGenerator, AsyncIterator
 from typing import TYPE_CHECKING, Any
+from urllib.parse import urlencode
 
 try:
     import httpx
@@ -80,14 +85,18 @@ _BASE_URL = "https://api.elevenlabs.io"
 #: spelling their SDK still honours.
 _API_KEY_ENV_VARS: tuple[str, ...] = ("ELEVENLABS_API_KEY", "ELEVEN_API_KEY")
 
-#: Per-capability default models, verified against the live ``/v1/models``
-#: lineup on 2026-09-30. ``eleven_v4`` is GA (no alpha access, standard rate)
-#: and covers 85 languages, so it is the default rather than an older release.
+#: Per-capability default models, verified live on 2026-11-16. ``eleven_v4``
+#: is GA and covers 90+ languages; ``eleven_v4_turbo`` is the low-latency
+#: variant for streaming. ``scribe_v3`` (GA 2026-11-09, 27% fewer word errors
+#: than v2) replaces the deprecated ``scribe_v1``, and
+#: ``eleven_text_to_sound_v3`` replaces v2, which is removed on 2027-03-01.
 _DEFAULT_MODELS: dict[str, str] = {
     "tts": "eleven_v4",
-    "tts_stream": "eleven_v4",
-    "asr": "scribe_v1",
-    "sfx": "eleven_text_to_sound_v2",
+    "tts_stream": "eleven_v4_turbo",
+    "asr": "scribe_v3",
+    # Realtime Scribe over a WebSocket (/v1/speech-to-text/realtime).
+    "asr_stream": "scribe_v2_realtime",
+    "sfx": "eleven_text_to_sound_v3",
     "music": "music_v2_5",
     "voice_design": "eleven_ttv_v3",
 }
@@ -102,6 +111,7 @@ _DEFAULT_OUTPUT_FORMAT = "mp3_44100_128"
 #: ``output_format`` prefix → MIME type.
 _FORMAT_MIME: dict[str, str] = {
     "mp3": "audio/mpeg",
+    "wav": "audio/wav",  # SFX takes wav_* since 2026-10 (was labelled mpeg)
     "pcm": "audio/pcm",
     "ulaw": "audio/basic",
     "alaw": "audio/x-alaw-basic",
@@ -131,7 +141,7 @@ class ElevenLabsProvider(BaseProvider):
     """
 
     _MEDIA_CAPABILITIES: frozenset[str] = frozenset(
-        {"tts", "tts_stream", "asr", "sfx", "music", "voice_design"}
+        {"tts", "tts_stream", "asr", "asr_stream", "sfx", "music", "voice_design"}
     )
 
     def __init__(self, config: dict[str, Any], log_raw_payloads: bool = False):
@@ -423,7 +433,7 @@ class ElevenLabsProvider(BaseProvider):
         """
         from ..media.models import MediaCapability, MediaExecution
 
-        if capability is MediaCapability.TTS_STREAM:
+        if capability in (MediaCapability.TTS_STREAM, MediaCapability.ASR_STREAM):
             return MediaExecution.STREAM
         return MediaExecution.REQUEST_RESPONSE
 
@@ -582,11 +592,10 @@ class ElevenLabsProvider(BaseProvider):
     ) -> bytes:
         """Run a one-shot TTS request and return the audio bytes."""
         if self._backend == "sdk":
-            chunks = self._sdk.text_to_speech.convert(
-                voice_id=voice_id,
-                text=body["text"],
-                model_id=body.get("model_id"),
-                output_format=output_format,
+            # Every body field the SDK has a keyword for (voice_settings,
+            # seed, audio_effects, ...); they used to be dropped.
+            chunks = _sdk_call(
+                self._sdk.text_to_speech.convert, voice_id=voice_id, output_format=output_format, **body
             )
             return b"".join([c async for c in chunks])
 
@@ -604,11 +613,8 @@ class ElevenLabsProvider(BaseProvider):
     ) -> AsyncIterator[bytes]:
         """Stream TTS audio chunks."""
         if self._backend == "sdk":
-            chunks = self._sdk.text_to_speech.stream(
-                voice_id=voice_id,
-                text=body["text"],
-                model_id=body.get("model_id"),
-                output_format=output_format,
+            chunks = _sdk_call(
+                self._sdk.text_to_speech.stream, voice_id=voice_id, output_format=output_format, **body
             )
             async for chunk in chunks:
                 if chunk:
@@ -662,7 +668,10 @@ class ElevenLabsProvider(BaseProvider):
             data["diarize"] = str(bool(diarize)).lower()
         if timestamps is not None:
             data["timestamps_granularity"] = "word" if timestamps else "none"
-        data.update({k: str(v) for k, v in kwargs.items() if v is not None})
+        # List and object fields (secondary_language_codes, keyterms, ...) go as
+        # JSON strings: repeated form fields are a 500 and str(list) is not
+        # JSON (both measured 2026-11-16).
+        data.update({k: _form_value(v) for k, v in kwargs.items() if v is not None})
 
         payload = await self._transcribe(audio, data)
 
@@ -671,10 +680,14 @@ class ElevenLabsProvider(BaseProvider):
             kind=MediaKind.TEXT,
             text=payload.get("text"),
             mime_type="text/plain",
+            duration_seconds=payload.get("audio_duration_secs"),
             provider_metadata={
                 "language_code": payload.get("language_code"),
                 "language_probability": payload.get("language_probability"),
                 "words": words,
+                # transcript_edit=true (scribe_v3): the cleaned-up transcript.
+                "edited_transcript": payload.get("edited_transcript"),
+                "transcription_id": payload.get("transcription_id"),
             },
         )
         return MediaResult(
@@ -690,12 +703,12 @@ class ElevenLabsProvider(BaseProvider):
     async def _transcribe(self, audio: MediaRef, data: dict[str, Any]) -> dict[str, Any]:
         """Post audio to the speech-to-text endpoint.
 
-        A remote ``MediaRef`` is handed to ElevenLabs as a ``cloud_storage_url``
-        so the bytes never round-trip through this process; local refs are
-        uploaded as multipart.
+        A remote ``MediaRef`` is handed to ElevenLabs as a ``source_url``
+        (``cloud_storage_url`` is deprecated) so the bytes never round-trip
+        through this process; local refs are uploaded as multipart.
         """
         if audio.is_remote and audio.url:
-            data = {**data, "cloud_storage_url": audio.url}
+            data = {**data, "source_url": audio.url}
             if self._backend == "sdk":
                 result = await self._sdk.speech_to_text.convert(**data)
                 return self._as_dict(result)
@@ -799,20 +812,10 @@ class ElevenLabsProvider(BaseProvider):
     async def _audio_post(self, path: str, body: dict[str, Any], context: str) -> bytes:
         """POST a JSON body to an endpoint that answers with audio bytes."""
         if self._backend == "sdk":
-            if context == "music":
-                chunks = self._sdk.music.compose(
-                    prompt=body.get("prompt"),
-                    model_id=body.get("model_id"),
-                    music_length_ms=body.get("music_length_ms"),
-                    output_format=self._output_format,
-                )
-            else:
-                chunks = self._sdk.text_to_sound_effects.convert(
-                    text=body.get("text"),
-                    model_id=body.get("model_id"),
-                    duration_seconds=body.get("duration_seconds"),
-                    output_format=self._output_format,
-                )
+            fn = self._sdk.music.compose if context == "music" else self._sdk.text_to_sound_effects.convert
+            # loop, prompt_influence, seed, force_instrumental, ... used to be
+            # dropped on this backend.
+            chunks = _sdk_call(fn, output_format=self._output_format, **body)
             return b"".join([c async for c in chunks])
 
         resp = await self._get_http().post(
@@ -958,6 +961,102 @@ class ElevenLabsProvider(BaseProvider):
     # Lifecycle
     # ------------------------------------------------------------------
 
+    # ------------------------------------------------------------------
+    # Realtime speech-to-text (Scribe realtime, WebSocket)
+    # ------------------------------------------------------------------
+
+    @contextlib.asynccontextmanager
+    async def open_transcription_session(
+        self,
+        *,
+        model: str | None = None,
+        language: str | None = None,
+        sample_rate_hz: int | None = None,
+        audio_format: str | None = None,
+        commit_strategy: str = "vad",
+        **kwargs: Any,
+    ) -> AsyncIterator[ElevenLabsTranscriptionStream]:
+        """Open a realtime transcription session (``asr_stream``).
+
+        The same duplex shape as Deepgram's session: ``send_audio`` raw
+        chunks, ``finalize()`` to commit the current segment, iterate for
+        :class:`TranscriptionStreamEvent` (partial -> ``INTERIM``, committed
+        -> ``FINAL``). Always the direct WebSocket; the SDK's realtime helper
+        is callback-based and adds nothing on the wire.
+
+        Args:
+            model: Realtime model (default ``scribe_v2_realtime``).
+            language: ISO-639-1/3 code (``language_code``).
+            sample_rate_hz: PCM rate; picks ``pcm_<rate>`` (default 16000).
+            audio_format: Explicit format (``pcm_16000`` ... ``ulaw_8000``).
+            commit_strategy: ``"vad"`` (server commits on silence, the
+                default here) or ``"manual"`` (call ``finalize()``).
+            **kwargs: Any other documented query option, sent as given:
+                ``include_timestamps``, ``include_language_detection``,
+                ``keyterms``, ``secondary_languages``, ``no_verbatim``,
+                ``vad_silence_threshold_secs``, ``vad_threshold``,
+                ``min_speech_duration_ms``, ``min_silence_duration_ms``,
+                ``entity_detection``, ``entity_redaction``,
+                ``entity_redaction_mode``, ``transcript_edit``,
+                ``filter_background_audio``, ``enable_logging``, ``token``
+                (a single-use token instead of the API key).
+
+        Raises:
+            ProviderError: When the handshake fails (bad key, bad option).
+        """
+        try:
+            from websockets.asyncio.client import connect as ws_connect
+        except ImportError as exc:  # pragma: no cover - dependency of the extra
+            raise ProviderError(
+                self.get_name(),
+                "Realtime transcription needs the 'websockets' package "
+                "(pip install llmcore[elevenlabs]).",
+            ) from exc
+
+        rate = int(sample_rate_hz or 16000)
+        fmt = audio_format or f"pcm_{rate}"
+        if fmt not in _REALTIME_FORMATS:
+            raise ValueError(
+                f"Unsupported realtime audio format {fmt!r}; use one of {sorted(_REALTIME_FORMATS)}."
+            )
+        used_model = model or self._models.get("asr_stream") or _DEFAULT_MODELS["asr_stream"]
+        params: list[tuple[str, str]] = [
+            ("model_id", used_model),
+            ("audio_format", fmt),
+            ("commit_strategy", commit_strategy),
+        ]
+        if language:
+            params.append(("language_code", language))
+        for key, value in kwargs.items():
+            if value is None:
+                continue
+            for item in value if isinstance(value, (list, tuple)) else [value]:
+                params.append((key, str(item).lower() if isinstance(item, bool) else str(item)))
+        token = kwargs.get("token")
+        headers = {} if token else {"xi-api-key": self._api_key}
+        ws_base = self._base_url.replace("https://", "wss://").replace("http://", "ws://")
+        url = f"{ws_base}/v1/speech-to-text/realtime?{urlencode(params)}"
+        try:
+            websocket = await ws_connect(url, additional_headers=headers)
+        except Exception as exc:
+            status = getattr(getattr(exc, "response", None), "status_code", None)
+            raise ProviderError(
+                self.get_name(),
+                f"ElevenLabs realtime transcription handshake failed: {exc}",
+                model_name=used_model,
+                status_code=status,
+                retryable=status is None or status >= 500,
+            ) from exc
+        stream = ElevenLabsTranscriptionStream(
+            websocket,
+            sample_rate=int(fmt.rsplit("_", 1)[-1]),
+            timestamps=bool(kwargs.get("include_timestamps")),
+        )
+        try:
+            yield stream
+        finally:
+            await stream.close()
+
     async def close(self) -> None:
         """Release the HTTP client and any SDK resources."""
         if self._http is not None:
@@ -966,3 +1065,142 @@ class ElevenLabsProvider(BaseProvider):
             finally:
                 self._http = None
         self._sdk = None
+
+
+def _form_value(value: Any) -> str:
+    """A multipart form value as ElevenLabs reads it."""
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, (list, tuple, dict)):
+        return json.dumps(list(value) if isinstance(value, tuple) else value)
+    return str(value)
+
+
+def _sdk_call(fn: Any, **kwargs: Any) -> Any:
+    """Call an SDK method with the fields it has keywords for.
+
+    Fields it does not know are dropped with a warning naming them, rather
+    than raising a TypeError deep inside the vendor package.
+    """
+    accepted = set(inspect.signature(fn).parameters)
+    known = {k: v for k, v in kwargs.items() if k in accepted and v is not None}
+    dropped = sorted(k for k in kwargs if k not in accepted)
+    if dropped:
+        logger.warning(
+            "The elevenlabs SDK has no parameter for %s; dropped (backend='httpx' sends them).",
+            ", ".join(dropped),
+        )
+    return fn(**known)
+
+
+#: Realtime Scribe input formats (elevenlabs SDK AudioFormat, 2.78).
+_REALTIME_FORMATS: frozenset[str] = frozenset(
+    {"pcm_8000", "pcm_16000", "pcm_22050", "pcm_24000", "pcm_44100", "pcm_48000", "ulaw_8000"}
+)
+
+#: Server messages that are errors; they end the useful life of the session.
+_REALTIME_ERRORS: frozenset[str] = frozenset({
+    "error", "auth_error", "quota_exceeded", "commit_throttled", "transcriber_error",
+    "unaccepted_terms", "rate_limited", "input_error", "invalid_request", "queue_overflow",
+    "resource_exhausted", "session_time_limit_exceeded", "chunk_size_exceeded",
+    "insufficient_audio_activity",
+})
+
+
+class ElevenLabsTranscriptionStream:
+    """A live Scribe realtime session (duplex): send audio, iterate events.
+
+    Mirrors the Deepgram session object so callers of ``asr_stream`` can
+    switch providers: ``send_audio(bytes)``, ``finalize()`` (commit the
+    segment), ``keepalive()``, ``close()``, and ``async for event in stream``.
+    """
+
+    def __init__(self, websocket: Any, *, sample_rate: int, timestamps: bool = False) -> None:
+        self._ws = websocket
+        self._rate = sample_rate
+        # With include_timestamps the server sends each commit twice (plain
+        # and with words); only the richer one becomes a FINAL event.
+        self._timestamps = timestamps
+        self._previous_text: str | None = None
+        self._sent_any = False
+
+    def set_context(self, previous_text: str) -> None:
+        """Context for the first chunk (ElevenLabs takes it only there)."""
+        self._previous_text = previous_text
+
+    async def send_audio(self, chunk: bytes) -> None:
+        """Send one raw audio chunk in the session's format."""
+        message: dict[str, Any] = {
+            "message_type": "input_audio_chunk",
+            "audio_base_64": base64.b64encode(bytes(chunk)).decode("ascii"),
+            "commit": False,
+            "sample_rate": self._rate,
+        }
+        if not self._sent_any and self._previous_text:
+            message["previous_text"] = self._previous_text
+        self._sent_any = True
+        await self._ws.send(json.dumps(message))
+
+    async def finalize(self) -> None:
+        """Commit the buffered audio; a ``FINAL`` event follows."""
+        await self._ws.send(json.dumps({
+            "message_type": "input_audio_chunk", "audio_base_64": "",
+            "commit": True, "sample_rate": self._rate,
+        }))
+
+    commit = finalize
+
+    async def keepalive(self) -> None:
+        """No-op: the realtime API defines no keepalive message."""
+
+    async def close(self) -> None:
+        """Close the WebSocket (idempotent)."""
+        with contextlib.suppress(Exception):
+            await self._ws.close()
+
+    async def __aiter__(self) -> AsyncIterator[Any]:
+        async for message in self._ws:
+            try:
+                raw = json.loads(message)
+            except (TypeError, ValueError):
+                continue
+            event = _map_realtime_message(raw, timestamps=self._timestamps)
+            if event is not None:
+                yield event
+
+    @property
+    def websocket(self) -> Any:
+        """The underlying WebSocket (escape hatch)."""
+        return self._ws
+
+
+def _map_realtime_message(raw: dict[str, Any], *, timestamps: bool = False) -> Any:
+    """Map one Scribe realtime message onto a ``TranscriptionStreamEvent``."""
+    from ..models_multimodal import StreamEventType, TranscriptionStreamEvent
+
+    kind = str(raw.get("message_type") or "")
+    text = str(raw.get("text") or raw.get("transcript") or "")
+
+    def event(type_: Any, **fields: Any) -> Any:
+        return TranscriptionStreamEvent(type=type_, provider="elevenlabs", raw=raw, **fields)
+
+    if kind == "partial_transcript":
+        return event(StreamEventType.INTERIM, text=text, is_final=False)
+    if kind == "committed_transcript":
+        if timestamps:
+            return None  # the _with_timestamps twin carries the same text plus words
+        return event(StreamEventType.FINAL, text=text, is_final=True, speech_final=True)
+    if kind == "committed_transcript_with_timestamps":
+        words = [w for w in raw.get("words") or [] if isinstance(w, dict)]
+        spoken = [w for w in words if w.get("type", "word") == "word"]
+        return event(
+            StreamEventType.FINAL, text=text, is_final=True, speech_final=True, words=words,
+            start=spoken[0].get("start") if spoken else None,
+            end=spoken[-1].get("end") if spoken else None,
+        )
+    if kind == "session_started":
+        return event(StreamEventType.OPEN)
+    if kind in _REALTIME_ERRORS:
+        return event(StreamEventType.ERROR, text=str(raw.get("error") or raw.get("message") or kind))
+    # entities / redacted / edited / language-detection finals and future kinds
+    return event(StreamEventType.OTHER, text=text)

@@ -1,6 +1,6 @@
 {
   "model_id": "gemma3:270m",
-  "display_name": "Gemma3:270m",
+  "display_name": "Gemma 3 270M",
   "provider": "ollama",
   "model_type": "chat",
   "architecture": {
@@ -9,7 +9,8 @@
     "architecture_type": "dense"
   },
   "context": {
-    "max_input_tokens": 32768
+    "max_input_tokens": 32768,
+    "max_output_tokens": 4096
   },
   "capabilities": {
     "streaming": true,
@@ -20,21 +21,23 @@
     "vision": false,
     "audio_input": false,
     "audio_output": false,
-    "video_input": false,
     "reasoning": false
   },
   "pricing": null,
   "lifecycle": {
     "status": "active"
   },
-  "license": null,
+  "license": "gemma",
   "open_weights": true,
   "aliases": [],
-  "description": "Ollama model: gemma3:270m",
+  "description": "Gemma 3 270M — smallest Gemma model, suitable for embedding-like tasks and edge deployment.",
   "tags": [
-    "local",
     "open-source",
+    "local",
+    "tiny",
+    "edge",
+    "google-deepmind",
     "quant:Q8_0"
   ],
-  "source": "generated"
+  "source": "builtin"
 }

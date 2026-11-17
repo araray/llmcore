@@ -1,6 +1,6 @@
 {
   "model_id": "CognitiveComputations/dolphin-gemma2:2b",
-  "display_name": "Dolphin Gemma2:2b",
+  "display_name": "Dolphin Gemma 2 2B",
   "provider": "ollama",
   "model_type": "chat",
   "architecture": {
@@ -9,32 +9,26 @@
     "architecture_type": "dense"
   },
   "context": {
-    "max_input_tokens": 8192
+    "max_input_tokens": 8192,
+    "max_output_tokens": 4096
   },
   "capabilities": {
-    "streaming": true,
-    "function_calling": false,
-    "tool_use": false,
-    "json_mode": false,
-    "structured_output": false,
-    "vision": false,
-    "audio_input": false,
-    "audio_output": false,
-    "video_input": false,
-    "reasoning": false
+    "streaming": true
   },
   "pricing": null,
   "lifecycle": {
     "status": "active"
   },
-  "license": null,
+  "license": "gemma",
   "open_weights": true,
   "aliases": [],
-  "description": "Ollama model: CognitiveComputations/dolphin-gemma2:2b",
+  "description": "CognitiveComputations Dolphin fine-tune of Gemma 2 2B — uncensored variant.",
   "tags": [
-    "local",
     "open-source",
+    "local",
+    "uncensored",
+    "community",
     "quant:Q4_0"
   ],
-  "source": "generated"
+  "source": "builtin"
 }

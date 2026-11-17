@@ -38,8 +38,8 @@
   "aliases": [],
   "description": "Automatically convert input text into natural and fluent speech output. You can generate natural and vivid speech content by configuring parameters such as speech style and voice. Use the high-quality voices from the built-in voices list.",
   "tags": [
-    "{'type': 'text', 'supported_inputs': {}, 'pricing': []}",
-    "output:{'type': 'speech', 'supported_parameters': {'voice': {'type': 'unknown'}, 'speed': {'type': 'range', 'min': 0.25, 'max': 4, 'default': 1}, 'output_format': {'type': 'enum', 'values': ['wav', 'mp3', 'aac', 'opus', 'flac', 'pcm']}}, 'streaming': true, 'pricing': []}"
+    "text",
+    "output:speech"
   ],
   "source": "generated",
   "provider_extension": {

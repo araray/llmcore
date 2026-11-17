@@ -97,13 +97,23 @@ _DEFAULT_MODELS: dict[str, str] = {
     "image_generate": "fal-ai/flux/schnell",
     "image_edit": "fal-ai/flux-pro/kontext",
     "image_upscale": "fal-ai/clarity-upscaler",
-    "video_generate": "fal-ai/minimax-video",
+    # fal-ai/minimax-video is gone (404 on fal's Platform API, 2026-11-16).
+    "video_generate": "fal-ai/minimax/hailuo-2.3/standard/text-to-video",
     "video_interpolate": "fal-ai/film",
+    # Foley from a video; a text-only request uses _TEXT_TO_AUDIO_SFX instead
+    # (mmaudio-v2 requires video_url).
     "sfx": "fal-ai/mmaudio-v2",
     "music": "fal-ai/stable-audio",
-    "tts": "fal-ai/kokoro",
+    # The bare fal-ai/kokoro id has no page or schema; the language variants do.
+    "tts": "fal-ai/kokoro/american-english",
     "asr": "fal-ai/whisper",
 }
+
+#: Text-only sound effects (no video to follow).
+_TEXT_TO_AUDIO_SFX = "fal-ai/mmaudio-v2/text-to-audio"
+
+#: Image-to-video sibling of the default video endpoint.
+_DEFAULT_I2V = "fal-ai/minimax/hailuo-2.3/standard/image-to-video"
 
 #: fal queue states → llmcore job statuses.
 _STATUS_MAP: dict[str, str] = {
@@ -329,6 +339,25 @@ class FalProvider(BaseProvider):
             )
         return self._http
 
+    async def _sdk_call(self, endpoint: str, call: Any) -> Any:
+        """Await an fal_client call, mapping its errors onto ProviderError.
+
+        fal_client raises FalClientHTTPError (with ``status_code``) for any
+        HTTP failure; it used to escape raw, so callers catching ProviderError
+        saw a 422 validation error as an unknown exception.
+        """
+        try:
+            return await call
+        except ProviderError:
+            raise
+        except Exception as e:
+            status = getattr(e, "status_code", None)
+            if isinstance(status, int):
+                self._raise_status(status, str(e), endpoint)
+            raise ProviderError(
+                self.get_name(), f"fal SDK error: {e}", model_name=endpoint, retryable=True
+            ) from e
+
     def _raise_status(self, status: int, body: str, endpoint: str) -> None:
         """Map an HTTP failure onto a ProviderError.
 
@@ -374,11 +403,13 @@ class FalProvider(BaseProvider):
         single-use token bound to this job is strictly better than one
         endpoint receiving every result.
         """
+        hook = webhook_url or self._webhook_url
         if self._backend == "sdk":
-            handle = await self._sdk.submit(endpoint, arguments=payload)
+            # The callback used to be dropped on this transport, although the
+            # provider declares accepts_webhook_url.
+            handle = await self._sdk_call(endpoint, self._sdk.submit(endpoint, arguments=payload, webhook_url=hook))
             return {"request_id": handle.request_id}
 
-        hook = webhook_url or self._webhook_url
         params = {"fal_webhook": hook} if hook else None
         client = self._get_http()
         try:
@@ -417,12 +448,17 @@ class FalProvider(BaseProvider):
         queue routes; the reconstruction is only a fallback.
         """
         if self._backend == "sdk":
-            status = await self._sdk.status(endpoint, request_id)
+            status = await self._sdk_call(endpoint, self._sdk.status(endpoint, request_id))
             name = type(status).__name__.upper()
             mapped = {"QUEUED": "IN_QUEUE", "INPROGRESS": "IN_PROGRESS", "COMPLETED": "COMPLETED"}
+            # A failed request is also "Completed", with an error: it used to
+            # go on to result() and surface as a raw fal_client HTTP error.
             return {
                 "status": mapped.get(name, "IN_PROGRESS"),
                 "queue_position": getattr(status, "position", None),
+                "error": getattr(status, "error", None),
+                "error_type": getattr(status, "error_type", None),
+                "metrics": getattr(status, "metrics", None),
             }
         resp = await self._get_http().get(url or self._queue_url(endpoint, request_id, "/status"))
         if resp.status_code >= 400:
@@ -438,7 +474,7 @@ class FalProvider(BaseProvider):
         :meth:`_fetch_status` for why it wins over a reconstructed path.
         """
         if self._backend == "sdk":
-            return await self._sdk.result(endpoint, request_id)
+            return await self._sdk_call(endpoint, self._sdk.result(endpoint, request_id))
         resp = await self._get_http().get(url or self._queue_url(endpoint, request_id))
         if resp.status_code >= 400:
             self._raise_status(resp.status_code, resp.text, endpoint)
@@ -464,7 +500,7 @@ class FalProvider(BaseProvider):
         file_name = ref.filename or "upload.bin"
 
         if self._backend == "sdk":
-            return await self._sdk.upload(data, content_type)
+            return await self._sdk_call("upload", self._sdk.upload(data, content_type))
 
         errors: list[str] = []
         for attempt in (self._upload_via_cdn_v3, self._upload_via_signed_url):
@@ -649,7 +685,7 @@ class FalProvider(BaseProvider):
             return job
 
         if self._backend == "sdk":
-            await self._sdk.cancel(endpoint, request_id)
+            await self._sdk_call(endpoint, self._sdk.cancel(endpoint, request_id))
             job.status = MediaJobStatus.CANCELED
             job.provider_metadata["cancellation"] = "requested"
             job.touch()
@@ -775,7 +811,7 @@ class FalProvider(BaseProvider):
         payload: dict[str, Any] = {
             "prompt": prompt,
             "num_images": n,
-            "image_size": size,
+            "image_size": _image_size(size),
             "seed": seed,
             "negative_prompt": negative_prompt,
             **kwargs,
@@ -800,7 +836,7 @@ class FalProvider(BaseProvider):
             "prompt": prompt,
             "image_url": await self._upload(image),
             "num_images": n,
-            "image_size": size,
+            "image_size": _image_size(size),
             **kwargs,
         }
         if mask is not None:
@@ -836,9 +872,16 @@ class FalProvider(BaseProvider):
         **kwargs: Any,
     ) -> "MediaJob":
         """Generate a video."""
+        if model is None and first_frame is not None and self._models["video_generate"] == _DEFAULT_MODELS["video_generate"]:
+            model = _DEFAULT_I2V
+        endpoint = self._endpoint_for("video_generate", model)
+        duration: Any = duration_seconds
+        if duration_seconds is not None and "hailuo" in endpoint:
+            # Hailuo takes "6" or "10" (a string enum).
+            duration = "10" if duration_seconds >= 8 else "6"
         payload: dict[str, Any] = {
             "prompt": prompt,
-            "duration": duration_seconds,
+            "duration": duration,
             "resolution": resolution,
             "aspect_ratio": aspect_ratio,
             "seed": seed,
@@ -850,7 +893,7 @@ class FalProvider(BaseProvider):
             payload["end_image_url"] = await self._upload(last_frame)
         if with_audio is not None:
             payload["generate_audio"] = with_audio
-        return await self._submit_job("video_generate", model, payload)
+        return await self._submit_job("video_generate", endpoint, payload)
 
     async def edit_video_media(
         self, prompt: str, *, video: "MediaRef", model: str | None = None, **kwargs: Any
@@ -908,6 +951,8 @@ class FalProvider(BaseProvider):
         }
         if video is not None:
             payload["video_url"] = await self._upload(video)
+        elif model is None and self._models["sfx"] == _DEFAULT_MODELS["sfx"]:
+            model = _TEXT_TO_AUDIO_SFX  # mmaudio-v2 itself rejects a request without video_url
         return await self._submit_job("sfx", model, payload)
 
     async def generate_music_media(
@@ -966,3 +1011,15 @@ class FalProvider(BaseProvider):
             self._http = None
         self._sdk = None
         logger.info("FalProvider closed.")
+
+
+def _image_size(size: str | None) -> Any:
+    """fal's ``image_size``: a preset name (``square_hd``, ``landscape_4_3``,
+    ...) passes through; ``"1024x768"`` becomes ``{"width", "height"}``, which
+    is what FLUX and most fal image endpoints take for a custom size."""
+    if not size or not isinstance(size, str):
+        return size
+    width, sep, height = size.lower().partition("x")
+    if sep and width.strip().isdigit() and height.strip().isdigit():
+        return {"width": int(width), "height": int(height)}
+    return size

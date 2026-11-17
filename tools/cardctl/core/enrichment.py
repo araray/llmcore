@@ -10,6 +10,8 @@ Enrichments survive card regeneration — the generator never modifies them.
 
 from __future__ import annotations
 
+import re
+
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -127,7 +129,7 @@ class EnrichmentStore:
     def get(self, model_id: str) -> ModelEnrichment:
         """Resolve enrichments for a model, using exact then prefix matching."""
         return ModelEnrichment(
-            pricing=self._match(self._pricing, model_id),
+            pricing=self._match_pricing(self._pricing, model_id),
             architecture=self._match(self._architecture, model_id),
             overrides=self._match(self._overrides, model_id) or {},
             extra_aliases=self._aliases.get(model_id, []),
@@ -136,6 +138,22 @@ class EnrichmentStore:
                 (self._match(self._overrides, model_id) or {}).pop("tags", [])
             ),
         )
+
+    @staticmethod
+    def _match_pricing(table: dict[str, Any], model_id: str) -> Any | None:
+        """Exact key, or a dated/versioned snapshot of one -- never a variant.
+
+        Longest-prefix matching gave ``gemini-2.5-pro-preview-tts`` the
+        ``gemini-2.5-pro`` chat price ($1.25/$10 instead of the TTS model's
+        $1/$20): a confidently wrong number. Only snapshot suffixes
+        (``-20250514``, ``-2025-05-14``, ``-001``) inherit a price.
+        """
+        if model_id in table:
+            return table[model_id]
+        for key, val in table.items():
+            if model_id.startswith(key) and _SNAPSHOT_SUFFIX.fullmatch(model_id[len(key):]):
+                return val
+        return None
 
     @staticmethod
     def _match(table: dict[str, Any], model_id: str) -> Any | None:
@@ -149,6 +167,9 @@ class EnrichmentStore:
             if model_id.startswith(key) and len(key) > best[0]:
                 best = (len(key), val)
         return best[1]
+
+
+_SNAPSHOT_SUFFIX = re.compile(r"-(?:\d{8}|\d{4}-\d{2}-\d{2}|\d{3})")
 
 
 def _list_wrap(val: Any) -> list[str]:

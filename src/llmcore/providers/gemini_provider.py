@@ -16,11 +16,13 @@ Supports:
 Tested against google-genai SDK v1.72.0.
 """
 
+import base64
 import json
 import logging
 import os
 import uuid
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, AsyncIterator, Mapping
+from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, Any
 
 from ..exceptions import ConfigError, ContextLengthError, ProviderError
@@ -62,23 +64,51 @@ logger = logging.getLogger(__name__)
 # Updated for current-generation Gemini models (April 2026).
 # Used as last-resort fallback when neither the model card registry
 # nor dynamic API discovery have context length data.
+#: Input token limits per model, from the Developer API's own models.list
+#: (v1beta, 2026-11-16). Used when neither a card nor live discovery knows a
+#: model.
 DEFAULT_GEMINI_TOKEN_LIMITS = {
-    # Gemini 3.x family (preview)
-    "gemini-3.1-pro-preview": 1048576,
-    "gemini-3-flash-preview": 1048576,
-    "gemini-3.1-flash-lite-preview": 1048576,
-    "gemini-3.1-flash-image-preview": 128000,
-    "gemini-3.1-flash-live-preview": 128000,
-    # Gemini 2.5 family (stable, deprecates Oct 2026)
-    "gemini-2.5-pro": 1048576,
     "gemini-2.5-flash": 1048576,
+    "gemini-2.5-pro": 1048576,
+    "gemini-2.5-flash-preview-tts": 8192,
+    "gemini-2.5-pro-preview-tts": 8192,
+    "gemini-flash-latest": 1048576,
+    "gemini-flash-lite-latest": 1048576,
+    "gemini-pro-latest": 1048576,
     "gemini-2.5-flash-lite": 1048576,
-    "gemini-2.5-flash-image": 65536,
-    # Gemini 2.0 family (deprecated, shutdown June 2026)
-    "gemini-2.0-flash": 1048576,
-    "gemini-2.0-flash-lite": 1048576,
+    "gemini-2.5-flash-image": 32768,
+    "gemini-3-flash-preview": 1048576,
+    "gemini-3.1-pro-preview": 1048576,
+    "gemini-3.1-pro-preview-customtools": 1048576,
+    "gemini-3.1-flash-lite-preview": 1048576,
+    "gemini-3.1-flash-lite": 1048576,
+    "gemini-3-pro-image-preview": 131072,
+    "gemini-3-pro-image": 131072,
+    "gemini-3.1-flash-image-preview": 65536,
+    "gemini-3.1-flash-image": 65536,
+    "gemini-3.1-flash-lite-image": 65536,
+    "gemini-nano-banana-2.1": 65536,
+    "gemini-3.5-flash": 1048576,
+    "gemini-3.5-flash-lite": 1048576,
+    "gemini-omni-flash-preview": 131072,
+    "gemini-omni-1.1-flash": 131072,
+    "gemini-omni-1.2-flash": 131072,
+    "gemini-3.5-transcribe": 98304,
+    "gemini-3.6-flash": 1048576,
+    "gemini-3.7-flash": 1048576,
+    "gemini-3.8-flash": 1048576,
+    "gemini-4-argon": 1048576,
+    "gemini-4-carbon": 1048576,
+    "gemini-4-hydrogen": 1048576,
+    "gemini-3.1-flash-tts-preview": 8192,
+    "gemini-3.8-flash-tts": 8192,
+    "gemini-3.8-flash-lite-tts": 8192,
+    "gemini-robotics-er-2-preview": 131072,
+    "gemini-2.5-computer-use-preview-10-2025": 131072,
 }
-DEFAULT_MODEL = "gemini-3.1-flash-lite-preview"
+#: gemini-3.1-flash-lite-preview (the old default) is shut down and only
+#: aliased; gemini-3.5-flash-lite is the current GA lite model.
+DEFAULT_MODEL = "gemini-3.5-flash-lite"
 
 LLMCORE_TO_GEMINI_ROLE_MAP = {
     LLMCoreRole.USER: "user",
@@ -102,8 +132,6 @@ def _ensure_google_genai_imported() -> bool:
     _google_genai_import_attempted = True
     try:
         from google import genai as _genai
-        from google.api_core.exceptions import InvalidArgument as _InvalidArgument
-        from google.api_core.exceptions import PermissionDenied as _PermissionDenied
         from google.genai import types as _types
         from google.genai.errors import APIError as _APIError
     except ImportError:
@@ -115,6 +143,16 @@ def _ensure_google_genai_imported() -> bool:
         InvalidArgument = Exception
         return False
 
+    # google-api-core is optional: google-genai raises its own APIError
+    # hierarchy and never these, so they are kept only for callers that still
+    # catch them. Requiring the package made the whole provider unavailable
+    # without it.
+    try:
+        from google.api_core.exceptions import InvalidArgument as _InvalidArgument
+        from google.api_core.exceptions import PermissionDenied as _PermissionDenied
+    except ImportError:
+        _InvalidArgument = _PermissionDenied = _APIError  # type: ignore[assignment,misc]
+
     genai = _genai
     types = _types
     APIError = _APIError
@@ -122,6 +160,102 @@ def _ensure_google_genai_imported() -> bool:
     InvalidArgument = _InvalidArgument
     google_genai_available = True
     return True
+
+
+# ---------------------------------------------------------------------------
+# Parts: the unit Gemini replays, with thought signatures
+# ---------------------------------------------------------------------------
+
+#: The documented placeholder for function calls that did not come from this
+#: model (foreign or hand-built history), as base64. Gemini 3+ rejects a
+#: replayed function call without a signature ("Function call is missing a
+#: thought_signature"), measured live 2026-11-16.
+_SKIP_SIGNATURE = base64.b64encode(b"skip_thought_signature_validator").decode()
+
+
+def _part_dict(part: Any) -> dict[str, Any]:
+    """One response part as a plain dict, signatures as base64 text.
+
+    SDK parts are dumped in JSON mode (``thought_signature`` is bytes on the
+    object and base64 on the wire); direct-transport parts are already wire
+    dicts. Both shapes are accepted back by both transports.
+    """
+    if isinstance(part, _WireValue):
+        return dict(part._data) if isinstance(part._data, dict) else {}
+    if isinstance(part, dict):
+        return dict(part)
+    dump = getattr(part, "model_dump", None)
+    if callable(dump):
+        dumped = dump(mode="json", exclude_none=True)
+        if isinstance(dumped, dict):
+            return dumped
+    # Any other part-like object: read the fields this provider uses.
+    out: dict[str, Any] = {}
+    for name in ("text", "thought", "thought_signature", "function_call", "inline_data"):
+        value = getattr(part, name, None)
+        if value is None:
+            continue
+        if name == "thought_signature" and isinstance(value, (bytes, bytearray)):
+            value = base64.b64encode(bytes(value)).decode()
+        elif name == "function_call":
+            value = {k: getattr(value, k, None) for k in ("name", "args", "id")}
+        out[name] = value
+    return out
+
+
+def _part_signature(part: dict[str, Any]) -> str | None:
+    return part.get("thought_signature") or part.get("thoughtSignature")
+
+
+def _part_function_call(part: dict[str, Any]) -> dict[str, Any] | None:
+    call = part.get("function_call") or part.get("functionCall")
+    return call if isinstance(call, dict) else None
+
+
+def _response_parts(response: Any) -> list[dict[str, Any]]:
+    """The first candidate's parts as dicts."""
+    candidates = getattr(response, "candidates", None) or []
+    if not candidates:
+        return []
+    content = getattr(candidates[0], "content", None)
+    return [_part_dict(p) for p in (getattr(content, "parts", None) or [])]
+
+
+def _tool_call_from_part(part: dict[str, Any], index: int) -> dict[str, Any] | None:
+    """A function-call part as an OpenAI-shaped tool call.
+
+    The signature travels in ``extra_content.google.thought_signature``, which
+    is where Google's own OpenAI-compatible endpoint puts it, so a caller that
+    replays only ``tool_calls`` still sends it back.
+    """
+    call = _part_function_call(part)
+    if call is None:
+        return None
+    tool_call: dict[str, Any] = {
+        "id": call.get("id") or f"call_{index}_{uuid.uuid4().hex[:12]}",
+        "type": "function",
+        "function": {"name": call.get("name"), "arguments": json.dumps(call.get("args") or {})},
+    }
+    signature = _part_signature(part)
+    if signature:
+        tool_call["extra_content"] = {"google": {"thought_signature": signature}}
+    return tool_call
+
+
+def _merge_parts(parts: list[dict[str, Any]], new: dict[str, Any]) -> None:
+    """Append a streamed part, joining plain text fragments into one part."""
+    plain = (
+        "text" in new
+        and not new.get("thought")
+        and not _part_signature(new)
+        and set(new) <= {"text"}
+    )
+    if plain and parts and set(parts[-1]) == {"text"}:
+        parts[-1] = {"text": parts[-1]["text"] + (new.get("text") or "")}
+        return
+    if set(new) <= {"text"} and not new.get("text"):
+        return  # empty keep-alive fragment
+    parts.append(new)
 
 
 #: Developer-API root for the direct transport. Vertex mode keeps using the SDK
@@ -344,11 +478,14 @@ class GeminiProvider(BaseProvider):
         self._vertex_ai = config.get("vertex_ai", False)
         # Optional per-capability media model overrides:
         #   default_image_model / default_video_model /
-        #   default_tts_model / default_embedding_model
+        #   default_tts_model / default_asr_model / default_embedding_model
         self._media_model_config: dict[str, Any] = {
             "image": config.get("default_image_model"),
             "video": config.get("default_video_model"),
             "tts": config.get("default_tts_model"),
+            "asr": config.get("default_asr_model"),
+            "music": config.get("default_music_model"),
+            "decision": config.get("default_decision_model"),
             "embed": config.get("default_embedding_model"),
         }
         self._project = config.get("project")
@@ -370,6 +507,12 @@ class GeminiProvider(BaseProvider):
                     client_kwargs["location"] = self._location
             else:
                 client_kwargs["api_key"] = self.api_key
+                # google-genai 3.x defaults the Developer API to v1, which lacks
+                # TTS (speechConfig: "Unknown name"), explicit caching, the Live
+                # API and the -latest/-preview aliases. v1beta has all of them.
+                client_kwargs["http_options"] = types.HttpOptions(
+                    api_version=str(config.get("api_version") or "v1beta")
+                )
 
             self._client = genai.Client(**client_kwargs)
             self._backend = self._resolve_backend(config.get("backend"))
@@ -585,6 +728,17 @@ class GeminiProvider(BaseProvider):
             "cached_content": {"type": "string"},
             "routing_config": {"type": "object"},
             "model_selection_config": {"type": "object"},
+            "service_tier": {"type": "string"},
+            "effort": {
+                "type": "string",
+                "enum": ["none", "minimal", "low", "medium", "high", "xhigh", "max"],
+                "description": "Mapped to thinking_config (thinking_level on Gemini 3+).",
+            },
+            "thinking_display": {
+                "type": "string",
+                "enum": ["summarized", "omitted"],
+                "description": "summarized = include_thoughts (thought summaries).",
+            },
         }
 
     def get_max_context_length(self, model: str | None = None) -> int:
@@ -722,19 +876,29 @@ class GeminiProvider(BaseProvider):
             else:
                 system_instruction_text = sys_msg.content
 
+        # Tool results name their function; the call id alone is not a name.
+        call_names: dict[str, str] = {}
+        for msg in processed_messages:
+            for tc in getattr(msg, "tool_calls", None) or (msg.metadata or {}).get("tool_calls") or []:
+                if isinstance(tc, dict) and tc.get("id"):
+                    func = tc.get("function") if isinstance(tc.get("function"), dict) else tc
+                    call_names[str(tc["id"])] = str(func.get("name") or "")
+
         last_role = None
         for msg in processed_messages:
             # Handle tool result messages -> functionResponse parts
             if msg.role == LLMCoreRole.TOOL:
-                tool_name = (msg.metadata or {}).get(
-                    "tool_name", msg.tool_call_id or "unknown"
+                tool_name = (msg.metadata or {}).get("tool_name") or call_names.get(
+                    msg.tool_call_id or "", msg.tool_call_id or "unknown"
                 )
-                function_response_part = {
-                    "function_response": {
-                        "name": tool_name,
-                        "response": {"result": msg.content},
-                    }
+                function_response: dict[str, Any] = {
+                    "name": tool_name,
+                    "response": {"result": msg.content},
                 }
+                if msg.tool_call_id:
+                    # Gemini 3.8 pairs results to calls by id.
+                    function_response["id"] = msg.tool_call_id
+                function_response_part = {"function_response": function_response}
                 if last_role == "user" and genai_history:
                     genai_history[-1]["parts"].append(function_response_part)
                 else:
@@ -749,7 +913,10 @@ class GeminiProvider(BaseProvider):
             if not genai_role:
                 continue
 
-            parts = self._build_multimodal_parts(msg)
+            if genai_role == "model":
+                parts = self._model_turn_parts(msg)
+            else:
+                parts = self._build_multimodal_parts(msg)
 
             if genai_role == last_role and genai_history:
                 genai_history[-1]["parts"].extend(parts)
@@ -759,6 +926,52 @@ class GeminiProvider(BaseProvider):
             last_role = genai_role
 
         return genai_history, system_instruction_text
+
+    def _model_turn_parts(self, msg: Message) -> list[dict[str, Any]]:
+        """Parts for an assistant (``model``) turn, ready to replay.
+
+        Gemini 3+ validates thought signatures on replayed function calls. A
+        call without one is a 400. So, in order of preference:
+
+        1. ``metadata["gemini_parts"]`` (from :meth:`assistant_replay_metadata`)
+           is the turn exactly as the model produced it, and is sent verbatim.
+        2. Otherwise the turn is rebuilt from ``tool_calls``, taking each call's
+           signature from ``extra_content.google.thought_signature``.
+        3. If no call carries one (history from another model, or built by
+           hand), the first call gets Google's documented placeholder.
+        """
+        metadata = msg.metadata or {}
+        replay = metadata.get("gemini_parts")
+        if replay:
+            return [dict(p) for p in replay]
+        tool_calls = getattr(msg, "tool_calls", None) or metadata.get("tool_calls")
+        if not tool_calls:
+            return self._build_multimodal_parts(msg)
+        parts: list[dict[str, Any]] = []
+        if msg.content:
+            parts.append({"text": msg.content})
+        calls: list[dict[str, Any]] = []
+        for tc in tool_calls:
+            if not isinstance(tc, dict):
+                continue
+            func = tc.get("function") if isinstance(tc.get("function"), dict) else tc
+            args = func.get("arguments", func.get("args", {}))
+            if isinstance(args, str):
+                try:
+                    args = json.loads(args or "{}")
+                except ValueError:
+                    args = {"_raw": args}
+            call: dict[str, Any] = {"name": func.get("name"), "args": args or {}}
+            if tc.get("id"):
+                call["id"] = tc["id"]
+            part: dict[str, Any] = {"function_call": call}
+            signature = ((tc.get("extra_content") or {}).get("google") or {}).get("thought_signature")
+            if signature:
+                part["thought_signature"] = signature
+            calls.append(part)
+        if calls and not any(_part_signature(c) for c in calls):
+            calls[0]["thought_signature"] = _SKIP_SIGNATURE
+        return parts + calls
 
     # ------------------------------------------------------------------
     # Tool Call Normalization
@@ -816,7 +1029,11 @@ class GeminiProvider(BaseProvider):
         if config is None:
             return {}
         dump = getattr(config, "model_dump", None)
-        raw = dump(exclude_none=True, by_alias=True) if callable(dump) else dict(config or {})
+        raw = (
+            dump(mode="json", exclude_none=True, by_alias=True)
+            if callable(dump)
+            else dict(config or {})
+        )
 
         body: dict[str, Any] = {}
         # These are top-level on the wire rather than inside generationConfig.
@@ -920,7 +1137,8 @@ class GeminiProvider(BaseProvider):
         for item in items:
             dump = getattr(item, "model_dump", None)
             if callable(dump):
-                wire.append(dump(exclude_none=True, by_alias=True))
+                # JSON mode: thought signatures are bytes on SDK objects.
+                wire.append(dump(mode="json", exclude_none=True, by_alias=True))
             elif isinstance(item, dict):
                 wire.append(item)
             else:
@@ -1020,6 +1238,31 @@ class GeminiProvider(BaseProvider):
         # Build GenerateContentConfig kwargs
         generation_config_kwargs: dict[str, Any] = {}
 
+        effort = kwargs.pop("effort", None)
+        display = kwargs.pop("thinking_display", None)
+        if effort or display:
+            thinking = dict(kwargs.pop("thinking_config", None) or {})
+            if effort:
+                thinking.update(self._effort_to_thinking(str(effort).strip().lower(), model_name))
+            if display:
+                thinking["include_thoughts"] = display == "summarized"
+            kwargs["thinking_config"] = thinking
+
+        # Portable names every other provider accepts. Passed through
+        # untranslated they reached GenerateContentConfig, which rejects
+        # unknown fields: chat(max_tokens=...) raised a pydantic error.
+        for portable, native in (
+            ("max_tokens", "max_output_tokens"),
+            ("max_completion_tokens", "max_output_tokens"),
+            ("stop", "stop_sequences"),
+            ("n", "candidate_count"),
+        ):
+            if portable in kwargs:
+                value = kwargs.pop(portable)
+                if native == "stop_sequences" and isinstance(value, str):
+                    value = [value]
+                kwargs.setdefault(native, value)
+
         supported = self.get_supported_parameters()
         for key, value in kwargs.items():
             if key not in supported:
@@ -1035,10 +1278,16 @@ class GeminiProvider(BaseProvider):
         if self._safety_settings:
             generation_config_kwargs["safety_settings"] = self._safety_settings
 
-        # Tool definitions
+        # Tool definitions. (This used FunctionDeclaration.from_dict, which
+        # google-genai has never had: every call with tools raised
+        # AttributeError.) parameters_json_schema takes a JSON Schema as-is.
         function_declarations = (
             [
-                types.FunctionDeclaration.from_dict(tool.model_dump())
+                types.FunctionDeclaration(
+                    name=tool.name,
+                    description=tool.description or "",
+                    parameters_json_schema=tool.parameters or {"type": "object", "properties": {}},
+                )
                 for tool in tools
             ]
             if tools
@@ -1096,13 +1345,21 @@ class GeminiProvider(BaseProvider):
                     model_name, genai_contents, config
                 )
         except (APIError, InvalidArgument) as e:
-            logger.error(f"Google AI API error: {e}", exc_info=True)
-            err_str = str(e).lower()
-            if "context length" in err_str or "token" in err_str:
+            status = getattr(e, "code", None)
+            status = status if isinstance(status, int) else None
+            logger.debug("Google AI API error (%s): %s", status, e)
+            if self._is_context_overflow(str(e)):
                 raise ContextLengthError(
                     model_name=model_name, message=str(e)
                 ) from e
-            raise ProviderError(self.get_name(), f"Google AI API Error: {e}") from e
+            raise ProviderError(
+                self.get_name(),
+                f"Google AI API Error: {e}",
+                model_name=model_name,
+                status_code=status,
+                retryable=status in (429, 500, 503, 504) if status else None,
+                original_exception=e,
+            ) from e
         except PermissionDenied as e:
             logger.error(
                 f"Permission denied during Gemini chat: {e}", exc_info=True
@@ -1143,22 +1400,16 @@ class GeminiProvider(BaseProvider):
                 config=config,
             )
 
-        # .text property excludes thought parts
-        text_content = response.text or ""
-
-        # Extract thinking content if present
-        thinking_content = None
-        if response.candidates and response.candidates[0].content:
-            thought_parts = [
-                p.text
-                for p in (response.candidates[0].content.parts or [])
-                if getattr(p, "thought", False) and p.text
-            ]
-            if thought_parts:
-                thinking_content = "".join(thought_parts)
-
-        # Extract and normalize tool calls
-        tool_calls = self._normalize_tool_calls_from_response(response)
+        parts = _response_parts(response)
+        text_content = "".join(
+            p.get("text") or "" for p in parts if "text" in p and not p.get("thought")
+        )
+        thinking_content = "".join(
+            p.get("text") or "" for p in parts if p.get("thought")
+        ) or None
+        tool_calls = [
+            tc for i, p in enumerate(parts) if (tc := _tool_call_from_part(p, i)) is not None
+        ] or None
 
         # Finish reason
         finish_reason = None
@@ -1169,31 +1420,18 @@ class GeminiProvider(BaseProvider):
         # Build message dict
         message_dict: dict[str, Any] = {
             "role": "assistant",
-            "content": text_content if not tool_calls else None,
+            "content": text_content if not tool_calls else (text_content or None),
         }
         if tool_calls:
             message_dict["tool_calls"] = tool_calls
         if thinking_content:
             message_dict["thinking"] = thinking_content
+        if tool_calls or any(_part_signature(p) for p in parts):
+            # The turn exactly as produced, signatures included: what a tool
+            # loop must send back (see assistant_replay_metadata).
+            message_dict["gemini_parts"] = parts
 
-        # Build usage dict with OpenAI-compatible aliases
-        usage_dict: dict[str, Any] = {}
-        if response.usage_metadata:
-            um = response.usage_metadata
-            usage_dict = {
-                "prompt_token_count": um.prompt_token_count,
-                "candidates_token_count": um.candidates_token_count,
-                "total_token_count": um.total_token_count,
-                "prompt_tokens": um.prompt_token_count,
-                "completion_tokens": um.candidates_token_count,
-                "total_tokens": um.total_token_count,
-            }
-            if um.thoughts_token_count:
-                usage_dict["thoughts_token_count"] = um.thoughts_token_count
-            if um.cached_content_token_count:
-                usage_dict["cached_content_token_count"] = (
-                    um.cached_content_token_count
-                )
+        usage_dict = self._normalize_usage_metadata(response.usage_metadata)
 
         response_dict: dict[str, Any] = {
             "id": getattr(response, "response_id", None),
@@ -1251,6 +1489,10 @@ class GeminiProvider(BaseProvider):
             )
 
         async def stream_wrapper():
+            parts: list[dict[str, Any]] = []
+            tool_index = 0
+            finish_reason = None
+            usage: dict[str, Any] = {}
             async for chunk in response_stream:
                 if self.log_raw_payloads_enabled:
                     logger.debug(
@@ -1259,20 +1501,139 @@ class GeminiProvider(BaseProvider):
 
                 text_delta = ""
                 thought_delta = ""
-                if chunk.candidates and chunk.candidates[0].content:
-                    for part in chunk.candidates[0].content.parts or []:
-                        if getattr(part, "thought", False):
-                            thought_delta += part.text or ""
-                        elif part.text is not None:
-                            text_delta += part.text
+                calls: list[dict[str, Any]] = []
+                for part in _response_parts(chunk):
+                    _merge_parts(parts, part)
+                    if part.get("thought"):
+                        thought_delta += part.get("text") or ""
+                    elif _part_function_call(part) is not None:
+                        # Gemini streams each function call whole, so it is
+                        # emitted as one complete tool-call delta.
+                        call = _tool_call_from_part(part, tool_index)
+                        if call is not None:
+                            calls.append({"index": tool_index, **call})
+                            tool_index += 1
+                    elif part.get("text") is not None:
+                        text_delta += part.get("text") or ""
 
                 delta: dict[str, Any] = {"content": text_delta}
                 if thought_delta:
                     delta["thinking"] = thought_delta
-
+                if calls:
+                    delta["tool_calls"] = calls
+                candidates = getattr(chunk, "candidates", None) or []
+                reason = getattr(candidates[0], "finish_reason", None) if candidates else None
+                if reason:
+                    finish_reason = getattr(reason, "name", str(reason))
+                if getattr(chunk, "usage_metadata", None):
+                    usage = self._normalize_usage_metadata(chunk.usage_metadata)
                 yield {"choices": [{"delta": delta}]}
 
+            # Final chunk: finish reason, usage (both were dropped before) and,
+            # when the turn has calls or signatures, the parts to replay.
+            final_delta: dict[str, Any] = {"content": ""}
+            if tool_index or any(_part_signature(p) for p in parts):
+                final_delta["gemini_parts"] = parts
+            if tool_index and finish_reason in (None, "STOP"):
+                finish_reason = "tool_calls"
+            yield {"choices": [{"delta": final_delta, "finish_reason": finish_reason}], "usage": usage}
+
         return stream_wrapper()
+
+    @staticmethod
+    def _normalize_usage_metadata(um: Any) -> dict[str, Any]:
+        """Gemini usage with the OpenAI keys llmcore reads.
+
+        Thinking tokens are billed as output, so ``completion_tokens`` counts
+        them. It used to be ``candidates_token_count`` alone, which undercounted
+        every thinking model's cost.
+        """
+        if not um:
+            return {}
+        prompt = getattr(um, "prompt_token_count", None) or 0
+        candidates = getattr(um, "candidates_token_count", None) or 0
+        thoughts = getattr(um, "thoughts_token_count", None) or 0
+        usage: dict[str, Any] = {
+            "prompt_token_count": prompt,
+            "candidates_token_count": candidates,
+            "total_token_count": getattr(um, "total_token_count", None),
+            "prompt_tokens": prompt,
+            "completion_tokens": candidates + thoughts,
+            "total_tokens": getattr(um, "total_token_count", None) or prompt + candidates + thoughts,
+        }
+        if thoughts:
+            usage["thoughts_token_count"] = thoughts
+            usage["completion_tokens_details"] = {"reasoning_tokens": thoughts}
+        cached = getattr(um, "cached_content_token_count", None)
+        if cached:
+            usage["cached_content_token_count"] = cached
+            usage["prompt_tokens_details"] = {"cached_tokens": cached}
+        return usage
+
+    @staticmethod
+    def _effort_to_thinking(effort: str, model: str) -> dict[str, Any]:
+        """llmcore's effort as Gemini's thinking settings for ``model``.
+
+        Gemini 3+ takes ``thinking_level`` (minimal/low/medium/high, xhigh on
+        gemini-4-hydrogen) and cannot switch thinking off; Gemini 4 and 3.8
+        reject ``minimal``. Gemini 2.5 takes a token budget instead.
+        """
+        if model.startswith("gemini-2"):
+            budgets = {"none": 0, "minimal": 512, "low": 1024, "medium": 8192,
+                       "high": 24576, "xhigh": 32768, "max": 32768}
+            return {"thinking_budget": budgets.get(effort, 8192)}
+        no_minimal = model.startswith(("gemini-4", "gemini-3.8"))
+        levels = {
+            "none": "low" if no_minimal else "minimal",
+            "minimal": "low" if no_minimal else "minimal",
+            "low": "low",
+            "medium": "medium",
+            "high": "high",
+            "xhigh": "xhigh" if "hydrogen" in model else "high",
+            "max": "xhigh" if "hydrogen" in model else "high",
+        }
+        return {"thinking_level": levels.get(effort, "medium")}
+
+    @staticmethod
+    def _is_context_overflow(text: str) -> bool:
+        """Gemini's prompt-too-long error, not just any message about tokens.
+
+        "The input token count (N) exceeds the maximum number of tokens allowed
+        (M)." The old test (``"token" in message``) also caught
+        max_output_tokens and continuation-token errors.
+        """
+        lowered = text.lower()
+        return "exceeds the maximum number of tokens" in lowered or (
+            "input token count" in lowered and "exceed" in lowered
+        ) or "context length" in lowered
+
+    def assistant_replay_metadata(self, response: dict[str, Any]) -> dict[str, Any]:
+        """The parts to send back on the next assistant turn of a tool loop.
+
+        Gemini 3+ requires the thought signature that came with a function call
+        to be sent back with it. A replayed call without one is a 400. For a
+        stream, pass the last chunk.
+        """
+        try:
+            choice = (response.get("choices") or [{}])[0]
+        except (AttributeError, IndexError, TypeError):
+            return {}
+        source = choice.get("message") or choice.get("delta") or {}
+        parts = source.get("gemini_parts")
+        return {"gemini_parts": list(parts)} if parts else {}
+
+    def extract_reasoning_content(self, response: dict[str, Any]) -> str | None:
+        """Thought summaries (with ``thinking_display="summarized"``)."""
+        try:
+            return ((response.get("choices") or [{}])[0].get("message") or {}).get("thinking")
+        except (AttributeError, IndexError, TypeError):
+            return None
+
+    def extract_delta_reasoning_content(self, chunk: dict[str, Any]) -> str | None:
+        try:
+            return ((chunk.get("choices") or [{}])[0].get("delta") or {}).get("thinking")
+        except (AttributeError, IndexError, TypeError):
+            return None
 
     # ------------------------------------------------------------------
     # Tool Call Extraction (Public API)
@@ -1493,8 +1854,13 @@ class GeminiProvider(BaseProvider):
     # timeout and cancellation policy — this adapter only reports state.
 
     #: Capabilities available on BOTH the Gemini Developer API and Vertex AI.
+    #: asr / asr_stream / voice_agent verified on both (Vertex 2026-11-16:
+    #: transcription on location "global", the Live agent model on
+    #: "us-central1" -- model availability differs per Vertex location).
     _MEDIA_CAPABILITIES: frozenset[str] = frozenset(
-        {"image_generate", "tts", "video_generate"}
+        # image_edit: the Gemini image models edit an image given with the
+        # prompt (generate_content), in both modes.
+        {"image_generate", "image_edit", "tts", "asr", "asr_stream", "voice_agent"}
     )
 
     #: Capabilities that exist ONLY on Vertex AI. Verified live: the Developer
@@ -1503,15 +1869,34 @@ class GeminiProvider(BaseProvider):
     #: mode". Declaring them unconditionally would make the router call an
     #: endpoint that always errors for Developer-API users.
     _VERTEX_ONLY_MEDIA_CAPABILITIES: frozenset[str] = frozenset(
-        {"image_edit", "image_upscale"}
+        # Veo is Vertex-only too: the Developer API shut its Veo previews down
+        # on 2026-10-22 (models 404), and google-genai 3.x refuses
+        # generate_videos outside Vertex before sending anything.
+        # Imagen (generate_images / edit_image / upscale_image) is gone from
+        # Vertex: no imagen-* model is listed on global or us-central1
+        # (2026-11-16), so image_upscale is no longer declared. Images go
+        # through the Gemini image models instead; Veo remains.
+        {"video_generate"}
+    )
+
+    #: Developer-API-only capabilities: ``gemini-3.5-transcribe`` is listed and
+    #: verified there (generateContent, 2026-11-16); its Vertex availability
+    #: is unverified, so it is not declared in Vertex mode.
+    _DEV_ONLY_MEDIA_CAPABILITIES: frozenset[str] = frozenset(
+        # music: Lyria (generateContent, MP3 out). Vertex answers 404 for
+        # lyria-3.5 on both global and us-central1 (2026-11-16), and has no
+        # createDecision method either.
+        {"music"}
     )
 
     #: Default models per media capability, overridable per call and via config.
-    _DEFAULT_IMAGE_MODEL = "imagen-4.0-generate-001"        # Vertex only
-    _DEFAULT_DEV_IMAGE_MODEL = "gemini-2.5-flash-image"     # Developer API
-    _DEFAULT_VIDEO_MODEL = "veo-3.1-generate-preview"
-    _DEFAULT_TTS_MODEL = "gemini-2.5-flash-preview-tts"
-    _DEFAULT_EMBED_MODEL = "gemini-embedding-001"
+    _DEFAULT_IMAGE_MODEL = "gemini-3.1-flash-image"         # Vertex (Imagen is gone)
+    _DEFAULT_DEV_IMAGE_MODEL = "gemini-nano-banana-2.1"     # Developer API (GA)
+    _DEFAULT_VIDEO_MODEL = "veo-3.1-generate-001"           # Vertex only
+    _DEFAULT_TTS_MODEL = "gemini-3.8-flash-tts"
+    _DEFAULT_ASR_MODEL = "gemini-3.5-transcribe"
+    _DEFAULT_MUSIC_MODEL = "lyria-3.5"
+    _DEFAULT_EMBED_MODEL = "gemini-embedding-2"
 
     def media_capabilities(self) -> "frozenset[MediaCapability]":
         """Capabilities Gemini can serve in the CURRENT auth mode.
@@ -1525,6 +1910,8 @@ class GeminiProvider(BaseProvider):
         names = set(self._MEDIA_CAPABILITIES)
         if self._vertex_ai:
             names |= self._VERTEX_ONLY_MEDIA_CAPABILITIES
+        else:
+            names |= self._DEV_ONLY_MEDIA_CAPABILITIES
         return frozenset(MediaCapability(c) for c in names)
 
     def media_execution(
@@ -1536,6 +1923,8 @@ class GeminiProvider(BaseProvider):
         """
         from ..media.models import MediaCapability, MediaExecution
 
+        if capability in (MediaCapability.ASR_STREAM, MediaCapability.VOICE_AGENT):
+            return MediaExecution.STREAM
         if capability is MediaCapability.VIDEO_GENERATE:
             return MediaExecution.ASYNC_JOB
         return MediaExecution.REQUEST_RESPONSE
@@ -1553,8 +1942,19 @@ class GeminiProvider(BaseProvider):
             "image": self._DEFAULT_IMAGE_MODEL,
             "video": self._DEFAULT_VIDEO_MODEL,
             "tts": self._DEFAULT_TTS_MODEL,
+            "asr": self._DEFAULT_ASR_MODEL,
+            "music": self._DEFAULT_MUSIC_MODEL,
             "embed": self._DEFAULT_EMBED_MODEL,
         }[capability]
+
+    @staticmethod
+    async def _ref_bytes(ref: "MediaRef") -> bytes:
+        """The bytes behind *ref*, fetching a remote one."""
+        if ref.is_remote:
+            from ..media.artifacts import default_fetcher
+
+            return await default_fetcher()(ref.url or "")
+        return ref.read_bytes()
 
     @staticmethod
     async def _to_genai_image(ref: "MediaRef") -> Any:
@@ -1628,10 +2028,12 @@ class GeminiProvider(BaseProvider):
                 prompt, image=reference_images[0], model=model, n=n, size=size, **kwargs
             )
 
-        if not self._vertex_ai:
-            # Developer API: Imagen's dedicated endpoint is unavailable, but the
-            # image-capable Gemini models generate through generate_content with
-            # an IMAGE response modality. Same capability, different transport.
+        requested = model or self._media_model_config.get("image")
+        if not (self._vertex_ai and str(requested or "").startswith("imagen")):
+            # The Gemini image models generate through generate_content with an
+            # IMAGE response modality, on both the Developer API and Vertex.
+            # Imagen's generate_images is used only when an imagen-* model is
+            # named explicitly (Vertex lists none any more).
             return await self._generate_image_via_generate_content(
                 prompt, model=model, n=n, size=size, **kwargs
             )
@@ -1699,7 +2101,11 @@ class GeminiProvider(BaseProvider):
             MediaUsage,
         )
 
-        img_model = model or self._media_model_config.get("image") or self._DEFAULT_DEV_IMAGE_MODEL
+        image_ref = kwargs.pop("_edit_image", None)
+        capability_name = kwargs.pop("_capability", "image_generate")
+        img_model = model or self._media_model_config.get("image") or (
+            self._DEFAULT_IMAGE_MODEL if self._vertex_ai else self._DEFAULT_DEV_IMAGE_MODEL
+        )
         if n != 1:
             logger.debug(
                 "The Gemini Developer API image path has no image-count parameter; "
@@ -1720,9 +2126,16 @@ class GeminiProvider(BaseProvider):
         if image_config:
             kwargs["image_config"] = genai_types.ImageConfig(**image_config)
         try:
+            contents: Any = prompt
+            if image_ref is not None:
+                data = await self._ref_bytes(image_ref)
+                contents = [
+                    genai_types.Part.from_bytes(data=data, mime_type=image_ref.mime_type or "image/png"),
+                    prompt,
+                ]
             response = await self._client.aio.models.generate_content(
                 model=img_model,
-                contents=prompt,
+                contents=contents,
                 config=genai_types.GenerateContentConfig(
                     response_modalities=["IMAGE"], **kwargs
                 ),
@@ -1750,7 +2163,7 @@ class GeminiProvider(BaseProvider):
                 )
 
         return MediaResult(
-            capability=MediaCapability.IMAGE_GENERATE,
+            capability=MediaCapability(capability_name),
             provider=self.get_name(),
             model=img_model,
             artifacts=tuple(artifacts),
@@ -1774,10 +2187,25 @@ class GeminiProvider(BaseProvider):
         size: str | None = None,
         **kwargs: Any,
     ) -> "MediaResult":
-        """Edit an image with Imagen's edit surface."""
+        """Edit an image.
+
+        The Gemini image models (Nano Banana) edit the image passed with the
+        prompt through ``generate_content``, on both the Developer API and
+        Vertex. Imagen's mask-based ``edit_image`` is used only when an
+        ``imagen-*`` model is named (Vertex lists none any more); the Gemini
+        path takes no mask, so a mask there is described in the prompt instead.
+        """
         from google.genai import types as genai_types
 
         from ..media.models import MediaCapability, MediaResult, MediaUsage
+
+        if not str(model or self._media_model_config.get("image") or "").startswith("imagen"):
+            if mask is not None:
+                logger.warning("Gemini image editing takes no mask; describe the region in the prompt.")
+            return await self._generate_image_via_generate_content(
+                prompt, model=model, n=n, size=size, _edit_image=image,
+                _capability="image_edit", **kwargs,
+            )
 
         img_model = self._media_model("image", model)
         reference: list[Any] = [
@@ -1937,6 +2365,295 @@ class GeminiProvider(BaseProvider):
                 characters=len(text),
             ),
         )
+
+    # --- transcription ---
+
+    async def transcribe_media(
+        self,
+        *,
+        audio: "MediaRef",
+        model: str | None = None,
+        language: str | None = None,
+        diarize: bool | None = None,
+        timestamps: bool | None = None,
+        **kwargs: Any,
+    ) -> "MediaResult":
+        """Transcribe audio with ``gemini-3.5-transcribe`` (``generateContent``).
+
+        The model answers with an ``audio_transcription`` part (``text``
+        only; ``response.text`` is empty), and ignores prompting for
+        timestamps, so ``timestamps`` / ``diarize`` are not offered. A
+        ``language`` hint is sent as a short text part.
+        """
+        from google.genai import types as genai_types
+
+        from ..media.models import MediaCapability, MediaResult, MediaUsage
+        from ..models_multimodal import TranscriptionResult
+
+        for unsupported, value in (("timestamps", timestamps), ("diarize", diarize)):
+            if value:
+                logger.debug("Gemini transcription ignores '%s' (text only).", unsupported)
+        asr_model = self._media_model("asr", model)
+        if audio.is_remote:
+            from ..media.artifacts import default_fetcher
+
+            data = await default_fetcher()(audio.url or "")
+        else:
+            data = audio.read_bytes()
+        parts: list[Any] = [
+            genai_types.Part.from_bytes(data=data, mime_type=audio.mime_type or "audio/mpeg")
+        ]
+        if language:
+            parts.append(genai_types.Part.from_text(text=f"The audio is in {language}."))
+        try:
+            response = await self._client.aio.models.generate_content(
+                model=asr_model,
+                contents=parts,
+                config=genai_types.GenerateContentConfig(**kwargs) if kwargs else None,
+            )
+        except Exception as e:
+            self._raise_media_error(e, asr_model, "transcription")
+
+        pieces: list[str] = []
+        for candidate in getattr(response, "candidates", None) or []:
+            for part in getattr(getattr(candidate, "content", None), "parts", None) or []:
+                spoken = getattr(part, "audio_transcription", None)
+                if spoken is not None and getattr(spoken, "text", None):
+                    pieces.append(spoken.text)
+                elif getattr(part, "text", None):
+                    pieces.append(part.text)
+        usage = getattr(response, "usage_metadata", None)
+        transcript = TranscriptionResult(
+            text=" ".join(p.strip() for p in pieces if p.strip()),
+            language=language,
+            model=str(getattr(response, "model_version", None) or asr_model),
+            metadata={"response_id": getattr(response, "response_id", None)},
+        )
+        return MediaResult(
+            capability=MediaCapability.ASR,
+            provider=self.get_name(),
+            model=transcript.model,
+            artifacts=(transcript.to_artifact(),),
+            usage=MediaUsage(
+                provider=self.get_name(),
+                model=transcript.model,
+                basis="per_token",
+                input_tokens=getattr(usage, "prompt_token_count", None),
+                output_tokens=getattr(usage, "candidates_token_count", None),
+            ),
+        )
+
+    # --- decisions (gemini-decision-1) ---
+
+    async def create_decision(
+        self,
+        input: Any,  # noqa: A002 - the API's field name
+        questions: Mapping[str, Any],
+        *,
+        model: str | None = None,
+    ) -> Any:
+        """Calibrated typed judgments via ``models/gemini-decision-1:createDecision``.
+
+        The same primitives as TypeSafe's Jev: ``noul`` (yes/no probability),
+        ``choice`` (one option, per-option probabilities) and ``score``
+        (rubric level). Questions are the TypeSafe builders
+        (:class:`~llmcore.providers.typesafe_provider.Noul`, ``Choice``,
+        ``Score``) or equivalent dicts; the result is the same
+        :class:`~llmcore.providers.typesafe_provider.SystemOneResult`, so code
+        written against one decision provider works with the other. Gemini
+        has no ``box`` question. Output tokens are not billed (0).
+
+        Raises:
+            ValueError: For invalid or ``box`` questions (before any request).
+            ProviderError: On API errors.
+        """
+        from .typesafe_provider import SystemOneResult, normalize_questions
+
+        wire = normalize_questions(questions)
+        for name, question in wire.items():
+            if question.get("type") == "box":
+                raise ValueError(f"Question {name!r}: Gemini decisions have no 'box' type.")
+            if question.get("type") == "choice":
+                question["criteria"] = {k: ("" if v is None else v) for k, v in question["criteria"].items()}
+        used = model or self._media_model_config.get("decision") or "gemini-decision-1"
+        try:
+            response = await self._client.aio.decisions.create(model=used, input=input, questions=wire)
+        except Exception as e:
+            self._raise_media_error(e, used, "decision")
+        data = response.model_dump(mode="json", exclude_none=True) if hasattr(response, "model_dump") else dict(response)
+        answers = {
+            k: v for k, v in (data.get("answers") or {}).items()
+            if isinstance(v, dict) and v.get("type") in ("noul", "choice", "score")
+        }
+        usage = data.get("usage") or {}
+        return SystemOneResult.model_validate({
+            "model": used,
+            "answers": answers,
+            "usage": {"input_tokens": usage.get("total_input_tokens"),
+                      "output_tokens": usage.get("total_output_tokens")},
+            "raw": data,
+        })
+
+    #: Parity with TypeSafeProvider / CommandCodeProvider.system_one.
+    async def system_one(self, state: Any, questions: Mapping[str, Any], *, model: str | None = None) -> Any:
+        """Alias of :meth:`create_decision` (``state`` is the shared input)."""
+        return await self.create_decision(state, questions, model=model)
+
+    # --- music (Lyria) ---
+
+    async def generate_music_media(
+        self,
+        prompt: str,
+        *,
+        model: str | None = None,
+        duration_seconds: float | None = None,
+        **kwargs: Any,
+    ) -> "MediaResult":
+        """Generate music with Lyria (``generateContent``).
+
+        Lyria answers with MP3 audio inline plus a text part carrying the
+        lyrics (``<instrumental>`` for instrumentals), kept in
+        ``provider_metadata["lyrics"]``. It takes no duration parameter, so
+        ``duration_seconds`` is added to the prompt as a hint.
+        """
+        import hashlib
+
+        from google.genai import types as genai_types
+
+        from ..media.models import MediaArtifact, MediaCapability, MediaKind, MediaResult, MediaUsage
+
+        music_model = self._media_model("music", model)
+        text = prompt if duration_seconds is None else f"{prompt} (about {int(duration_seconds)} seconds)"
+        try:
+            response = await self._client.aio.models.generate_content(
+                model=music_model,
+                contents=text,
+                config=genai_types.GenerateContentConfig(**kwargs) if kwargs else None,
+            )
+        except Exception as e:
+            self._raise_media_error(e, music_model, "music generation")
+
+        artifacts: list[Any] = []
+        lyrics: list[str] = []
+        for candidate in getattr(response, "candidates", None) or []:
+            for part in getattr(getattr(candidate, "content", None), "parts", None) or []:
+                inline = getattr(part, "inline_data", None)
+                if inline is not None and getattr(inline, "data", None):
+                    artifacts.append(MediaArtifact(
+                        kind=MediaKind.AUDIO,
+                        data=inline.data,
+                        mime_type=getattr(inline, "mime_type", None) or "audio/mpeg",
+                        checksum_sha256=hashlib.sha256(inline.data).hexdigest(),
+                    ))
+                elif getattr(part, "text", None):
+                    lyrics.append(part.text)
+        if lyrics:
+            artifacts = [
+                MediaArtifact(**{**{f: getattr(a, f) for f in a.__slots__},
+                                 "provider_metadata": {"lyrics": "\n".join(lyrics)}})
+                for a in artifacts
+            ]
+        usage = getattr(response, "usage_metadata", None)
+        return MediaResult(
+            capability=MediaCapability.MUSIC,
+            provider=self.get_name(),
+            model=music_model,
+            artifacts=tuple(artifacts),
+            usage=MediaUsage(
+                provider=self.get_name(), model=music_model, basis="per_token",
+                input_tokens=getattr(usage, "prompt_token_count", None),
+                output_tokens=getattr(usage, "candidates_token_count", None),
+            ),
+        )
+
+    # --- Live API sessions ---
+
+    @asynccontextmanager
+    async def open_transcription_session(
+        self,
+        *,
+        model: str | None = None,
+        language: str | None = None,
+        sample_rate_hz: int | None = None,
+        **kwargs: Any,
+    ) -> "AsyncIterator[GeminiTranscriptionStream]":
+        """Realtime transcription over the Live API (``asr_stream``).
+
+        ``gemini-3.5-transcribe-live`` streams ``interim`` hypotheses and a
+        ``final`` per utterance (live 2026-11-16). Send 16-bit mono PCM at
+        ``sample_rate_hz`` (default 16000); ``finalize()`` ends the audio
+        stream. ``language`` is accepted for parity and passed as a hint.
+        """
+        from google.genai import types as genai_types
+
+        used = model or "gemini-3.5-transcribe-live"
+        # Vertex refuses a transcription session that may answer in audio
+        # ("Only text modality is supported for Vertex ASR"); text is right on
+        # the Developer API as well.
+        kwargs.setdefault("response_modalities", ["TEXT"])
+        config = genai_types.LiveConnectConfig(input_audio_transcription={}, **kwargs)
+        if language:
+            logger.debug("Gemini Live transcription detects the language itself; hint %s noted.", language)
+        try:
+            async with self._client.aio.live.connect(model=used, config=config) as session:
+                yield GeminiTranscriptionStream(session, rate=int(sample_rate_hz or 16000))
+        except ProviderError:
+            raise
+        except Exception as e:
+            self._raise_media_error(e, used, "live transcription")
+
+    @asynccontextmanager
+    async def open_voice_agent(
+        self,
+        *,
+        model: str | None = None,
+        prompt: str | None = None,
+        functions: list[Any] | None = None,
+        greeting: str | None = None,
+        voice: str | None = None,
+        transcribe_user: bool = True,
+        settings: dict[str, Any] | None = None,
+        **kwargs: Any,
+    ) -> "AsyncIterator[GeminiVoiceAgentSession]":
+        """A Live API speech-to-speech agent (``voice_agent``).
+
+        Same session surface as the Deepgram and OpenAI agents. Microphone
+        audio is 16-bit mono PCM at 16 kHz; the agent answers in 24 kHz PCM.
+        Live sessions fix the system instruction at connect time, so
+        ``update_prompt`` raises. Default model ``gemini-3.8-live``.
+        """
+        from google.genai import types as genai_types
+
+        used = model or "gemini-3.8-live"
+        options: dict[str, Any] = {
+            "response_modalities": ["AUDIO"],
+            "output_audio_transcription": {},
+        }
+        if transcribe_user:
+            options["input_audio_transcription"] = {}
+        if prompt:
+            options["system_instruction"] = prompt
+        if functions:
+            options["tools"] = [genai_types.Tool(function_declarations=[
+                genai_types.FunctionDeclaration(**_live_function(f)) for f in functions
+            ])]
+        if voice:
+            options["speech_config"] = genai_types.SpeechConfig(voice_config=genai_types.VoiceConfig(
+                prebuilt_voice_config=genai_types.PrebuiltVoiceConfig(voice_name=voice)))
+        options.update(kwargs)
+        options.update(settings or {})
+        try:
+            async with self._client.aio.live.connect(
+                model=used, config=genai_types.LiveConnectConfig(**options)
+            ) as session:
+                agent = GeminiVoiceAgentSession(session)
+                if greeting:
+                    await agent.inject_agent_message(greeting)
+                yield agent
+        except ProviderError:
+            raise
+        except Exception as e:
+            self._raise_media_error(e, used, "live voice agent")
 
     # --- video (async job) ---
 
@@ -2120,7 +2837,7 @@ class GeminiProvider(BaseProvider):
 
         Args:
             input_texts: A string or list of strings to embed.
-            model: Embedding model; defaults to ``gemini-embedding-001``.
+            model: Embedding model; defaults to ``gemini-embedding-2``.
             dimensions: Output dimensionality, where the model supports it.
             task_type: Google's retrieval task hint (e.g.
                 ``RETRIEVAL_DOCUMENT``), which materially changes the vectors.
@@ -2139,10 +2856,15 @@ class GeminiProvider(BaseProvider):
         if task_type is not None:
             config_kwargs["task_type"] = task_type
 
+        texts = [input_texts] if isinstance(input_texts, str) else list(input_texts)
+        # One Content per text. gemini-embedding-2 is multimodal and reads a
+        # plain list of strings as the parts of ONE input, returning a single
+        # aggregated vector for N texts (measured live 2026-11-16).
+        contents = [genai_types.Content(parts=[genai_types.Part(text=t)]) for t in texts]
         try:
             response = await self._client.aio.models.embed_content(
                 model=embed_model,
-                contents=input_texts,
+                contents=contents,
                 config=genai_types.EmbedContentConfig(**config_kwargs)
                 if config_kwargs
                 else None,
@@ -2187,3 +2909,172 @@ class GeminiProvider(BaseProvider):
                 logger.debug(f"Error during Gemini client cleanup: {e}")
         logger.debug("GeminiProvider closed.")
         self._client = None
+
+
+def _live_function(function: Any) -> dict[str, Any]:
+    """FunctionDeclaration kwargs from an llmcore Tool or a plain dict."""
+    if isinstance(function, dict):
+        data = dict(function.get("function") or function)
+    else:
+        params = getattr(function, "parameters", None)
+        data = {
+            "name": getattr(function, "name", None),
+            "description": getattr(function, "description", None),
+            "parameters": params.model_dump(exclude_none=True) if hasattr(params, "model_dump") else params,
+        }
+    return {
+        "name": data.get("name"),
+        "description": data.get("description") or "",
+        "parameters_json_schema": data.get("parameters") or {"type": "object", "properties": {}},
+    }
+
+
+async def _live_messages(session: Any) -> Any:
+    """Every server message of a Live session.
+
+    ``AsyncSession.receive()`` stops after each model turn; a session that
+    yields nothing on a fresh call has closed.
+    """
+    while True:
+        got_any = False
+        async for message in session.receive():
+            got_any = True
+            yield message
+        if not got_any:
+            return
+
+
+class GeminiTranscriptionStream:
+    """Live API transcription session (Deepgram/ElevenLabs/OpenAI surface)."""
+
+    def __init__(self, session: Any, *, rate: int = 16000) -> None:
+        self._session = session
+        self._mime = f"audio/pcm;rate={rate}"
+
+    async def send_audio(self, chunk: bytes) -> None:
+        """16-bit mono PCM at the session's rate."""
+        from google.genai import types as genai_types
+
+        await self._session.send_realtime_input(audio=genai_types.Blob(data=bytes(chunk), mime_type=self._mime))
+
+    async def finalize(self) -> None:
+        """End the audio stream so the last utterance is finalized."""
+        await self._session.send_realtime_input(audio_stream_end=True)
+
+    commit = finalize
+
+    async def keepalive(self) -> None:
+        """No-op: Live sessions need no keepalive."""
+
+    async def close(self) -> None:
+        """Closed by the context manager that opened the session."""
+
+    async def __aiter__(self) -> "AsyncIterator[Any]":
+        from ..models_multimodal import StreamEventType, TranscriptionStreamEvent
+
+        async for message in _live_messages(self._session):
+            content = getattr(message, "server_content", None)
+            if content is None:
+                continue
+            raw = message.model_dump(exclude_none=True, mode="json") if hasattr(message, "model_dump") else {}
+            interim = getattr(content, "interim_input_transcription", None)
+            if interim is not None and getattr(interim, "text", None):
+                yield TranscriptionStreamEvent(type=StreamEventType.INTERIM, text=interim.text,
+                                               is_final=False, provider="gemini", raw=raw)
+            final = getattr(content, "input_transcription", None)
+            if final is not None and getattr(final, "text", None):
+                yield TranscriptionStreamEvent(type=StreamEventType.FINAL, text=final.text.strip(),
+                                               is_final=True, speech_final=True, provider="gemini", raw=raw)
+
+
+class GeminiVoiceAgentSession:
+    """Live API speech-to-speech agent with the shared voice-agent surface."""
+
+    def __init__(self, session: Any) -> None:
+        self._session = session
+        self._call_names: dict[str, str] = {}
+        self._said: list[str] = []
+        self._heard: list[str] = []
+        self._speaking = False
+
+    async def send_audio(self, chunk: bytes) -> None:
+        """Microphone audio: 16-bit mono PCM at 16 kHz."""
+        from google.genai import types as genai_types
+
+        await self._session.send_realtime_input(
+            audio=genai_types.Blob(data=bytes(chunk), mime_type="audio/pcm;rate=16000"))
+
+    async def inject_user_message(self, content: str) -> None:
+        """Add a typed user turn; the agent replies."""
+        from google.genai import types as genai_types
+
+        await self._session.send_client_content(
+            turns=genai_types.Content(role="user", parts=[genai_types.Part(text=content)]), turn_complete=True)
+
+    async def inject_agent_message(self, message: str) -> None:
+        """Have the agent say *message* now."""
+        await self.inject_user_message(f"Say exactly this, and nothing else: {message}")
+
+    async def update_prompt(self, prompt: str) -> None:
+        """Not available: Live fixes the system instruction at connect time."""
+        raise ProviderError(
+            "gemini", "Gemini Live sessions cannot change their system instruction; open a new session.",
+            retryable=False,
+        )
+
+    async def respond_to_function_call(self, function_call_id: str, output: Any, name: str | None = None) -> None:
+        """Return a tool result; the agent continues its turn."""
+        from google.genai import types as genai_types
+
+        response = output if isinstance(output, dict) else {"result": output}
+        await self._session.send_tool_response(function_responses=[genai_types.FunctionResponse(
+            id=function_call_id, name=name or self._call_names.get(function_call_id, ""), response=response)])
+
+    async def keepalive(self) -> None:
+        """No-op: Live sessions need no keepalive."""
+
+    async def close(self) -> None:
+        """Closed by the context manager that opened the session."""
+
+    async def __aiter__(self) -> "AsyncIterator[Any]":
+        from ..models_multimodal import VoiceAgentEvent, VoiceAgentEventType, VoiceAgentFunctionCall
+
+        def event(type_: Any, **fields: Any) -> Any:
+            return VoiceAgentEvent(type=type_, provider="gemini", **fields)
+
+        async for message in _live_messages(self._session):
+            if getattr(message, "setup_complete", None) is not None:
+                yield event(VoiceAgentEventType.WELCOME)
+            tool_call = getattr(message, "tool_call", None)
+            for call in getattr(tool_call, "function_calls", None) or []:
+                self._call_names[str(call.id)] = str(call.name)
+                yield event(VoiceAgentEventType.FUNCTION_CALL_REQUEST, function_call=VoiceAgentFunctionCall(
+                    id=str(call.id or ""), name=str(call.name or ""), arguments=dict(call.args or {})))
+            content = getattr(message, "server_content", None)
+            if content is None:
+                continue
+            heard = getattr(content, "input_transcription", None)
+            if heard is not None and getattr(heard, "text", None):
+                self._heard.append(heard.text)
+            if getattr(content, "interrupted", None):
+                yield event(VoiceAgentEventType.USER_STARTED_SPEAKING)
+            for part in getattr(getattr(content, "model_turn", None), "parts", None) or []:
+                inline = getattr(part, "inline_data", None)
+                if inline is not None and getattr(inline, "data", None):
+                    if self._heard:
+                        yield event(VoiceAgentEventType.CONVERSATION_TEXT, role="user", content="".join(self._heard).strip())
+                        self._heard = []
+                    if not self._speaking:
+                        self._speaking = True
+                        yield event(VoiceAgentEventType.AGENT_STARTED_SPEAKING)
+                    yield event(VoiceAgentEventType.AUDIO, audio=inline.data)
+            said = getattr(content, "output_transcription", None)
+            if said is not None and getattr(said, "text", None):
+                self._said.append(said.text)
+            if getattr(content, "turn_complete", None):
+                if self._speaking:
+                    self._speaking = False
+                    yield event(VoiceAgentEventType.AGENT_AUDIO_DONE)
+                if self._said:
+                    yield event(VoiceAgentEventType.CONVERSATION_TEXT, role="assistant", content="".join(self._said).strip())
+                    self._said = []

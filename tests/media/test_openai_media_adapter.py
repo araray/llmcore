@@ -88,6 +88,8 @@ class TestConformance:
                 MediaCapability.TTS,
                 MediaCapability.TTS_STREAM,
                 MediaCapability.ASR,
+                MediaCapability.ASR_STREAM,  # Realtime transcription session
+                MediaCapability.VOICE_AGENT,  # Realtime speech-to-speech agent
             }
         )
 

@@ -38,8 +38,8 @@
   "aliases": [],
   "description": "The new top-tier image model from Black Forest Labs, significantly pushing image quality and editing consistency",
   "tags": [
-    "{'type': 'text', 'supported_inputs': {}, 'pricing': []}",
-    "output:{'type': 'image', 'supported_parameters': {'width': {'type': 'integer', 'min': 64, 'max': 2048, 'unit': 'pixel'}, 'height': {'type': 'integer', 'min': 64, 'max': 2048, 'unit': 'pixel'}, 'num_inference_steps': {'type': 'integer', 'min': 1, 'max': 50}, 'guidance_scale': {'type': 'range', 'min': 0, 'max': 20}, 'n': {'type': 'integer', 'min': 1, 'max': 4}, 'seed': {'type': 'boolean'}}, 'streaming': false, 'pricing': [{'type': 'completion', 'unit': 'image', 'cost_usd': '0.0700000000'}]}"
+    "text",
+    "output:image"
   ],
   "source": "generated",
   "provider_extension": {

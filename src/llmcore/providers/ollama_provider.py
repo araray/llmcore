@@ -6,7 +6,18 @@ Interacts with a local Ollama instance.
 Supports streaming and different API endpoints (/api/chat, /api/generate).
 Accepts context as List[Message].
 
-Tested against ollama-python SDK v0.6.1.
+Audited against ollama-python 0.6.3 and a live server (0.32.14) on
+2026-11-16:
+
+- The server loads a model with ITS default context (4096 on this 6 GiB GPU;
+  docs: 4k under 24 GiB VRAM, 32k under 48, 256k above), not the trained
+  window, and silently truncates longer prompts. ``num_ctx`` in config is sent
+  with every request; without it, the effective window is read from
+  ``/api/ps`` and :meth:`get_max_context_length` reports that.
+- Tool loops: assistant turns are replayed with their ``tool_calls`` and
+  ``thinking`` (both were dropped), tool results carry ``tool_name``
+  (resolved from the call id), and tool calls keep the server's ``id``.
+- ``effort`` maps to ``think`` (false for "none").
 
 Supports:
 - Chat completion (text, streaming)
@@ -24,6 +35,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import time
 import uuid
 from collections.abc import AsyncGenerator
@@ -69,24 +81,24 @@ logger = logging.getLogger(__name__)
 # Default context lengths for common Ollama models.
 # Used as first-tier fallback before model card registry and 4096 default.
 DEFAULT_OLLAMA_TOKEN_LIMITS = {
-    "llama3": 8000,
-    "llama3:8b": 8000,
-    "llama3:70b": 8000,
+    "llama3": 8192,
+    "llama3:8b": 8192,
+    "llama3:70b": 8192,
     "llama3.2": 131072,
     "llama3.2:latest": 131072,
     "llama3.3": 131072,
     "llama3.3:70b": 131072,
-    "qwen3": 262144,
-    "qwen3:4b": 262144,
-    "qwen3:8b": 262144,
-    "qwen3:14b": 262144,
-    "qwen3:32b": 262144,
+    # qwen3:32b reports 40960 (live server, 2026-11-16); the 262144 here was
+    # wrong. Other qwen3 tags are left to their cards.
+    "qwen3": 40960,
+    "qwen3:32b": 40960,
+    "qwen3.5": 262144,
     "qwen2.5": 131072,
     "qwen2.5:latest": 131072,
-    "gemma3": 128000,
-    "gemma3:4b": 128000,
-    "gemma3:12b": 128000,
-    "gemma3:27b": 128000,
+    "gemma3": 131072,
+    "gemma3:4b": 131072,
+    "gemma3:12b": 131072,
+    "gemma3:27b": 131072,
     "falcon3:3b": 8000,
     "gemma:latest": 8000,
     "gemma:7b": 8000,
@@ -112,7 +124,9 @@ DEFAULT_OLLAMA_TOKEN_LIMITS = {
     "llama2:13b": 4000,
     "llama2:70b": 4000,
 }
-DEFAULT_MODEL = "gemma3:4b"
+#: A small current model with tools, thinking and vision that fits a 6 GiB GPU.
+#: (gemma3:4b and llama3, the old code/config defaults, have no tool support.)
+DEFAULT_MODEL = "qwen3.5:4b"
 
 # Top-level chat parameters that go directly into the chat() call,
 # NOT inside the ``options`` dict.  Everything else goes into ``options``.
@@ -160,6 +174,24 @@ class OllamaProvider(BaseProvider):
 
         self.host = config.get("host")
         self.default_model = config.get("default_model", DEFAULT_MODEL)
+        # The context the server allocates. Without it Ollama uses its own
+        # default (4096 on small GPUs) and silently truncates longer prompts.
+        try:
+            self.num_ctx: int | None = int(config["num_ctx"]) if config.get("num_ctx") else None
+        except (TypeError, ValueError):
+            logger.warning("Ignoring invalid Ollama num_ctx %r.", config.get("num_ctx"))
+            self.num_ctx = None
+        # ollama.com cloud (and authenticated proxies) need a bearer token.
+        self._api_key = config.get("api_key") or os.environ.get(
+            config.get("api_key_env_var") or "OLLAMA_API_KEY", ""
+        )
+        #: model -> trained window reported by the server (tags/show)
+        self._server_ctx: dict[str, int] = {}
+        #: model -> context the server actually loaded it with (/api/ps)
+        self._effective_ctx: dict[str, int] = {}
+        #: model -> thinking levels from /api/show (server >= 0.34.3)
+        self._thinking_levels: dict[str, list[str]] = {}
+        self._warned_ctx: set[str] = set()
         timeout_val = config.get("timeout")
         self.timeout = float(timeout_val) if timeout_val is not None else None
         self.default_keep_alive = config.get("keep_alive")
@@ -178,6 +210,8 @@ class OllamaProvider(BaseProvider):
                 client_args["host"] = self.host
             if self.timeout is not None:
                 client_args["timeout"] = self.timeout
+            if self._api_key:
+                client_args["headers"] = {"Authorization": f"Bearer {self._api_key}"}
             self._client = AsyncClient(**client_args)
             logger.debug("Ollama AsyncClient initialized.")
             # llmcore's rule is to call the API directly and fall back to the
@@ -247,49 +281,52 @@ class OllamaProvider(BaseProvider):
                 list_response = resp.json()
             else:
                 list_response = await self._client.list()
-            # ListResponse.models is Sequence[ListResponse.Model]
-            # Each model has: .model, .size, .digest, .modified_at, .details
-            model_list = list_response.models if list_response else []
+            # The SDK returns ListResponse (.models); the direct path a dict
+            # ({"models": [...]}) - which used to fail with AttributeError.
+            model_list = _field(list_response, "models") or []
+            model_entries = [entry for entry in model_list if _field(entry, "model")]
 
-            # The model identifier is in the `model` attribute, not `name`.
-            model_entries = [entry for entry in model_list if getattr(entry, "model", None)]
-
-            async def _fetch_capabilities(model_name: str) -> tuple[bool, bool, bool]:
-                """Best-effort capability flags via show(); defaults on failure."""
-                try:
-                    show_response = await self._client.show(model_name)
-                    capabilities = getattr(show_response, "capabilities", None) or []
-                    return (
-                        "tools" in capabilities,
-                        "vision" in capabilities,
-                        "thinking" in capabilities,
-                    )
-                except Exception as e:
-                    logger.debug(
-                        f"Could not fetch capabilities for '{model_name}': {e}. Using defaults."
-                    )
-                    return False, False, False
+            async def _fetch_capabilities(entry: Any) -> tuple[bool, bool, bool]:
+                """Flags from the tags entry (servers >= 0.34.1 list them),
+                else from show(); defaults on failure."""
+                model_name = _field(entry, "model")
+                capabilities = _field(entry, "capabilities")
+                if not isinstance(capabilities, (list, tuple)) or not capabilities:
+                    try:
+                        show = await self._show(model_name)
+                        capabilities = show.get("capabilities") or []
+                    except Exception as e:
+                        logger.debug(
+                            f"Could not fetch capabilities for '{model_name}': {e}. Using defaults."
+                        )
+                        return False, False, False
+                return (
+                    "tools" in capabilities,
+                    "vision" in capabilities,
+                    "thinking" in capabilities,
+                )
 
             capability_flags = await asyncio.gather(
-                *(_fetch_capabilities(entry.model) for entry in model_entries)
+                *(_fetch_capabilities(entry) for entry in model_entries)
             )
+            for entry in model_entries:
+                window = _field(_field(entry, "details"), "context_length")
+                if isinstance(window, int) and window > 0:
+                    self._server_ctx[_field(entry, "model")] = window
+            await self._observe_effective_context()
 
             details_list = []
             for model_entry, flags in zip(model_entries, capability_flags, strict=True):
-                model_name = model_entry.model
+                model_name = _field(model_entry, "model")
                 supports_tools, supports_vision, supports_reasoning = flags
 
                 # Extract rich details from the ListResponse.Model.details
-                entry_details = model_entry.details
-                family = getattr(entry_details, "family", None) if entry_details else None
-                families = getattr(entry_details, "families", None) if entry_details else None
-                parameter_size = (
-                    getattr(entry_details, "parameter_size", None) if entry_details else None
-                )
-                quantization = (
-                    getattr(entry_details, "quantization_level", None) if entry_details else None
-                )
-                file_size = getattr(model_entry, "size", None)
+                entry_details = _field(model_entry, "details")
+                family = _field(entry_details, "family")
+                families = _field(entry_details, "families")
+                parameter_size = _field(entry_details, "parameter_size")
+                quantization = _field(entry_details, "quantization_level")
+                file_size = _field(model_entry, "size")
 
                 details = ModelDetails(
                     id=model_name,
@@ -305,7 +342,10 @@ class OllamaProvider(BaseProvider):
                     file_size_bytes=int(file_size) if file_size is not None else None,
                     metadata={
                         "families": families,
-                        "digest": getattr(model_entry, "digest", None),
+                        "digest": _field(model_entry, "digest"),
+                        "trained_context_length": self._server_ctx.get(model_name),
+                        "effective_context_length": self._effective_ctx.get(model_name),
+                        "embedding": "embedding" in (_field(model_entry, "capabilities") or []),
                     },
                 )
                 details_list.append(details)
@@ -364,25 +404,36 @@ class OllamaProvider(BaseProvider):
             "format": {"type": ["string", "object"], "note": "'json' or JSON Schema"},
             "keep_alive": {"type": ["number", "string"]},
             "think": {"type": ["boolean", "string"], "note": "true or 'low'/'medium'/'high'"},
+            # llmcore's cross-provider knob: "none" -> think=false, else a
+            # level the model lists (/api/show thinking.values) or true.
+            "effort": {
+                "type": "string",
+                "enum": ["none", "minimal", "low", "medium", "high", "xhigh", "max"],
+            },
             "logprobs": {"type": "boolean"},
             "top_logprobs": {"type": "integer"},
         }
 
     def get_max_context_length(self, model: str | None = None) -> int:
-        """Returns the maximum context length (tokens) for the given Ollama model.
+        """The context the server will actually give ``model``.
 
         Resolution order:
-            1. Hardcoded DEFAULT_OLLAMA_TOKEN_LIMITS (fast, known models)
-            2. Model card registry (covers newer models like qwen3)
-            3. Fallback to 4096
+            1. ``num_ctx`` from config (sent with every request), capped at
+               the trained window when that is known.
+            2. The window the server loaded the model with (``/api/ps``) --
+               its default is 4096 on small GPUs, whatever the model's training.
+            3. The trained window the server reports (``/api/tags``).
+            4. Model card registry, then DEFAULT_OLLAMA_TOKEN_LIMITS.
+            5. Fallback to 4096.
         """
         model_name = model or self.default_model
-        base_model_name = model_name.split(":")[0]
-        limit = DEFAULT_OLLAMA_TOKEN_LIMITS.get(
-            model_name, DEFAULT_OLLAMA_TOKEN_LIMITS.get(base_model_name)
-        )
-        if limit is not None:
-            return limit
+        trained = self._server_ctx.get(model_name)
+        if self.num_ctx:
+            return min(self.num_ctx, trained) if trained else self.num_ctx
+        if model_name in self._effective_ctx:
+            return self._effective_ctx[model_name]
+        if trained:
+            return trained
 
         # Try the model card registry — it has context info for models
         # not in the hardcoded dict (e.g. qwen3, llama3.2, etc.)
@@ -403,6 +454,13 @@ class OllamaProvider(BaseProvider):
         except Exception as e:
             logger.warning(f"Model card registry lookup failed for '{model_name}': {e}")
 
+        base_model_name = model_name.split(":")[0]
+        limit = DEFAULT_OLLAMA_TOKEN_LIMITS.get(
+            model_name, DEFAULT_OLLAMA_TOKEN_LIMITS.get(base_model_name)
+        )
+        if limit is not None:
+            return limit
+
         limit = 4096
         logger.warning(
             f"Unknown context length for Ollama model '{model_name}'. Using fallback: {limit}."
@@ -413,7 +471,9 @@ class OllamaProvider(BaseProvider):
     # Message Conversion
     # ------------------------------------------------------------------
 
-    def _build_message_payload(self, msg: Message) -> dict[str, Any]:
+    def _build_message_payload(
+        self, msg: Message, call_names: dict[str, str] | None = None
+    ) -> dict[str, Any]:
         """Convert a single llmcore ``Message`` to an Ollama message dict.
 
         Handles:
@@ -433,11 +493,26 @@ class OllamaProvider(BaseProvider):
         }
 
         # Tool-result messages need the function name so the model can
-        # correlate the result with its earlier tool_call.
+        # correlate the result with its earlier tool_call; resolved from the
+        # call id when the caller did not name it.
         if role_str == "tool":
-            tool_name = msg.metadata.get("tool_name") or msg.metadata.get("name")
+            tool_name = (
+                msg.metadata.get("tool_name")
+                or msg.metadata.get("name")
+                or (call_names or {}).get(str(msg.tool_call_id or ""))
+            )
             if tool_name:
                 payload["tool_name"] = tool_name
+
+        # Assistant turns go back with their tool calls and thinking (both
+        # were dropped, so a tool loop resent a turn with no calls).
+        if role_str == "assistant":
+            calls = getattr(msg, "tool_calls", None) or msg.metadata.get("tool_calls") or []
+            if calls:
+                payload["tool_calls"] = [_ollama_tool_call(c) for c in calls]
+            thinking = msg.metadata.get("thinking") or msg.metadata.get("reasoning_content")
+            if thinking:
+                payload["thinking"] = thinking
 
         # Multimodal image support
         images = msg.metadata.get("inline_images")
@@ -487,10 +562,10 @@ class OllamaProvider(BaseProvider):
     def _direct_base_url(self) -> str:
         """Return the server root for the direct transport.
 
-        Mirrors the SDK's own default so switching transports does not quietly
-        change which server is contacted.
+        Mirrors the SDK (config ``host``, then ``OLLAMA_HOST``, then
+        localhost) so switching transports does not change the server.
         """
-        host = self.host or "http://localhost:11434"
+        host = self.host or os.environ.get("OLLAMA_HOST") or "http://localhost:11434"
         if not host.startswith(("http://", "https://")):
             host = f"http://{host}"
         return host.rstrip("/")
@@ -501,6 +576,7 @@ class OllamaProvider(BaseProvider):
             self._http = httpx.AsyncClient(
                 base_url=self._direct_base_url(),
                 timeout=self.timeout if self.timeout is not None else 120.0,
+                headers={"Authorization": f"Bearer {self._api_key}"} if self._api_key else None,
             )
         return self._http
 
@@ -613,13 +689,38 @@ class OllamaProvider(BaseProvider):
         if not (isinstance(context, list) and all(isinstance(msg, Message) for msg in context)):
             raise ProviderError(self.get_name(), "Unsupported context type.")
 
-        messages_payload = [self._build_message_payload(msg) for msg in context]
+        call_names = {
+            str(_call_id(c)): _call_name(c)
+            for msg in context
+            for c in (getattr(msg, "tool_calls", None) or (msg.metadata or {}).get("tool_calls") or [])
+            if _call_id(c)
+        }
+        messages_payload = []
+        pending: list[str] = []  # names of the last assistant turn's calls, in order
+        for msg in context:
+            payload = self._build_message_payload(msg, call_names)
+            if payload["role"] == "assistant":
+                pending = [f["function"]["name"] for f in payload.get("tool_calls") or []]
+            elif payload["role"] == "tool":
+                # The SDK drops call ids, so results that cannot be matched by
+                # id are matched by position, the order Ollama returns them in.
+                if "tool_name" not in payload and pending:
+                    payload["tool_name"] = pending[0]
+                if pending and payload.get("tool_name") in pending:
+                    pending.remove(payload["tool_name"])
+            messages_payload.append(payload)
         if not messages_payload:
             raise ProviderError(self.get_name(), "No valid messages to send.")
 
+        kwargs = dict(kwargs)
         # --- Alias: max_tokens → num_predict ---
         if "max_tokens" in kwargs:
             kwargs["num_predict"] = kwargs.pop("max_tokens")
+        if self.num_ctx and "num_ctx" not in kwargs:
+            kwargs["num_ctx"] = self.num_ctx
+        effort = kwargs.pop("effort", None)
+        if effort is not None and "think" not in kwargs:
+            kwargs["think"] = self._think_for(model_name, str(effort).strip().lower())
 
         # --- Route kwargs into top-level params vs options dict ---
         top_level_kwargs: dict[str, Any] = {}
@@ -694,9 +795,10 @@ class OllamaProvider(BaseProvider):
                 response_or_stream = await self._client.chat(**call_kwargs)
 
             if stream:
-                return await self._wrap_stream(response_or_stream)
-            else:
-                return self._normalize_response(response_or_stream)
+                return await self._wrap_stream(response_or_stream, model_name)
+            normalized = self._normalize_response(response_or_stream)
+            await self._observe_effective_context(model_name)
+            return normalized
 
         except ProviderError:
             # Already mapped by the direct transport. Without this, the generic
@@ -757,15 +859,20 @@ class OllamaProvider(BaseProvider):
             )
         return response_dict
 
-    async def _wrap_stream(self, stream: Any) -> AsyncGenerator[dict[str, Any], None]:
+    async def _wrap_stream(
+        self, stream: Any, model_name: str | None = None
+    ) -> AsyncGenerator[dict[str, Any], None]:
         """Wrap the SDK's async stream, yielding normalized dicts.
 
         Each ``ChatResponse`` chunk is converted to a dict via
         ``model_dump()`` so that all downstream consumers see dicts,
         matching the ``AsyncGenerator[dict, None]`` return type contract.
+        The final (``done``) chunk also carries the whole turn's thinking as
+        ``message.replay_thinking``, for :meth:`assistant_replay_metadata`.
         """
 
         async def _inner() -> AsyncGenerator[dict[str, Any], None]:
+            thinking: list[str] = []
             async for chunk in stream:
                 # Normalize to dict
                 if hasattr(chunk, "model_dump"):
@@ -780,9 +887,96 @@ class OllamaProvider(BaseProvider):
                         f"RAW LLM STREAM CHUNK ({self.get_name()}): "
                         f"{json.dumps(chunk_dict, default=str)}"
                     )
+                message = chunk_dict.get("message")
+                if isinstance(message, dict):
+                    if message.get("thinking"):
+                        thinking.append(message["thinking"])
+                    if chunk_dict.get("done") and thinking:
+                        message["replay_thinking"] = "".join(thinking)
                 yield chunk_dict
+            if model_name:
+                await self._observe_effective_context(model_name)
 
         return _inner()
+
+    # ------------------------------------------------------------------
+    # Server state: effective context, thinking levels
+    # ------------------------------------------------------------------
+
+    async def _show(self, model_name: str) -> dict[str, Any]:
+        """``/api/show`` as a dict, on the configured transport.
+
+        The SDK drops fields it does not model (``thinking`` levels among
+        them), so those are only known with ``backend = "httpx"``.
+        """
+        if self._backend == "httpx":
+            resp = await self._get_http().post("/api/show", json={"model": model_name})
+            if resp.status_code >= 400:
+                self._raise_direct_status(resp.status_code, resp.text, model_name)
+            shown: Any = resp.json()
+        else:
+            raw = await self._client.show(model_name)
+            dumped = raw.model_dump() if hasattr(raw, "model_dump") else raw
+            shown = dumped if isinstance(dumped, dict) else {
+                "capabilities": getattr(raw, "capabilities", None) or [],
+                "model_info": getattr(raw, "modelinfo", None) or {},
+            }
+        levels = (shown.get("thinking") or {}).get("values") if isinstance(shown.get("thinking"), dict) else None
+        if levels:
+            self._thinking_levels[model_name] = [str(v) for v in levels]
+        # "model_info" on the wire, "modelinfo" in the SDK's dump.
+        info = shown.get("model_info") or shown.get("modelinfo") or {}
+        for key, value in (info.items() if isinstance(info, dict) else []):
+            if key.endswith(".context_length") and isinstance(value, int) and value > 0:
+                self._server_ctx.setdefault(model_name, value)
+        return dict(shown)
+
+    async def _observe_effective_context(self, model_name: str | None = None) -> None:
+        """Record the context the server loaded models with (``/api/ps``).
+
+        Warns once per model when that is smaller than its trained window,
+        which is when Ollama truncates prompts silently.
+        """
+        if self.num_ctx or (model_name and model_name in self._effective_ctx):
+            return
+        try:
+            if self._backend == "httpx":
+                resp = await asyncio.wait_for(self._get_http().get("/api/ps"), timeout=5)
+                running = (resp.json().get("models") or []) if resp.status_code < 400 else []
+            else:
+                running = _field(await asyncio.wait_for(self._client.ps(), timeout=5), "models") or []
+        except Exception as e:
+            logger.debug("Could not read Ollama /api/ps: %s", e)
+            return
+        for entry in running:
+            name = _field(entry, "model") or _field(entry, "name")
+            window = _field(entry, "context_length")
+            if not name or not isinstance(window, int) or window <= 0:
+                continue
+            self._effective_ctx[name] = window
+            trained = self._server_ctx.get(name)
+            if trained and window < trained and name not in self._warned_ctx:
+                self._warned_ctx.add(name)
+                logger.warning(
+                    "Ollama runs '%s' with a %d-token context (server default), not its "
+                    "trained %d; longer prompts are truncated silently. Set num_ctx in "
+                    "[providers.ollama] (or OLLAMA_CONTEXT_LENGTH on the server).",
+                    name,
+                    window,
+                    trained,
+                )
+
+    def _think_for(self, model_name: str, effort: str) -> bool | str:
+        """``think`` for an effort level: False for "none", else the nearest
+        level the model declares (``/api/show`` thinking.values), else True."""
+        if effort == "none":
+            return False
+        levels = self._thinking_levels.get(model_name)
+        if levels:
+            from .openai_provider import nearest_effort
+
+            return nearest_effort(effort, levels) or True
+        return True
 
     # ------------------------------------------------------------------
     # Content Extraction
@@ -859,6 +1053,29 @@ class OllamaProvider(BaseProvider):
         except (KeyError, TypeError, AttributeError):
             return ""
 
+    def extract_reasoning_content(self, response: dict[str, Any]) -> str | None:
+        """Alias of :meth:`extract_thinking_content` (the name other providers use)."""
+        return self.extract_thinking_content(response)
+
+    def extract_delta_reasoning_content(self, chunk: dict[str, Any]) -> str | None:
+        """The thinking delta of a streaming chunk."""
+        message = chunk.get("message") if isinstance(chunk, dict) else None
+        return (message or {}).get("thinking") or None if isinstance(message, dict) else None
+
+    def assistant_replay_metadata(self, response: dict[str, Any]) -> dict[str, Any]:
+        """The thinking to send back with the next assistant turn.
+
+        Ollama's tool-calling docs append the whole assistant message
+        (thinking, content, tool_calls). Tool calls travel in
+        ``Message.tool_calls``; this returns the thinking. For a stream, pass
+        the final (``done``) chunk.
+        """
+        message = response.get("message") if isinstance(response, dict) else None
+        if not isinstance(message, dict):
+            return {}
+        thinking = message.get("replay_thinking") or message.get("thinking")
+        return {"thinking": thinking} if thinking else {}
+
     def extract_thinking_content(self, response: dict[str, Any]) -> str | None:
         """Extract thinking/reasoning content from a non-streaming response.
 
@@ -924,7 +1141,9 @@ class OllamaProvider(BaseProvider):
                         arguments = {"raw": arguments}
                 tool_calls_out.append(
                     ToolCall(
-                        id=str(uuid.uuid4()),
+                        # Servers since 2026 send an id ("call_..."); keep it
+                        # so tool results can be matched to their call.
+                        id=str(tc.get("id") or uuid.uuid4()),
                         name=func.get("name", "unknown"),
                         arguments=arguments,
                     )
@@ -953,6 +1172,8 @@ class OllamaProvider(BaseProvider):
             "prompt_tokens": prompt_tokens,
             "completion_tokens": completion_tokens,
             "total_tokens": prompt_tokens + completion_tokens,
+            "cached_tokens": response.get("prompt_eval_cached_count"),
+            "finish_reason": response.get("done_reason"),
             # Ollama-specific timing (nanoseconds)
             "total_duration": response.get("total_duration"),
             "load_duration": response.get("load_duration"),
@@ -1032,3 +1253,47 @@ class OllamaProvider(BaseProvider):
                 logger.error(f"Error closing OllamaProvider client: {e}", exc_info=True)
             finally:
                 self._client = None
+
+
+def _field(obj: Any, name: str) -> Any:
+    """A field from an SDK model or a plain dict (the two transports)."""
+    if obj is None:
+        return None
+    if isinstance(obj, dict):
+        return obj.get(name)
+    return getattr(obj, name, None)
+
+
+def _call_id(call: Any) -> str | None:
+    if isinstance(call, dict):
+        return call.get("id")
+    return getattr(call, "id", None)
+
+
+def _call_name(call: Any) -> str:
+    if isinstance(call, dict):
+        func = call.get("function") if isinstance(call.get("function"), dict) else call
+        return str(func.get("name") or "")
+    return str(getattr(call, "name", "") or "")
+
+
+def _ollama_tool_call(call: Any) -> dict[str, Any]:
+    """An OpenAI-shaped (or ToolCall) call as Ollama expects it back:
+    ``{"function": {"name", "arguments": <dict>}}`` (arguments are objects,
+    not JSON strings)."""
+    if not isinstance(call, dict):
+        call = {"id": getattr(call, "id", None),
+                "function": {"name": getattr(call, "name", ""), "arguments": getattr(call, "arguments", {})}}
+    func = dict(call.get("function") or {})
+    arguments = func.get("arguments", {})
+    if isinstance(arguments, str):
+        try:
+            arguments = json.loads(arguments) if arguments.strip() else {}
+        except ValueError:
+            arguments = {"raw": arguments}
+    out: dict[str, Any] = {"function": {"name": func.get("name", ""), "arguments": arguments}}
+    if func.get("index") is not None:
+        out["function"]["index"] = func["index"]
+    if call.get("id"):
+        out["id"] = call["id"]
+    return out

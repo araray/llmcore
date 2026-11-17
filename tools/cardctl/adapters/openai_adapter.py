@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from .base import NormalizedModel
@@ -20,7 +21,48 @@ _EXCLUDE_PREFIXES = (
     "chatgpt-4o-latest",       # ephemeral alias
 )
 
-_REASONING_PREFIXES = ("o1", "o3", "o4")
+#: Not chat models; they get no chat capabilities.
+_NON_CHAT = re.compile(r"(tts|transcribe|whisper|image|embedding|moderation|realtime|sora|dall-e)")
+
+
+def infer_capabilities(model_id: str) -> dict[str, bool]:
+    """What an OpenAI chat model id can do, by family.
+
+    OpenAI's /models states none of this. The rules: the o-series and every
+    GPT-5+ model reason (chat-tuned and search variants do not); every GPT-4+
+    and o-series chat model takes tools and structured output; GPT-4o, 4.1,
+    GPT-5+ and the o-series take images. The old version knew only o1/o3/o4 as
+    reasoning models and "gpt-4" substrings for the rest, which is how the
+    GPT-5.5/5.6/6.x cards came out claiming no tools, vision or reasoning.
+    """
+    if _NON_CHAT.search(model_id):
+        return {}
+    chat_family = bool(re.match(r"(gpt-[4-9]|o\d|chatgpt|codex)", model_id))
+    reasoning = bool(re.match(r"(o\d|gpt-[5-9])", model_id)) and not re.search(
+        r"(chat-latest|search-api|search-preview|audio)", model_id
+    )
+    vision = bool(re.match(r"(gpt-4o|gpt-4\.1|gpt-[5-9]|o\d|chatgpt)", model_id)) and not re.search(
+        r"(search-api|audio)", model_id
+    )
+    return {
+        "supports_reasoning": reasoning,
+        "supports_tools": chat_family,
+        "supports_json_mode": chat_family,
+        "supports_structured_output": chat_family,
+        "supports_vision": vision,
+    }
+
+
+def known_context_window(model_id: str) -> int | None:
+    """The context window llmcore's OpenAI provider knows for this id."""
+    try:
+        from llmcore.providers.openai_provider import _OPENAI_PREFIX_CONTEXT_HEURISTICS
+    except Exception:  # pragma: no cover - llmcore is importable here
+        return None
+    for prefix, ctx in _OPENAI_PREFIX_CONTEXT_HEURISTICS:
+        if model_id.startswith(prefix):
+            return ctx
+    return None
 
 
 class OpenAIAdapter(OpenAICompatAdapter):
@@ -34,19 +76,12 @@ class OpenAIAdapter(OpenAICompatAdapter):
 
     def _enrich_model(self, normalized: NormalizedModel, raw: dict[str, Any]) -> NormalizedModel:
         mid = normalized.model_id
-
-        # Reasoning models
-        if any(mid.startswith(p) for p in _REASONING_PREFIXES):
-            normalized.supports_reasoning = True
+        for flag, value in infer_capabilities(mid).items():
+            setattr(normalized, flag, value)
+        if normalized.supports_reasoning and "reasoning" not in normalized.tags:
             normalized.tags.append("reasoning")
-
-        # Most GPT-4+ models support tools and vision
-        if "gpt-4" in mid or mid.startswith("gpt-4") or mid.startswith("o"):
-            normalized.supports_tools = True
-            normalized.supports_json_mode = True
-            normalized.supports_structured_output = True
-        if "gpt-4o" in mid or "gpt-4.1" in mid or mid.startswith("o"):
-            normalized.supports_vision = True
+        if normalized.context_length is None:
+            normalized.context_length = known_context_window(mid)
 
         normalized.architecture_family = "gpt"
         normalized.architecture_type = "transformer"

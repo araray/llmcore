@@ -8,7 +8,8 @@
     "architecture_type": "moe"
   },
   "context": {
-    "max_input_tokens": 128000
+    "max_input_tokens": 1048576,
+    "max_output_tokens": 393216
   },
   "capabilities": {
     "streaming": true,
@@ -16,11 +17,11 @@
     "tool_use": true,
     "json_mode": true,
     "structured_output": false,
-    "vision": false,
+    "vision": true,
     "audio_input": false,
     "audio_output": false,
     "video_input": false,
-    "reasoning": false,
+    "reasoning": true,
     "image_generation": false,
     "image_edit": false,
     "image_upscale": false,

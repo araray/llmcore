@@ -44,8 +44,8 @@
   "aliases": [],
   "description": "GLM-4.7 is a state-of-the-art, multilingual Mixture-of-Experts (MoE) language model designed for complex reasoning, agentic coding, and tool use. Building on its predecessor GLM-4.6, it delivers significant improvements across key benchmarks, including multilingual SWE-bench, Terminal Bench, and reasoning-heavy evaluations like HLE. The model features advanced \"Interleaved Thinking\" and new \"Preserved Thinking\" modes, allowing it to reason before actions and maintain consistency across long, multi-turn tasks. With 358 billion parameters, GLM-4.7 excels in generating clean code, modern UI elements, and sophisticated reasoning outputs.",
   "tags": [
-    "{'type': 'text', 'supported_inputs': {'max_context_length': {'value': 202752, 'unit': 'token'}}, 'pricing': [{'type': 'prompt', 'unit': 'token', 'cost_usd': '0.0000004000'}, {'type': 'cached_prompt', 'unit': 'token', 'cost_usd': '0.0000000800', 'implicit': true}]}",
-    "output:{'type': 'text', 'supported_parameters': {'temperature': {'type': 'range', 'min': 0, 'max': 2}, 'top_p': {'type': 'range', 'min': 0, 'max': 1}, 'top_k': {'type': 'integer', 'min': 0}, 'min_p': {'type': 'range', 'min': 0, 'max': 1}, 'frequency_penalty': {'type': 'range', 'min': -2, 'max': 2}, 'presence_penalty': {'type': 'range', 'min': -2, 'max': 2}, 'repetition_penalty': {'type': 'range', 'min': 0, 'max': 2}, 'stop': {'type': 'array', 'items': {'type': 'unknown'}}, 'seed': {'type': 'integer'}, 'max_tokens': {'type': 'integer', 'min': 1, 'max': 131072, 'unit': 'token'}, 'tools': {'type': 'boolean'}, 'tool_choice': {'type': 'unknown'}, 'response_format': {'type': 'unknown'}, 'structured_outputs': {'type': 'boolean'}, 'reasoning': {'type': 'boolean'}, 'include_reasoning': {'type': 'boolean'}, 'logit_bias': {'type': 'unknown'}, 'logprobs': {'type': 'boolean'}, 'top_logprobs': {'type': 'integer', 'min': 0, 'max': 20}}, 'max_length': {'value': 131072, 'unit': 'token'}, 'streaming': true, 'pricing': [{'type': 'completion', 'unit': 'token', 'cost_usd': '0.0000017500'}]}"
+    "text",
+    "output:text"
   ],
   "source": "generated",
   "provider_extension": {

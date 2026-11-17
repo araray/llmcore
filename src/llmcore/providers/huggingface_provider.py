@@ -15,10 +15,22 @@ interact with Hugging Face's Inference API, supporting:
 - Document Question Answering
 
 The Inference API routes requests to models hosted on the HF Hub or to
-third-party providers (Together, Sambanova, Replicate, etc.) via the HF
-routing infrastructure.
+third-party providers (deepinfra, featherless, novita, groq, cerebras, ...)
+via the HF router. A ``:fastest`` / ``:cheapest`` / ``:<provider>`` suffix on
+the model id picks the route.
 
-Requires: ``pip install huggingface_hub>=0.28``
+Audited against the live router and huggingface_hub 2.4 on 2026-11-16:
+
+- ``get_models_details`` reads the router's own ``/v1/models`` (per-provider
+  context, tools, structured output, pricing), so context windows come from
+  the providers actually serving a model.
+- Reasoning arrives as ``message.reasoning``; ``assistant_replay_metadata``
+  returns it and the next assistant turn carries it as ``reasoning`` (the
+  router rejects ``reasoning_content`` on some routes, measured).
+- ``effort`` / ``reasoning_effort``, ``top_k`` and other non-SDK fields travel
+  in ``extra_body``; streams request usage.
+
+Requires: ``pip install huggingface_hub>=2.4``
 """
 
 from __future__ import annotations
@@ -75,7 +87,7 @@ from ..models_multimodal import (
     TranscriptionSegment,
 )
 from ..tokens import EstimateCounter as _EstimateCounter
-from .base import BaseProvider, ContextPayload
+from .base import BaseProvider, ContextPayload, carry_replay_to_tail
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from ..media.models import (
@@ -162,6 +174,19 @@ _CAPABILITY_TASKS: dict[str, str] = {
 }
 
 
+#: Chat parameters the SDK's chat_completion takes by name.
+_SDK_CHAT_PARAMS: frozenset[str] = frozenset(
+    {"temperature", "top_p", "max_tokens", "stop", "seed", "frequency_penalty",
+     "presence_penalty", "response_format", "logprobs", "top_logprobs", "n",
+     "logit_bias", "tool_prompt", "stream_options"}
+)
+
+#: Router parameters without an SDK keyword; sent through ``extra_body``.
+_EXTRA_BODY_PARAMS: frozenset[str] = frozenset(
+    {"top_k", "reasoning_effort", "min_p", "repetition_penalty", "chat_template_kwargs"}
+)
+
+
 class HuggingFaceProvider(BaseProvider):
     """LLMCore provider for the Hugging Face Inference API.
 
@@ -200,9 +225,10 @@ class HuggingFaceProvider(BaseProvider):
                 "api_key / api_key_env_var in [providers.huggingface]."
             )
 
-        self.default_model: str = config.get(
-            "default_model", "meta-llama/Llama-3.3-70B-Instruct"
-        )
+        # gpt-oss-120b: 7 live router providers, tools, reasoning, from
+        # $0.05/$0.25 per Mtok (2026-11-16). Llama-3.3-70B was served by three,
+        # one of them at a 12k context.
+        self.default_model: str = config.get("default_model", "openai/gpt-oss-120b")
         self._timeout: float = float(config.get("timeout", 120))
         self._hf_provider: str | None = config.get("provider")
         self._bill_to: str | None = config.get("bill_to")
@@ -217,6 +243,8 @@ class HuggingFaceProvider(BaseProvider):
 
         # Cache for dynamically discovered context lengths
         self._discovered_context_lengths: dict[str, int] = {}
+        #: model id -> the router's per-provider entries (from /v1/models)
+        self._router_providers: dict[str, list[dict[str, Any]]] = {}
 
         # --- Media subsystem (spec phase M8) ---
         self._media_models: dict[str, str] = {
@@ -246,15 +274,31 @@ class HuggingFaceProvider(BaseProvider):
         return "huggingface"
 
     async def get_models_details(self) -> list[ModelDetails]:
-        """Return model details from the model card registry.
+        """The router's chat catalogue, plus model cards for everything else.
 
-        HF Hub has hundreds of thousands of models; we return only the
-        models for which we have model cards, rather than calling the
-        full Hub listing API.
+        ``GET router.huggingface.co/v1/models`` lists the chat models that are
+        actually served, each with its providers' context window, tool and
+        structured-output support, pricing and status. Media and embedding
+        models are not in it, so their model cards are appended. If the router
+        cannot be reached, the cards alone are returned.
         """
-        registry = get_model_card_registry()
         results: list[ModelDetails] = []
+        listed: set[str] = set()
+        try:
+            resp = await self._get_media_http().get(f"{_ROUTER_URL}/v1/models")
+            resp.raise_for_status()
+            for entry in resp.json().get("data") or []:
+                details = self._router_details(entry)
+                if details is not None:
+                    results.append(details)
+                    listed.add(details.id)
+        except Exception as e:
+            logger.warning("HF router /v1/models failed (%s); using model cards only.", e)
+
+        registry = get_model_card_registry()
         for summary in registry.list_cards(provider="huggingface"):
+            if summary.model_id in listed:
+                continue
             card = registry.get("huggingface", summary.model_id)
             if card is None:  # pragma: no cover - listed but unreadable
                 continue
@@ -287,6 +331,51 @@ class HuggingFaceProvider(BaseProvider):
             )
         return results
 
+    def _router_details(self, entry: dict[str, Any]) -> ModelDetails | None:
+        """One router catalogue entry as ModelDetails (live providers only)."""
+        model_id = entry.get("id")
+        providers = [p for p in entry.get("providers") or [] if p.get("status") == "live"]
+        if not model_id or not providers:
+            return None
+        self._router_providers[model_id] = providers
+        window = self._router_context(model_id)
+        inputs = (entry.get("architecture") or {}).get("input_modalities") or []
+        return ModelDetails(
+            id=model_id,
+            provider_name=self.get_name(),
+            context_length=window or self.get_max_context_length(model_id),
+            supports_streaming=True,
+            supports_tools=any(p.get("supports_tools") for p in providers),
+            supports_vision="image" in inputs,
+            model_type="chat",
+            metadata={
+                "source": "router",
+                "owned_by": entry.get("owned_by"),
+                "providers": [
+                    {k: p.get(k) for k in ("provider", "context_length", "pricing", "supports_tools",
+                                           "supports_structured_output", "is_free")}
+                    for p in providers
+                ],
+            },
+        )
+
+    def _router_context(self, model: str) -> int | None:
+        """The context window the route for ``model`` will actually have.
+
+        Pinned (``model:provider`` or the configured ``provider``): that
+        provider's window. Otherwise the smallest among live providers, since
+        auto-routing may pick any of them (Llama-3.3-70B: 12,288 on one).
+        """
+        base, _, suffix = model.partition(":")
+        providers = self._router_providers.get(base) or []
+        pinned = suffix if suffix and suffix not in ("fastest", "cheapest", "preferred") else self._hf_provider
+        windows = [
+            int(p["context_length"])
+            for p in providers
+            if p.get("context_length") and (not pinned or pinned == "auto" or p.get("provider") == pinned)
+        ]
+        return min(windows) if windows else None
+
     def get_supported_parameters(self, model: str | None = None) -> dict[str, Any]:
         return {
             "temperature": {"type": "number", "min": 0, "max": 2.0},
@@ -298,10 +387,30 @@ class HuggingFaceProvider(BaseProvider):
             "presence_penalty": {"type": "number", "min": -2.0, "max": 2.0},
             "top_k": {"type": "integer"},
             "response_format": {"type": "object"},
+            "logprobs": {"type": "boolean"},
+            "top_logprobs": {"type": "integer"},
+            "n": {"type": "integer", "min": 1},
+            "logit_bias": {"type": "object"},
+            "tool_prompt": {"type": "string"},
+            "stream_options": {"type": "object"},
+            "min_p": {"type": "number"},
+            "repetition_penalty": {"type": "number"},
+            "chat_template_kwargs": {"type": "object"},
+            "extra_body": {"type": "object"},
+            "reasoning_effort": {"type": "string"},
+            "effort": {
+                "type": "string",
+                "enum": ["none", "minimal", "low", "medium", "high", "xhigh", "max"],
+            },
         }
 
     def get_max_context_length(self, model: str | None = None) -> int:
         model_name = model or self.default_model
+
+        # 0. The router's live providers (after get_models_details)
+        routed = self._router_context(model_name)
+        if routed:
+            return routed
 
         # 1. Check model card registry
         try:
@@ -361,11 +470,20 @@ class HuggingFaceProvider(BaseProvider):
         if msg.role == LLMCoreRole.TOOL and msg.tool_call_id:
             msg_dict["tool_call_id"] = msg.tool_call_id
 
-        # Assistant messages with tool calls
-        if role_str == "assistant" and "tool_calls" in metadata:
-            msg_dict["tool_calls"] = metadata["tool_calls"]
+        # Assistant messages with tool calls. First-class Message.tool_calls
+        # wins over the legacy metadata channel (it was ignored here, so a
+        # tool loop built the standard way lost its calls).
+        tool_calls = getattr(msg, "tool_calls", None) or metadata.get("tool_calls")
+        if role_str == "assistant" and tool_calls:
+            msg_dict["tool_calls"] = tool_calls
             if not msg.content:
                 msg_dict["content"] = None
+        if role_str == "assistant":
+            # The router takes back reasoning as "reasoning"; it rejects
+            # "reasoning_content" on some routes (400, measured 2026-11-16).
+            reasoning = metadata.get("reasoning_content") or metadata.get("reasoning")
+            if reasoning:
+                msg_dict["reasoning"] = reasoning
 
         # Optional name field
         name = metadata.get("name")
@@ -411,20 +529,28 @@ class HuggingFaceProvider(BaseProvider):
                 {"type": "function", "function": t.model_dump()} for t in tools
             ]
 
-        # Build API kwargs
+        # Build API kwargs. SDK keywords by name; the rest (top_k used to be
+        # advertised and silently dropped, reasoning_effort was filtered out)
+        # in extra_body.
+        supported = self.get_supported_parameters(model_name)
+        unknown = [k for k in kwargs if k not in supported]
+        if unknown:
+            raise ValueError(f"Unsupported parameter '{unknown[0]}' for Hugging Face provider.")
+        params = dict(kwargs)
+        effort = params.pop("effort", None)
+        if effort is not None:
+            params.setdefault("reasoning_effort", str(effort).strip().lower())
+        extra_body: dict[str, Any] = dict(params.pop("extra_body", None) or {})
         api_kwargs: dict[str, Any] = {}
-        for k in (
-            "temperature",
-            "top_p",
-            "max_tokens",
-            "stop",
-            "seed",
-            "frequency_penalty",
-            "presence_penalty",
-            "response_format",
-        ):
-            if k in kwargs:
-                api_kwargs[k] = kwargs[k]
+        for k, v in params.items():
+            if k in _SDK_CHAT_PARAMS:
+                api_kwargs[k] = v
+            else:
+                extra_body[k] = v
+        if stream:
+            api_kwargs.setdefault("stream_options", {"include_usage": True})
+        if extra_body:
+            api_kwargs["extra_body"] = extra_body
 
         if self.log_raw_payloads_enabled and logger.isEnabledFor(logging.DEBUG):
             logger.debug(
@@ -487,8 +613,14 @@ class HuggingFaceProvider(BaseProvider):
     async def _stream_wrapper(
         self, response: Any
     ) -> AsyncGenerator[dict[str, Any], None]:
-        """Wrap HF streaming response into dicts for llmcore."""
+        """Wrap HF streaming response into dicts for llmcore.
+
+        The chunk with the finish reason also carries the whole turn's
+        reasoning as ``replay_reasoning_content`` (assistant_replay_metadata).
+        """
+        reasoning: list[str] = []
         try:
+            _replay_tail: dict[str, Any] = {}
             async for chunk in response:
                 chunk_dict = self._normalize_hf_response(chunk)
                 if self.log_raw_payloads_enabled and logger.isEnabledFor(
@@ -499,8 +631,21 @@ class HuggingFaceProvider(BaseProvider):
                         self.get_name(),
                         json.dumps(chunk_dict, default=str),
                     )
+                for choice in chunk_dict.get("choices") or []:
+                    if not isinstance(choice, dict) or choice.get("index", 0) != 0:
+                        continue
+                    delta = choice.get("delta") or {}
+                    piece = delta.get("reasoning") or delta.get("reasoning_content")
+                    if isinstance(piece, str) and piece:
+                        reasoning.append(piece)
+                    if choice.get("finish_reason") and reasoning and isinstance(choice.get("delta"), dict):
+                        choice["delta"]["replay_reasoning_content"] = "".join(reasoning)
+                carry_replay_to_tail(chunk, _replay_tail)
                 yield chunk_dict
-        except HfHubHTTPError as e:
+        except ProviderError:
+            raise
+        except Exception as e:
+            # huggingface_hub 2.x raises httpx2 errors as well as its own.
             raise ProviderError(
                 self.get_name(), f"Stream error: {e}"
             ) from e
@@ -543,6 +688,34 @@ class HuggingFaceProvider(BaseProvider):
             return choices[0].get("delta", {}).get("content") or ""
         except (KeyError, IndexError, TypeError):
             return ""
+
+    def extract_reasoning_content(self, response: dict[str, Any]) -> str | None:
+        """The model's reasoning (``message.reasoning`` from the router/SDK)."""
+        try:
+            message = (response.get("choices") or [{}])[0].get("message") or {}
+        except (AttributeError, IndexError, TypeError):
+            return None
+        return message.get("reasoning") or message.get("reasoning_content") or None
+
+    def extract_delta_reasoning_content(self, chunk: dict[str, Any]) -> str | None:
+        """Streaming counterpart of :meth:`extract_reasoning_content`."""
+        try:
+            delta = (chunk.get("choices") or [{}])[0].get("delta") or {}
+        except (AttributeError, IndexError, TypeError):
+            return None
+        return delta.get("reasoning") or delta.get("reasoning_content") or None
+
+    def assistant_replay_metadata(self, response: dict[str, Any]) -> dict[str, Any]:
+        """The reasoning to send back with the next assistant turn (as
+        ``reasoning``). For a stream, pass the chunk with the finish reason."""
+        try:
+            choice = (response.get("choices") or [{}])[0]
+        except (AttributeError, IndexError, TypeError):
+            return {}
+        message = choice.get("message") or {}
+        delta = choice.get("delta") or {}
+        text = message.get("reasoning") or message.get("reasoning_content") or delta.get("replay_reasoning_content")
+        return {"reasoning_content": text} if isinstance(text, str) and text else {}
 
     def extract_tool_calls(self, response: dict[str, Any]) -> list[ToolCall]:
         """Extract tool calls from HF response (OpenAI-compatible format)."""
@@ -628,7 +801,9 @@ class HuggingFaceProvider(BaseProvider):
         **kwargs: Any,
     ) -> SpeechResult:
         """Generate speech audio from text via HF Inference API."""
-        tts_model = model or "facebook/mms-tts-eng"
+        # facebook/mms-tts-eng (the old default) has no inference provider at
+        # all now; use the media default, which is served.
+        tts_model = model or self._media_models["tts"]
 
         try:
             audio_bytes: bytes = await self._client.text_to_speech(
@@ -643,7 +818,9 @@ class HuggingFaceProvider(BaseProvider):
                 voice=voice,
                 metadata={"provider": "huggingface"},
             )
-        except HfHubHTTPError as e:
+        except Exception as e:
+            # huggingface_hub 2.x raises httpx2 errors (and StopIteration for
+            # a model no provider serves), not only HfHubHTTPError.
             raise ProviderError(
                 self.get_name(), f"TTS failed: {e}"
             ) from e
@@ -1150,7 +1327,7 @@ class HuggingFaceProvider(BaseProvider):
         **kwargs: Any,
     ) -> TranscriptionResult:
         """Transcribe audio to text via HF Inference API (ASR)."""
-        asr_model = model or "openai/whisper-large-v3-turbo"
+        asr_model = model or self._media_models["asr"]
 
         try:
             result = await self._client.automatic_speech_recognition(
@@ -1179,7 +1356,7 @@ class HuggingFaceProvider(BaseProvider):
                 model=asr_model,
                 metadata={"provider": "huggingface"},
             )
-        except HfHubHTTPError as e:
+        except Exception as e:
             raise ProviderError(
                 self.get_name(), f"ASR failed: {e}"
             ) from e
@@ -1201,7 +1378,7 @@ class HuggingFaceProvider(BaseProvider):
         **kwargs: Any,
     ) -> ImageGenerationResult:
         """Generate images from text via HF Inference API."""
-        img_model = model or "black-forest-labs/FLUX.1-dev"
+        img_model = model or self._media_models["image_generate"]
 
         # Parse size into dimensions
         width, height = 1024, 1024
@@ -1238,14 +1415,14 @@ class HuggingFaceProvider(BaseProvider):
                 model=img_model,
                 metadata={"provider": "huggingface"},
             )
-        except HfHubHTTPError as e:
-            raise ProviderError(
-                self.get_name(), f"Image generation failed: {e}"
-            ) from e
         except ImportError as e:
             raise ProviderError(
                 self.get_name(),
                 f"Image generation requires PIL: {e}",
+            ) from e
+        except Exception as e:
+            raise ProviderError(
+                self.get_name(), f"Image generation failed: {e}"
             ) from e
 
     # ------------------------------------------------------------------
@@ -1261,31 +1438,19 @@ class HuggingFaceProvider(BaseProvider):
     ) -> dict[str, Any]:
         """Create text embeddings via HF Inference API (feature extraction)."""
         embed_model = model or "sentence-transformers/all-MiniLM-L6-v2"
-        texts = [input_texts] if isinstance(input_texts, str) else input_texts
+        texts = [input_texts] if isinstance(input_texts, str) else list(input_texts)
+        options = {k: v for k, v in kwargs.items() if k in ("dimensions", "normalize", "truncate", "prompt_name")}
 
         try:
-            data_items = []
-            for idx, text in enumerate(texts):
-                embedding = await self._client.feature_extraction(
-                    text=text,
-                    model=embed_model,
-                )
-                # HF returns numpy array; convert to list
-                emb_list = embedding.tolist() if hasattr(embedding, "tolist") else list(embedding)
-                # Flatten if nested (HF sometimes returns [1, dim] shape)
-                if (
-                    isinstance(emb_list, list)
-                    and len(emb_list) > 0
-                    and isinstance(emb_list[0], list)
-                ):
-                    emb_list = emb_list[0]
-                data_items.append(
-                    {
-                        "object": "embedding",
-                        "embedding": emb_list,
-                        "index": idx,
-                    }
-                )
+            # One request for the whole batch (it used to be one per text).
+            embedding = await self._client.feature_extraction(text=texts, model=embed_model, **options)
+            rows = embedding.tolist() if hasattr(embedding, "tolist") else list(embedding)
+            if len(texts) == 1 and rows and not isinstance(rows[0], list):
+                rows = [rows]
+            data_items = [
+                {"object": "embedding", "embedding": list(row), "index": idx}
+                for idx, row in enumerate(rows)
+            ]
 
             total_tokens = 0
             for t in texts:
@@ -1300,7 +1465,7 @@ class HuggingFaceProvider(BaseProvider):
                     "total_tokens": total_tokens,
                 },
             }
-        except HfHubHTTPError as e:
+        except Exception as e:
             raise ProviderError(
                 self.get_name(), f"Embedding failed: {e}"
             ) from e

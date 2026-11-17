@@ -1,0 +1,67 @@
+{
+  "model_id": "google/gemini-4-hydrogen:batch",
+  "display_name": "Google: Gemini 4 Hydrogen (batch)",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 1048576,
+    "max_output_tokens": 943718
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": true,
+    "structured_output": true,
+    "vision": true,
+    "audio_input": true,
+    "audio_output": false,
+    "video_input": true,
+    "reasoning": true,
+    "image_generation": false,
+    "image_edit": false,
+    "image_upscale": false,
+    "video_generation": false,
+    "video_interpolation": false,
+    "speech_synthesis": false,
+    "transcription": false,
+    "music_generation": false,
+    "sfx_generation": false,
+    "voice_design": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.75,
+      "output": 3.75,
+      "cached_input": 0.0375,
+      "cache_write": 0.083333
+    }
+  },
+  "lifecycle": {
+    "status": "active",
+    "release_date": "2026-11-12"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Gemini 4 Hydrogen is the high-efficiency workhorse model of the Gemini 4 family from Google, built for high-throughput agentic workflows, coding and multi-model routing at lower cost and latency than...",
+  "tags": [],
+  "source": "generated",
+  "x_pricewatch": {
+    "feed": "openrouter",
+    "method": "api",
+    "url": "https://openrouter.ai/api/v1/models",
+    "matched_key": "openrouter/google/gemini-4-hydrogen:batch",
+    "match": "exact key match",
+    "fetched_at": "2026-11-16T09:04:54+00:00",
+    "capabilities": {
+      "feed": "caps:openrouter",
+      "method": "api",
+      "url": "https://openrouter.ai/api/v1/models",
+      "matched_key": "openrouter/google/gemini-4-hydrogen:batch",
+      "fetched_at": "2026-11-16T09:06:07+00:00"
+    }
+  }
+}

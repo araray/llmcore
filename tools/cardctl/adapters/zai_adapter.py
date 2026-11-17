@@ -24,8 +24,13 @@ from typing import Any
 from .base import NormalizedModel
 from .openai_compat import OpenAICompatAdapter
 
-# GLM model metadata keyed by model_id prefix (longest match wins).
+# GLM model metadata keyed by model_id prefix. The longest match wins, and it
+# inherits fields from the family entries it extends (see ``_glm_metadata``).
 _GLM_MODELS: dict[str, dict[str, Any]] = {
+    # GLM-5.3 (2026-08-18) always thinks; the Flash/FlashX models take image,
+    # video and file input (docs.z.ai, 2026-11-16).
+    "glm-5.3-flash": {"architecture_type": "moe", "reasoning": True, "vision": True},
+    "glm-5.3": {"context_length": 1_000_000, "architecture_type": "moe", "reasoning": True},
     "glm-5.2": {"context_length": 1_000_000, "architecture_type": "moe", "reasoning": True},
     "glm-5.1": {"context_length": 1_000_000, "architecture_type": "moe", "reasoning": True},
     "glm-5v-turbo": {"context_length": 65_536, "architecture_type": "moe", "vision": True},
@@ -37,6 +42,26 @@ _GLM_MODELS: dict[str, dict[str, Any]] = {
     "glm-4.5v": {"context_length": 65_536, "architecture_type": "moe", "vision": True},
     "glm-4.5": {"context_length": 131_072, "architecture_type": "moe", "reasoning": True},
 }
+
+
+def _glm_metadata(model_id: str) -> dict[str, Any]:
+    """Metadata for *model_id*: the longest matching prefix plus its family.
+
+    A narrow entry such as ``glm-5.3-flash`` only states what differs from its
+    family and inherits the rest (``context_length`` among it) from the
+    shorter entries it extends at a ``-`` boundary (``glm-5.3``). Siblings
+    that merely share characters (``glm-5v-turbo`` and ``glm-5``) do not
+    inherit from each other.
+    """
+    matches = [p for p in _GLM_MODELS if model_id.startswith(p)]
+    if not matches:
+        return {}
+    longest = max(matches, key=len)
+    meta: dict[str, Any] = {}
+    for prefix in sorted(_GLM_MODELS, key=len):
+        if longest == prefix or longest.startswith(prefix + "-"):
+            meta.update(_GLM_MODELS[prefix])
+    return meta
 
 
 class ZaiAdapter(OpenAICompatAdapter):
@@ -73,15 +98,10 @@ class ZaiAdapter(OpenAICompatAdapter):
         normalized.supports_tools = True
         normalized.supports_json_mode = True
 
-        # Longest-prefix match against the metadata table.
-        meta = None
-        for prefix in sorted(_GLM_MODELS, key=len, reverse=True):
-            if mid.startswith(prefix):
-                meta = _GLM_MODELS[prefix]
-                break
-
+        meta = _glm_metadata(mid)
         if meta:
-            normalized.context_length = meta["context_length"]
+            if meta.get("context_length"):
+                normalized.context_length = meta["context_length"]
             normalized.architecture_type = meta.get("architecture_type", "moe")
             if meta.get("reasoning"):
                 normalized.supports_reasoning = True

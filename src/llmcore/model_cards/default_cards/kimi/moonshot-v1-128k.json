@@ -25,7 +25,7 @@
     }
   },
   "lifecycle": {
-    "status": "active"
+    "status": "retired"
   },
   "description": "Moonshot V1 text generation model (128K context).",
   "tags": [

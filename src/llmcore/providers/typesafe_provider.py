@@ -67,6 +67,7 @@ Docs: https://docs.typesafe.ai  (API reference: https://docs.typesafe.ai/api)
 from __future__ import annotations
 
 import asyncio
+import base64
 import json
 import logging
 import math
@@ -164,7 +165,14 @@ _RETRY_STATUSES: frozenset[int] = frozenset({408, 429, 500, 502, 503, 504, 529})
 #: Statuses that are never retried and map to ``retryable=False``.
 _NON_RETRYABLE_STATUSES: frozenset[int] = frozenset({400, 401, 403, 404, 422})
 
-_QUESTION_TYPES: frozenset[str] = frozenset({"noul", "choice", "score"})
+_QUESTION_TYPES: frozenset[str] = frozenset({"noul", "choice", "score", "box"})
+
+#: Opt-in headers ("danger zone" features, docs.typesafe.ai). Images and Box
+#: questions need the first (a 400 without it); the second raises the request
+#: budget from 64k to 262k tokens.
+_IMAGES_HEADER = "TypeSafe-Danger-Zone-Images"
+_LONG_CONTEXT_HEADER = "TypeSafe-Danger-Zone-Long-Context"
+_LONG_CONTEXT_TOKENS = 262_144
 _MAX_ERROR_BODY = 500
 
 #: JSON content accepted for ``state``, ``instructions`` and criteria descriptions.
@@ -281,7 +289,21 @@ class Score(_Question):
         return value
 
 
-QuestionLike = Noul | Choice | Score | Mapping[str, Any]
+class Box(_Question):
+    """Locate something in an image (Jev 1.14+; needs image assets).
+
+    Args:
+        instructions: What to find, referring to an image in ``state``.
+
+    The answer carries ``box`` (``top``/``bottom``/``left``/``right`` as 0-1
+    fractions of the image) and a nullable ``confidence``.
+    See https://docs.typesafe.ai/primitives/box
+    """
+
+    type: Literal["box"] = "box"
+
+
+QuestionLike = Noul | Choice | Score | Box | Mapping[str, Any]
 
 
 def normalize_questions(questions: Mapping[str, QuestionLike]) -> dict[str, dict[str, Any]]:
@@ -307,7 +329,7 @@ def normalize_questions(questions: Mapping[str, QuestionLike]) -> dict[str, dict
     for name, question in questions.items():
         if not isinstance(name, str) or not name:
             raise ValueError("Question ids must be non-empty strings.")
-        if isinstance(question, (Noul, Choice, Score)):
+        if isinstance(question, (Noul, Choice, Score, Box)):
             wire[name] = question.to_wire()
             continue
         if not isinstance(question, Mapping):
@@ -386,7 +408,18 @@ class ScoreAnswer(BaseModel):
     """How certain the model is (0-1), derived from the distribution's shape."""
 
 
-Answer = Annotated[NoulAnswer | ChoiceAnswer | ScoreAnswer, Field(discriminator="type")]
+class BoxAnswer(BaseModel):
+    """Answer to a :class:`Box` question."""
+
+    model_config = ConfigDict(extra="allow")
+
+    type: Literal["box"] = "box"
+    box: dict[str, float]
+    """``top``, ``bottom``, ``left``, ``right`` as 0-1 fractions of the image."""
+    confidence: float | None = None
+
+
+Answer = Annotated[NoulAnswer | ChoiceAnswer | ScoreAnswer | BoxAnswer, Field(discriminator="type")]
 """An answer to a single question, discriminated on ``type``."""
 
 
@@ -419,7 +452,7 @@ class SystemOneResult(BaseModel):
     """Typed result of :meth:`TypeSafeProvider.system_one`.
 
     Attributes:
-        model: The versioned model id that answered (e.g. ``jev-1.13.0``), even
+        model: The versioned model id that answered (e.g. ``jev-1.14.0``), even
             when the request used an alias.
         answers: Every answer keyed by the question id you chose.
         usage: Token usage.
@@ -450,6 +483,11 @@ class SystemOneResult(BaseModel):
     def scores(self) -> dict[str, ScoreAnswer]:
         """Score answers keyed by question id."""
         return {k: v for k, v in self.answers.items() if isinstance(v, ScoreAnswer)}
+
+    @property
+    def boxes(self) -> dict[str, BoxAnswer]:
+        """Box answers keyed by question id (Jev 1.14+)."""
+        return {k: v for k, v in self.answers.items() if isinstance(v, BoxAnswer)}
 
     def answers_dict(self) -> dict[str, dict[str, Any]]:
         """Answers as plain JSON-serialisable dicts (string keys, wire shape)."""
@@ -646,8 +684,14 @@ class TypeSafeProvider(BaseProvider):
         self._backoff_max: float = self._non_negative_float(
             config.get("retry_backoff_max", _DEFAULT_BACKOFF_MAX), "retry_backoff_max"
         )
+        #: Long Context opt-in: requests carry the header and the budget is
+        #: 262k tokens instead of 64k.
+        self.long_context: bool = bool(config.get("long_context", False))
         self.fallback_context_length: int = int(
-            config.get("fallback_context_length", _DEFAULT_FALLBACK_CONTEXT)
+            config.get(
+                "fallback_context_length",
+                _LONG_CONTEXT_TOKENS if config.get("long_context") else _DEFAULT_FALLBACK_CONTEXT,
+            )
         )
         self._default_headers: dict[str, str] = {
             str(k): str(v) for k, v in (config.get("headers") or {}).items()
@@ -718,6 +762,8 @@ class TypeSafeProvider(BaseProvider):
         *,
         json_body: dict[str, Any] | None = None,
         model: str | None = None,
+        timeout: float | None = None,  # noqa: ASYNC109 - SDK-parity kwarg name
+        extra_headers: Mapping[str, str] | None = None,
     ) -> Any:
         """Serve a request through the official SDK, shaped like the REST reply.
 
@@ -730,11 +776,19 @@ class TypeSafeProvider(BaseProvider):
         """
         try:
             if path == _SYSTEM_ONE_PATH:
-                body = json_body or {}
+                body = dict(json_body or {})
+                state = body.pop("state", None)
+                questions = body.pop("questions", None) or {}
+                used = body.pop("model", None) or model
+                # Assets travel already encoded, like the rest of the body;
+                # headers and timeout used to be dropped on this transport.
                 result = await self._sdk.system_one(
-                    body.get("state"),
-                    body.get("questions") or {},
-                    model=body.get("model") or model,
+                    state,
+                    questions,
+                    model=used,
+                    timeout=timeout,
+                    extra_headers=dict(extra_headers or {}) or None,
+                    extra_body=body or None,
                 )
                 payload = result.model_dump(mode="json")
             elif path == _MODELS_PATH:
@@ -752,11 +806,14 @@ class TypeSafeProvider(BaseProvider):
         except ProviderError:
             raise
         except Exception as exc:
+            # Every SDK failure used to be retryable, a 400/401/422 included.
+            status, retryable = _sdk_error_status(exc)
             raise ProviderError(
                 self.get_name(),
                 f"TypeSafe SDK request failed: {exc}",
                 model_name=model,
-                retryable=True,
+                status_code=status,
+                retryable=retryable,
             ) from exc
         return _SdkResponse(payload)
 
@@ -883,7 +940,7 @@ class TypeSafeProvider(BaseProvider):
                 family="jev",
                 model_type="decision",
             )
-            for model_id in ("jev-1.13.0", "jev-latest", "jev-preview")
+            for model_id in ("jev-1.14.0", "jev-1.13.0", "jev-latest", "jev-preview")
         ]
 
     def get_supported_parameters(self, model: str | None = None) -> dict[str, Any]:
@@ -931,7 +988,8 @@ class TypeSafeProvider(BaseProvider):
             registry.load()
             card = registry.get(_PROVIDER_NAME, target)
             if card is not None:
-                return int(card.context.max_input_tokens)
+                window = int(card.context.max_input_tokens)
+                return max(window, _LONG_CONTEXT_TOKENS) if self.long_context else window
         except Exception as exc:  # best-effort
             logger.debug("TypeSafe context-length lookup failed for %s: %s", target, exc)
         return self.fallback_context_length
@@ -1053,7 +1111,8 @@ class TypeSafeProvider(BaseProvider):
             # retries, so llmcore's retry loop is deliberately skipped here
             # rather than wrapped around it.
             return await self._sdk_request(
-                method, path, json_body=json_body, model=model
+                method, path, json_body=json_body, model=model,
+                timeout=timeout, extra_headers=extra_headers,
             )
 
         client = self._get_http()
@@ -1131,6 +1190,7 @@ class TypeSafeProvider(BaseProvider):
         questions: Mapping[str, QuestionLike],
         *,
         model: str | None = None,
+        assets: Mapping[str, Any] | None = None,
         timeout: float | None = None,  # noqa: ASYNC109 - SDK-parity kwarg name
         extra_headers: Mapping[str, str] | None = None,
         extra_body: Mapping[str, Any] | None = None,
@@ -1139,11 +1199,17 @@ class TypeSafeProvider(BaseProvider):
 
         Args:
             state: The content to evaluate — a string, a JSON object, or an
-                array. Text only (pre-process images/audio into text first).
+                array. A string equal to an ``assets`` key is that image;
+                questions can point at one by name in backticks.
             questions: Map of question id → :class:`Noul` / :class:`Choice` /
                 :class:`Score` (or equivalent dicts). All questions see the same
                 state and are evaluated independently, in parallel.
             model: Model id or alias; defaults to ``default_model``.
+            assets: Images keyed by the reference used in ``state`` (PNG/JPEG,
+                280-1568 px per side, 16 MiB each): raw bytes, a file path, or
+                a ready ``{"format", "data_base64"}`` dict. Every asset must be
+                referenced. Sends ``TypeSafe-Danger-Zone-Images: true``, which
+                :class:`Box` questions need as well.
             timeout: Per-call timeout override in seconds.
             extra_headers: Extra HTTP headers for this call.
             extra_body: Extra top-level request fields (forward compatibility).
@@ -1161,6 +1227,14 @@ class TypeSafeProvider(BaseProvider):
         wire_questions = normalize_questions(questions)
         used_model = model or self.default_model
         body: dict[str, Any] = {"state": state, "model": used_model, "questions": wire_questions}
+        headers = dict(extra_headers or {})
+        if assets:
+            body["assets"] = {ref: _wire_asset(ref, value) for ref, value in assets.items()}
+        if assets or any(q.get("type") == "box" for q in wire_questions.values()):
+            headers.setdefault(_IMAGES_HEADER, "true")
+        if self.long_context:
+            headers.setdefault(_LONG_CONTEXT_HEADER, "true")
+        extra_headers = headers or None
         if extra_body:
             body.update(dict(extra_body))
         if self.log_raw_payloads_enabled:
@@ -1246,7 +1320,7 @@ class TypeSafeProvider(BaseProvider):
         """Return the models/aliases the account can use (``GET /v1/models``).
 
         The endpoint currently lists aliases (``jev-latest``, ``jev-preview``);
-        versioned ids such as ``jev-1.13.0`` are accepted by ``model`` whether
+        versioned ids such as ``jev-1.14.0`` are accepted by ``model`` whether
         or not they appear here.
         """
         response = await self._request(
@@ -1494,3 +1568,46 @@ class TypeSafeProvider(BaseProvider):
                 logger.error("Error closing TypeSafe SDK client: %s", exc)
             self._sdk = None
         logger.info("TypeSafeProvider closed.")
+
+
+def _wire_asset(ref: str, value: Any) -> dict[str, Any]:
+    """One image asset in the wire shape (``format`` + ``data_base64``)."""
+    if isinstance(value, Mapping):
+        return {"type": "image", **dict(value)}
+    if isinstance(value, (str, os.PathLike)) and os.path.exists(os.fspath(value)):
+        with open(os.fspath(value), "rb") as fh:
+            value = fh.read()
+    if not isinstance(value, (bytes, bytearray)):
+        raise ValueError(f"Asset {ref!r} must be bytes, a file path, or a dict (got {type(value).__name__}).")
+    raw = bytes(value)
+    if raw.startswith(b"\x89PNG"):
+        fmt = "png"
+    elif raw.startswith(b"\xff\xd8"):
+        fmt = "jpeg"
+    else:
+        raise ValueError(f"Asset {ref!r} is not a PNG or JPEG image (the only formats TypeSafe takes).")
+    return {"type": "image", "format": fmt, "data_base64": base64.b64encode(raw).decode("ascii")}
+
+
+def _sdk_error_status(exc: BaseException) -> tuple[int | None, bool]:
+    """(status, retryable) for an SDK exception, by its class."""
+    name = type(exc).__name__
+    table = {
+        "TypeSafeBadRequestError": (400, False),
+        "TypeSafeAuthenticationError": (401, False),
+        "TypeSafePermissionDeniedError": (403, False),
+        "TypeSafeNotFoundError": (404, False),
+        "TypeSafeUnprocessableEntityError": (422, False),
+        "TypeSafeRateLimitError": (429, True),
+        "TypeSafeInternalServerError": (500, True),
+        "TypeSafeAPITimeoutError": (None, True),
+        "TypeSafeAPIConnectionError": (None, True),
+    }
+    if name in table:
+        return table[name]
+    status = getattr(exc, "status", None) or getattr(exc, "status_code", None)
+    if isinstance(status, int):
+        return status, status == 429 or status >= 500
+    # Anything else failed before or outside the HTTP exchange (local request
+    # validation, a bug): retrying cannot help, unless it is a transport issue.
+    return None, any(word in name for word in ("Timeout", "Connection"))

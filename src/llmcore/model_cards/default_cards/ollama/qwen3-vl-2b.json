@@ -1,6 +1,6 @@
 {
   "model_id": "qwen3-vl:2b",
-  "display_name": "Qwen3 Vl:2b",
+  "display_name": "Qwen 3 VL 2B",
   "provider": "ollama",
   "model_type": "chat",
   "architecture": {
@@ -9,7 +9,8 @@
     "architecture_type": "dense"
   },
   "context": {
-    "max_input_tokens": 262144
+    "max_input_tokens": 262144,
+    "max_output_tokens": 8192
   },
   "capabilities": {
     "streaming": true,
@@ -17,24 +18,27 @@
     "tool_use": true,
     "json_mode": false,
     "structured_output": false,
-    "vision": false,
+    "vision": true,
     "audio_input": false,
     "audio_output": false,
-    "video_input": false,
     "reasoning": false
   },
   "pricing": null,
   "lifecycle": {
     "status": "active"
   },
-  "license": null,
+  "license": "apache-2.0",
   "open_weights": true,
   "aliases": [],
-  "description": "Ollama model: qwen3-vl:2b",
+  "description": "Qwen 3 VL 2B — compact vision-language model.",
   "tags": [
-    "local",
     "open-source",
+    "local",
+    "multimodal",
+    "vision",
+    "compact",
+    "alibaba",
     "quant:Q4_K_M"
   ],
-  "source": "generated"
+  "source": "builtin"
 }

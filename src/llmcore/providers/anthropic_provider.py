@@ -16,7 +16,8 @@ Supports:
 - Service tier selection
 - Metadata / user_id passthrough
 
-Tested against anthropic SDK v0.94.0.
+Tested against anthropic SDK v2.8.0 and API version 2026-10-21 (live,
+2026-11-16).
 """
 
 from __future__ import annotations
@@ -27,7 +28,7 @@ import os
 import re
 import uuid
 from collections.abc import AsyncGenerator
-from typing import Any
+from typing import Any, ClassVar
 
 try:
     import httpx
@@ -43,24 +44,25 @@ logger = logging.getLogger(__name__)
 anthropic_available = False
 try:
     import anthropic
-    from anthropic import AsyncAnthropic
-    from anthropic._exceptions import (
+    # Public exports (the private ``anthropic._exceptions`` module is not API).
+    from anthropic import (
         APIConnectionError as AnthropicConnectionError,
     )
-    from anthropic._exceptions import (
+    from anthropic import (
         APIStatusError,
+        AsyncAnthropic,
         OverloadedError,
     )
-    from anthropic._exceptions import (
+    from anthropic import (
         APITimeoutError as AnthropicTimeoutError,
     )
-    from anthropic._exceptions import (
+    from anthropic import (
         AuthenticationError as AnthropicAuthError,
     )
-    from anthropic._exceptions import (
+    from anthropic import (
         BadRequestError as AnthropicBadRequestError,
     )
-    from anthropic._exceptions import (
+    from anthropic import (
         RateLimitError as AnthropicRateLimitError,
     )
 
@@ -83,33 +85,59 @@ from ..tokens import EstimateCounter as _EstimateCounter
 from .base import BaseProvider, ContextPayload
 
 # ---------------------------------------------------------------------------
-# Default context lengths — fallback when dynamic discovery hasn't run.
-# Updated April 2026 to cover current-generation models.
+# What each model accepts, as Anthropic's Models API states it.
 # ---------------------------------------------------------------------------
-DEFAULT_ANTHROPIC_TOKEN_LIMITS: dict[str, int] = {
-    # Claude 4.6
-    "claude-opus-4-6": 200000,
-    "claude-sonnet-4-6": 200000,
-    # Claude 4.5
-    "claude-opus-4-5": 200000,
-    "claude-opus-4-5-20251101": 200000,
-    "claude-sonnet-4-5": 200000,
-    "claude-sonnet-4-5-20250929": 200000,
-    "claude-haiku-4-5": 200000,
-    "claude-haiku-4-5-20251001": 200000,
-    # Claude 4.1
-    "claude-opus-4-1": 200000,
-    "claude-opus-4-1-20250805": 200000,
-    # Claude 4.0
-    "claude-opus-4-0": 200000,
-    "claude-opus-4-20250514": 200000,
-    "claude-sonnet-4-0": 200000,
-    "claude-sonnet-4-20250514": 200000,
-    # Claude 3 (legacy, some still available)
-    "claude-3-haiku-20240307": 200000,
+#: Snapshot of ``GET /v1/models`` capabilities (2026-11-16): accepted thinking
+#: types, accepted ``output_config.effort`` levels, max input and max output.
+#: The provider reads the live list once per process and uses this only when
+#: that fails (offline, a gateway without capabilities, a stub in tests). The
+#: rules are per model, not per generation: Sonnet 5.5 alone takes
+#: ``between_tools``, Opus 5.5 and every Fable model have no off switch at all,
+#: Sonnet 4.6 has no ``xhigh``, and Haiku/Sonnet 4.5 take no effort level.
+_E5 = frozenset({"low", "medium", "high", "xhigh", "max"})
+_MEASURED_CAPABILITIES: dict[str, tuple[frozenset[str], frozenset[str], int, int]] = {
+    "claude-fable-5-2": (frozenset({"adaptive"}), _E5, 1_000_000, 128_000),
+    "claude-fable-5-1": (frozenset({"adaptive"}), _E5, 1_000_000, 128_000),
+    "claude-fable-5": (frozenset({"adaptive"}), _E5, 1_000_000, 128_000),
+    "claude-opus-5-5": (frozenset({"adaptive"}), _E5, 1_000_000, 128_000),
+    "claude-sonnet-5-5": (frozenset({"adaptive", "between_tools"}), _E5, 1_000_000, 128_000),
+    "claude-haiku-5-5": (frozenset({"adaptive", "disabled"}), _E5, 1_000_000, 128_000),
+    "claude-opus-5": (frozenset({"adaptive", "disabled"}), _E5, 1_000_000, 128_000),
+    "claude-sonnet-5": (frozenset({"adaptive", "disabled"}), _E5, 1_000_000, 128_000),
+    "claude-opus-4-8": (frozenset({"adaptive", "disabled"}), _E5, 1_000_000, 128_000),
+    "claude-opus-4-7": (frozenset({"adaptive", "disabled"}), _E5, 1_000_000, 128_000),
+    "claude-sonnet-4-6": (
+        frozenset({"enabled", "adaptive", "disabled"}),
+        frozenset({"low", "medium", "high", "max"}),
+        1_000_000,
+        128_000,
+    ),
+    "claude-opus-4-6": (
+        frozenset({"enabled", "adaptive", "disabled"}),
+        frozenset({"low", "medium", "high", "max"}),
+        1_000_000,
+        128_000,
+    ),
+    "claude-opus-4-5-20251101": (
+        frozenset({"enabled", "disabled"}),
+        frozenset({"low", "medium", "high"}),
+        200_000,
+        64_000,
+    ),
+    "claude-haiku-4-5-20251001": (frozenset({"enabled", "disabled"}), frozenset(), 200_000, 64_000),
+    "claude-sonnet-4-5-20250929": (frozenset({"enabled", "disabled"}), frozenset(), 200_000, 64_000),
 }
 
-DEFAULT_MODEL = "claude-sonnet-4-5-20250929"
+# Default context lengths, kept for older ids the Models API no longer lists.
+DEFAULT_ANTHROPIC_TOKEN_LIMITS: dict[str, int] = {
+    **{model_id: caps[2] for model_id, caps in _MEASURED_CAPABILITIES.items()},
+    "claude-opus-4-5": 200000,
+    "claude-sonnet-4-5": 200000,
+    "claude-haiku-4-5": 200000,
+}
+
+#: claude-sonnet-4-5-20250929 (the old default) retires 2026-11-30.
+DEFAULT_MODEL = "claude-sonnet-5-5"
 
 
 #: Public API root for the direct transport.
@@ -117,7 +145,9 @@ _ANTHROPIC_DEFAULT_BASE_URL = "https://api.anthropic.com"
 
 #: Version header the Messages API requires on every direct request. The SDK
 #: sends this for you; calling the API directly means owning it.
-_ANTHROPIC_VERSION = "2023-06-01"
+#: 2026-10-21 is what SDK 2.x sends. It removes temperature/top_p/top_k, and
+#: rejects documents in assistant turns and citations in user turns.
+_ANTHROPIC_VERSION = "2026-10-21"
 
 
 class AnthropicProvider(BaseProvider):
@@ -183,6 +213,15 @@ class AnthropicProvider(BaseProvider):
         self.base_url = config.get("base_url")
         self.default_model = config.get("default_model", DEFAULT_MODEL)
         self.timeout = float(config.get("timeout", 120.0))
+        #: Read per-model capabilities from GET /v1/models once per process.
+        #: Off for gateways whose model list carries no capabilities.
+        self._capability_lookup = bool(config.get("capability_lookup", True))
+        self._capabilities_loaded = False
+        #: Server tool used for native_search=True.
+        self._native_search_tool = dict(
+            config.get("native_search_tool")
+            or {"type": "web_search_20250305", "name": "web_search"}
+        )
 
         if not self.api_key:
             raise ConfigError(
@@ -272,6 +311,14 @@ class AnthropicProvider(BaseProvider):
             return [AnthropicProvider._drop_none(v) for v in value]
         return value
 
+    @staticmethod
+    def _is_context_overflow(text: str) -> bool:
+        """Anthropic's prompt-too-long error ("prompt is too long: N tokens > M")."""
+        lowered = text.lower()
+        return "prompt is too long" in lowered or "model_context_window_exceeded" in lowered or (
+            "context" in lowered and ("too long" in lowered or "exceed" in lowered)
+        )
+
     def _raise_direct_status(self, status: int, body: str, model_name: str) -> None:
         """Map a direct-transport failure onto the same errors the SDK path uses.
 
@@ -279,10 +326,7 @@ class AnthropicProvider(BaseProvider):
             ContextLengthError: If the prompt exceeded the model's window.
             ProviderError: For every other failure.
         """
-        lowered = body.lower()
-        if status == 400 and (
-            "context" in lowered and ("long" in lowered or "exceed" in lowered)
-        ):
+        if status == 400 and self._is_context_overflow(body):
             raise ContextLengthError(
                 model_name=model_name,
                 limit=self.get_max_context_length(model_name),
@@ -418,10 +462,14 @@ class AnthropicProvider(BaseProvider):
                     if hasattr(caps, "thinking") and caps.thinking:
                         thinking_types = getattr(caps.thinking, "types", None)
                         if thinking_types:
-                            supports_thinking = (
-                                getattr(thinking_types, "enabled", None) is not None
-                                or getattr(thinking_types, "adaptive", None) is not None
+                            # Each type is an always-present object; what matters
+                            # is its ``supported`` flag (the old `is not None`
+                            # check made every model "support thinking").
+                            supports_thinking = any(
+                                getattr(getattr(thinking_types, t, None), "supported", False)
+                                for t in ("enabled", "adaptive")
                             )
+                    self._remember_capabilities(model_info)
 
                 discovered_ctx[model_id] = context_length
 
@@ -497,16 +545,16 @@ class AnthropicProvider(BaseProvider):
     #: the provider modernization plan and the routing spec.
     _BUDGET_REJECTED_FROM = (4, 7)
 
-    #: Earliest generation that rejects ``{"type": "disabled"}``. Measured:
-    #: 4.7+ answers 400 and says so itself -- *"To turn thinking off on this
-    #: model, send "thinking": {"type": "between_tools"} instead of
-    #: {"type": "disabled"}"*. So "do not think" is spelled differently on
-    #: either side of this line, and a caller asking for no reasoning should
-    #: not have to know which.
-    _DISABLED_REJECTED_FROM = (4, 7)
+    #: Live per-model capabilities read from ``GET /v1/models`` (shared by
+    #: every instance in the process): model id -> (thinking types, effort
+    #: levels, max input, max output). Falls back to ``_MEASURED_CAPABILITIES``.
+    _LIVE_CAPABILITIES: ClassVar[dict[str, tuple[frozenset[str], frozenset[str], int, int]]] = {}
 
-    #: What "do not think" is called on 4.7 and later.
-    _NO_THINKING_MODERN = "between_tools"
+    #: Models seen to reject a forced tool_choice ("any"/"tool"); see
+    #: ``chat_completion``.
+    _NO_FORCED_TOOL_CHOICE: ClassVar[set[str]] = set()
+
+    _warned_sampling: ClassVar[bool] = False
 
     #: Anthropic requires ``max_tokens`` **strictly greater** than
     #: ``thinking.budget_tokens`` -- equal values are rejected -- and a budget
@@ -540,6 +588,25 @@ class AnthropicProvider(BaseProvider):
         "max": 32768,
     }
 
+    @classmethod
+    def _capabilities(
+        cls, model: str | None
+    ) -> tuple[frozenset[str], frozenset[str], int, int] | None:
+        """What ``model`` accepts: live Models API data first, then the snapshot.
+
+        A dated id (``claude-opus-4-5-20251101``) and its undated alias
+        (``claude-opus-4-5``) resolve to each other.
+        """
+        if not model:
+            return None
+        for table in (cls._LIVE_CAPABILITIES, _MEASURED_CAPABILITIES):
+            if model in table:
+                return table[model]
+            for known, caps in table.items():
+                if known.startswith(model + "-") or model.startswith(known + "-"):
+                    return caps
+        return None
+
     @staticmethod
     def _model_generation(model: str | None) -> tuple[int, int] | None:
         """Extract ``(major, minor)`` from a model id, or ``None`` if unclear.
@@ -551,14 +618,23 @@ class AnthropicProvider(BaseProvider):
         """
         if not model:
             return None
-        match = re.search(r"-(\d+)-(\d+)(?:-|$)", model)
-        if not match:
-            return None
-        return int(match.group(1)), int(match.group(2))
+        # A one- or two-digit minor, then a date or the end: "claude-sonnet-4-
+        # 20250514" is generation 4.0, not (4, 20250514) as the old pattern read
+        # it, and "claude-opus-5" (no minor) is 5.0.
+        match = re.search(r"-(\d)-(\d{1,2})(?:-\d{8}|$)", model)
+        if match:
+            return int(match.group(1)), int(match.group(2))
+        match = re.search(r"-(\d)(?:-\d{8}|$)", model)
+        if match:
+            return int(match.group(1)), 0
+        return None
 
     @classmethod
     def _supports_adaptive_thinking(cls, model: str | None) -> bool:
         """Whether *model* accepts ``{"type": "adaptive"}``."""
+        caps = cls._capabilities(model)
+        if caps is not None:
+            return "adaptive" in caps[0]
         generation = cls._model_generation(model)
         if generation is None:
             # Unknown id: assume the newest behaviour. The older family is the
@@ -570,17 +646,58 @@ class AnthropicProvider(BaseProvider):
     @classmethod
     def _rejects_budget_tokens(cls, model: str | None) -> bool:
         """Whether *model* answers 400 to ``{"type": "enabled"}``."""
+        caps = cls._capabilities(model)
+        if caps is not None:
+            return "enabled" not in caps[0]
         generation = cls._model_generation(model)
         if generation is None:
             return True
         return generation >= cls._BUDGET_REJECTED_FROM
 
     @classmethod
-    def _no_thinking_block(cls, model: str | None) -> dict[str, str]:
-        """The way to say "do not think" that *model* accepts."""
+    def _no_thinking_block(cls, model: str | None) -> dict[str, str] | None:
+        """The way to say "do not think" that *model* accepts, or ``None``.
+
+        Measured live 2026-11-16: Haiku 5.5 and Sonnet 4.6 take ``disabled``,
+        Sonnet 5.5 takes only ``between_tools``, and Opus 5.5 and every Fable
+        model take neither ("Use thinking.type.adaptive and
+        output_config.effort"). ``None`` means omit ``thinking`` and ask for
+        the lowest effort, which is as close to "do not think" as those models
+        go. An unknown modern model gets ``None`` too, which no model rejects.
+        """
+        caps = cls._capabilities(model)
+        if caps is not None:
+            if "disabled" in caps[0]:
+                return {"type": "disabled"}
+            if "between_tools" in caps[0]:
+                return {"type": "between_tools"}
+            return None
         generation = cls._model_generation(model)
-        modern = generation is None or generation >= cls._DISABLED_REJECTED_FROM
-        return {"type": cls._NO_THINKING_MODERN if modern else "disabled"}
+        if generation is not None and generation < (4, 7):
+            return {"type": "disabled"}
+        return None
+
+    @classmethod
+    def _fold_effort(cls, effort: str, model: str | None) -> str | None:
+        """llmcore's effort level as an ``output_config.effort`` *model* accepts.
+
+        ``None`` means the model takes no effort level at all (Haiku and
+        Sonnet 4.5), so none is sent.
+        """
+        wanted = cls._EFFORT_TO_OUTPUT_CONFIG.get(effort, "medium")
+        caps = cls._capabilities(model)
+        if caps is None:
+            return wanted
+        accepted = caps[1]
+        if not accepted:
+            return None
+        if effort in accepted:
+            return effort  # xhigh is real on 4.7+; the table folds it for older ones
+        if wanted in accepted:
+            return wanted
+        order = ["low", "medium", "high", "xhigh", "max"]
+        target = order.index(wanted) if wanted in order else 1
+        return min(accepted, key=lambda level: (abs(order.index(level) - target), -order.index(level)))
 
     @classmethod
     def _normalize_thinking(
@@ -629,14 +746,17 @@ class AnthropicProvider(BaseProvider):
                 # Honoured as given; nothing to map.
                 return block, None
             if effort_key == "none":
-                # "none" means do not think, on either generation. Returning
-                # adaptive-at-low would quietly spend reasoning tokens the
-                # caller explicitly asked not to spend.
-                return cls._no_thinking_block(model), None
+                # "none" means do not think. Where a model has an off switch it
+                # is used; where it has none (Opus 5.5, Fable), the lowest
+                # effort is the closest thing, and anything else is a 400.
+                off = cls._no_thinking_block(model)
+                if off is not None:
+                    return off, None
+                return None, cls._fold_effort("low", model)
             if effort_key:
                 if block is None:
                     block = {"type": "adaptive"}
-                return block, cls._EFFORT_TO_OUTPUT_CONFIG.get(effort_key, "medium")
+                return block, cls._fold_effort(effort_key, model)
             return block, None
 
         # Pre-4.6: a budget, not an effort level.
@@ -747,6 +867,19 @@ class AnthropicProvider(BaseProvider):
                     "thinking.budget_tokens on earlier models."
                 ),
             },
+            "thinking_display": {
+                "type": "string",
+                "enum": ["summarized", "omitted"],
+                "description": (
+                    "Whether thinking text comes back. Claude 4.7+ and 5.x omit it "
+                    "by default; 'summarized' returns a readable summary."
+                ),
+            },
+            "native_search": {"type": "boolean", "description": "Add the web-search server tool."},
+            "extra_tools": {
+                "type": "array",
+                "description": "Raw tool declarations, e.g. server tools (web_fetch, code_execution).",
+            },
             "output_config": {
                 "type": "object",
                 "description": (
@@ -768,6 +901,9 @@ class AnthropicProvider(BaseProvider):
     def get_max_context_length(self, model: str | None = None) -> int:
         """Returns the maximum context length (tokens) for the given model."""
         model_name = model or self.default_model
+        caps = self._capabilities(model_name)
+        if caps is not None and caps[2]:
+            return caps[2]
 
         # Check dynamic discovery cache first
         if self._discovered_context_lengths:
@@ -791,11 +927,16 @@ class AnthropicProvider(BaseProvider):
         if limit is not None:
             return limit
 
-        # Final fallback — all modern Claude models are 200K
+        # Final fallback. Every current Claude model has 1M except the 4.5 line,
+        # so an unknown 4.6+ id gets 1M and anything older 200K.
+        generation = self._model_generation(model_name)
+        fallback = 1_000_000 if generation is None or generation >= (4, 6) else 200_000
         logger.warning(
-            f"Unknown context length for Anthropic model '{model_name}'. Using fallback: 200000."
+            "Unknown context length for Anthropic model '%s'. Using fallback: %d.",
+            model_name,
+            fallback,
         )
-        return 200000
+        return fallback
 
     # ------------------------------------------------------------------
     # Message Conversion
@@ -897,6 +1038,32 @@ class AnthropicProvider(BaseProvider):
 
         return blocks
 
+    @staticmethod
+    def _fit_blocks_to_role(blocks: list[dict[str, Any]], role: str) -> list[dict[str, Any]]:
+        """Apply API 2026-10-21's per-role content rules.
+
+        A ``document`` block in an assistant turn and a ``text`` block carrying
+        ``citations`` in a user turn are both 400s from that version on.
+        Documents are dropped from assistant turns with a warning, and
+        citations are stripped from user text (the text itself is kept).
+        """
+        if role == "assistant":
+            kept = [b for b in blocks if b.get("type") != "document"]
+            if len(kept) != len(blocks):
+                logger.warning(
+                    "Dropping document block(s) from an assistant turn: Anthropic rejects "
+                    "documents outside user turns (API 2026-10-21)."
+                )
+            return kept
+        if role == "user":
+            out = []
+            for block in blocks:
+                if block.get("type") == "text" and block.get("citations"):
+                    block = {k: v for k, v in block.items() if k != "citations"}
+                out.append(block)
+            return out
+        return blocks
+
     def _convert_llmcore_msgs_to_anthropic(
         self, messages: list[Message]
     ) -> tuple[str | list[dict[str, Any]] | None, list[dict[str, Any]]]:
@@ -986,6 +1153,12 @@ class AnthropicProvider(BaseProvider):
             tool_calls = getattr(msg, "tool_calls", None) or metadata.get("tool_calls")
 
             # Build content blocks
+            raw_blocks = metadata.get("anthropic_content") if role_str == "assistant" else None
+            if raw_blocks:
+                # Replayed verbatim: thinking signatures, redacted thinking and
+                # server-tool blocks have to come back exactly as received.
+                anthropic_messages.append({"role": "assistant", "content": list(raw_blocks)})
+                continue
             if role_str == "assistant" and tool_calls:
                 # Assistant message with tool calls — construct tool_use blocks
                 content_blocks: list[dict[str, Any]] = []
@@ -1031,6 +1204,7 @@ class AnthropicProvider(BaseProvider):
                 )
             else:
                 content_blocks = self._build_content_blocks(msg)
+                content_blocks = self._fit_blocks_to_role(content_blocks, role_str)
                 if not content_blocks:
                     # Anthropic requires non-empty content
                     content_blocks = [{"type": "text", "text": ""}]
@@ -1152,6 +1326,9 @@ class AnthropicProvider(BaseProvider):
             "end_turn": "stop",
             "tool_use": "tool_calls",
             "max_tokens": "length",
+            # The prompt plus output reached the model's window: as "length" as
+            # a max_tokens stop, and callers check for that, not the raw value.
+            "model_context_window_exceeded": "length",
             "stop_sequence": "stop",
             "pause_turn": "stop",
             "refusal": "content_filter",
@@ -1186,7 +1363,121 @@ class AnthropicProvider(BaseProvider):
         tool_choice: str | None = None,
         **kwargs: Any,
     ) -> dict[str, Any] | AsyncGenerator[dict[str, Any], None]:
-        """Send a chat completion request to the Anthropic API.
+        """Send a chat request, shaped to what the model accepts.
+
+        On top of :meth:`_chat_completion_once`:
+
+        - Per-model capabilities are read from the Models API once (thinking
+          types, effort levels, windows), so "no thinking" and effort levels
+          are sent in the form each model takes.
+        - ``temperature``/``top_p``/``top_k`` are dropped with a one-time
+          warning. API version 2026-10-21 rejects them on every model, and
+          Claude 5.x rejected them before that.
+        - A forced ``tool_choice`` (``"any"`` or a tool name) on a model that
+          rejects it (Opus 5.5, Sonnet 5.5, Fable) is sent as ``"auto"`` with a
+          warning, and the model is remembered.
+        - ``native_search=True`` adds Anthropic's web-search server tool, and
+          ``extra_tools=[...]`` passes raw tool declarations (server tools).
+        """
+        model_name = model or self.default_model
+        await self._ensure_capabilities()
+        dropped = [k for k in ("temperature", "top_p", "top_k") if kwargs.pop(k, None) is not None]
+        if dropped and not AnthropicProvider._warned_sampling:
+            AnthropicProvider._warned_sampling = True
+            logger.warning(
+                "Dropping %s for Anthropic: API version 2026-10-21 removed sampling "
+                "parameters (Claude 5.x rejected them before that). Use effort= instead.",
+                ", ".join(dropped),
+            )
+        for attempt in (0, 1):
+            choice = tool_choice
+            if (
+                choice not in (None, "auto", "none")
+                and model_name in AnthropicProvider._NO_FORCED_TOOL_CHOICE
+            ):
+                choice = "auto"
+            try:
+                return await self._chat_completion_once(
+                    context, model_name, stream, tools, choice, **dict(kwargs)
+                )
+            except ProviderError as exc:
+                if (
+                    attempt == 0
+                    and choice not in (None, "auto", "none")
+                    and self._rejects_forced_tool_choice(str(exc))
+                ):
+                    AnthropicProvider._NO_FORCED_TOOL_CHOICE.add(model_name)
+                    logger.warning(
+                        "%s rejects a forced tool_choice; sending tool_choice='auto' instead "
+                        "(remembered for this model).",
+                        model_name,
+                    )
+                    continue
+                raise
+        raise AssertionError("unreachable")  # pragma: no cover
+
+    @staticmethod
+    def _rejects_forced_tool_choice(text: str) -> bool:
+        """Anthropic's 'tool_choice: type "tool" and "any" are not supported'.
+
+        Matched without the quotes: on the direct transport they arrive JSON-
+        escaped inside the error body.
+        """
+        return "tool_choice" in text and "are not supported for this model" in text
+
+    def _remember_capabilities(self, model_info: Any) -> None:
+        """Record one Models API entry's thinking types, effort levels, limits."""
+        info = model_info.model_dump() if hasattr(model_info, "model_dump") else dict(model_info)
+        model_id = info.get("id")
+        caps = info.get("capabilities") or {}
+        if not model_id or not isinstance(caps, dict) or not caps.get("thinking"):
+            return  # e.g. a gateway's catalog: nothing to learn
+        types = frozenset(
+            name
+            for name, flag in ((caps.get("thinking") or {}).get("types") or {}).items()
+            if isinstance(flag, dict) and flag.get("supported")
+        )
+        efforts = frozenset(
+            name
+            for name, flag in (caps.get("effort") or {}).items()
+            if isinstance(flag, dict) and flag.get("supported")
+        )
+        AnthropicProvider._LIVE_CAPABILITIES[model_id] = (
+            types,
+            efforts,
+            int(info.get("max_input_tokens") or 0),
+            int(info.get("max_tokens") or 0),
+        )
+
+    async def _ensure_capabilities(self) -> None:
+        """Read the Models API once; on any failure keep the measured snapshot."""
+        if self._capabilities_loaded or not self._capability_lookup:
+            return
+        self._capabilities_loaded = True
+        try:
+            if self._backend == "httpx":
+                resp = await self._get_http().get("/v1/models", params={"limit": 1000})
+                if resp.status_code >= 400:
+                    raise RuntimeError(f"HTTP {resp.status_code}")
+                for entry in resp.json().get("data") or []:
+                    self._remember_capabilities(entry)
+            else:
+                page = await self._client.models.list(limit=1000)  # type: ignore[union-attr]
+                for entry in page.data:
+                    self._remember_capabilities(entry)
+        except Exception as exc:  # the snapshot is a complete fallback
+            logger.debug("Anthropic capability lookup failed (%s); using the snapshot.", exc)
+
+    async def _chat_completion_once(
+        self,
+        context: ContextPayload,
+        model: str | None = None,
+        stream: bool = False,
+        tools: list[Tool] | None = None,
+        tool_choice: str | None = None,
+        **kwargs: Any,
+    ) -> dict[str, Any] | AsyncGenerator[dict[str, Any], None]:
+        """Send one chat completion request to the Anthropic API.
 
         Args:
             context: List of llmcore Message objects.
@@ -1238,6 +1529,13 @@ class AnthropicProvider(BaseProvider):
             model_name,
             max_tokens=api_kwargs.get("max_tokens"),
         )
+        display = kwargs.pop("thinking_display", None)
+        if display and thinking is None and self._supports_adaptive_thinking(model_name):
+            thinking = {"type": "adaptive"}
+        if display and thinking and thinking.get("type") in ("adaptive", "enabled"):
+            # 4.7+ and every 5.x model omit thinking text by default (only the
+            # signature comes back); "summarized" returns a readable summary.
+            thinking = {**thinking, "display": display}
         if thinking:
             api_kwargs["thinking"] = thinking
 
@@ -1261,9 +1559,15 @@ class AnthropicProvider(BaseProvider):
         if service_tier:
             api_kwargs["service_tier"] = service_tier
 
-        # Tools
-        if tools:
-            api_kwargs["tools"] = self._convert_tools_to_anthropic(tools)
+        # Tools: llmcore tools, then raw server tools.
+        native_search = bool(kwargs.pop("native_search", False))
+        extra_tools = list(kwargs.pop("extra_tools", None) or [])
+        if native_search:
+            extra_tools.append(dict(self._native_search_tool))
+        if tools or extra_tools:
+            api_kwargs["tools"] = self._convert_tools_to_anthropic(tools or []) + [
+                dict(t) for t in extra_tools
+            ]
         if tool_choice:
             api_kwargs["tool_choice"] = self._convert_tool_choice(tool_choice)
 
@@ -1302,26 +1606,44 @@ class AnthropicProvider(BaseProvider):
 
         except AnthropicBadRequestError as e:
             err_msg = str(e)
-            # Detect context length errors
-            if "too long" in err_msg.lower() or "token" in err_msg.lower():
+            # Only the prompt-too-long error: the old `"token" in message` test
+            # turned every 400 that mentioned max_tokens or budget_tokens into a
+            # ContextLengthError.
+            if self._is_context_overflow(err_msg):
                 raise ContextLengthError(
                     model_name=model_name,
                     limit=self.get_max_context_length(model_name),
                     message=f"Anthropic context length exceeded: {e}",
-                )
-            raise ProviderError(self.get_name(), f"Bad request: {e}")
+                ) from e
+            raise ProviderError(
+                self.get_name(), f"Bad request: {e}", model_name=model_name,
+                status_code=400, retryable=False, original_exception=e,
+            ) from e
         except AnthropicAuthError as e:
-            raise ProviderError(self.get_name(), f"Authentication failed: {e}")
+            raise ProviderError(
+                self.get_name(), f"Authentication failed: {e}", model_name=model_name,
+                status_code=401, retryable=False, original_exception=e,
+            ) from e
         except AnthropicRateLimitError as e:
-            raise ProviderError(self.get_name(), f"Rate limited: {e}")
+            raise ProviderError(
+                self.get_name(), f"Rate limited: {e}", model_name=model_name,
+                status_code=429, retryable=True, original_exception=e,
+            ) from e
         except OverloadedError as e:
-            raise ProviderError(self.get_name(), f"API overloaded: {e}")
+            raise ProviderError(
+                self.get_name(), f"API overloaded: {e}", model_name=model_name,
+                status_code=529, retryable=True, original_exception=e,
+            ) from e
         except APIStatusError as e:
-            logger.error(f"Anthropic API error: {e}", exc_info=True)
+            status = getattr(e, "status_code", None)
+            logger.debug("Anthropic API error (%s): %s", status, e)
             raise ProviderError(
                 self.get_name(),
-                f"API Error (Status: {getattr(e, 'status_code', 'N/A')}): {e}",
-            )
+                f"API Error (Status: {status if status is not None else 'N/A'}): {e}",
+                model_name=model_name,
+                status_code=status,
+                original_exception=e,
+            ) from e
         except (ContextLengthError, ProviderError):
             raise
         except Exception as e:
@@ -1405,6 +1727,17 @@ class AnthropicProvider(BaseProvider):
             message_dict["tool_calls"] = tool_calls
         if thinking_content:
             message_dict["thinking"] = thinking_content
+        if any(block.get("type") not in ("text", "tool_use") for block in content_blocks):
+            # Thinking blocks (with their signatures), redacted thinking and
+            # server-tool blocks must go back complete and in order on the next
+            # assistant turn of a tool loop. The OpenAI-shaped message above
+            # cannot carry them, so the raw blocks travel alongside; see
+            # assistant_replay_metadata().
+            message_dict["anthropic_content"] = content_blocks
+        if response_dict.get("stop_details"):
+            message_dict["stop_details"] = response_dict["stop_details"]
+        if response_dict.get("stop_reason") == "pause_turn":
+            message_dict["pause_turn"] = True  # resumable server-tool turn
 
         # Build usage dict
         usage_dict: dict[str, Any] = {}
@@ -1464,12 +1797,46 @@ class AnthropicProvider(BaseProvider):
         # Track state for streaming tool calls
         current_tool_id: str | None = None
         current_tool_name: str | None = None
+        # The raw content blocks, rebuilt from the events, so the final chunk
+        # can carry them for replay (thinking text + signature, server tools).
+        blocks: dict[int, dict[str, Any]] = {}
+        partial_json: dict[int, str] = {}
+
+        def track(event: dict[str, Any]) -> None:
+            kind = event.get("type")
+            index = int(event.get("index", 0) or 0)
+            if kind == "content_block_start":
+                blocks[index] = dict(event.get("content_block") or {})
+            elif kind == "content_block_delta" and index in blocks:
+                delta = event.get("delta") or {}
+                block = blocks[index]
+                dtype = delta.get("type")
+                if dtype == "text_delta":
+                    block["text"] = block.get("text", "") + delta.get("text", "")
+                elif dtype == "thinking_delta":
+                    block["thinking"] = block.get("thinking", "") + delta.get("thinking", "")
+                elif dtype == "signature_delta":
+                    block["signature"] = delta.get("signature", "")
+                elif dtype == "input_json_delta":
+                    partial_json[index] = partial_json.get(index, "") + delta.get("partial_json", "")
+            elif kind == "content_block_stop" and index in partial_json:
+                try:
+                    blocks[index]["input"] = json.loads(partial_json.pop(index) or "{}")
+                except ValueError:
+                    pass
+
+        def raw_blocks() -> list[dict[str, Any]] | None:
+            ordered = [blocks[i] for i in sorted(blocks)]
+            if any(b.get("type") not in ("text", "tool_use") for b in ordered):
+                return ordered
+            return None
 
         async def stream_wrapper() -> AsyncGenerator[dict[str, Any], None]:
             nonlocal current_tool_id, current_tool_name
 
             async for event_dict in event_source:
                 event_type = event_dict.get("type")
+                track(event_dict)
 
                 if self.log_raw_payloads_enabled and logger.isEnabledFor(logging.DEBUG):
                     logger.debug(
@@ -1594,7 +1961,11 @@ class AnthropicProvider(BaseProvider):
                     continue
 
                 elif event_type == "message_stop":
-                    yield {"type": "message_stop"}
+                    final: dict[str, Any] = {"type": "message_stop"}
+                    replay = raw_blocks()
+                    if replay is not None:
+                        final["choices"] = [{"delta": {"anthropic_content": replay}}]
+                    yield final
                     continue
 
                 # Pass through any unknown events
@@ -1605,6 +1976,26 @@ class AnthropicProvider(BaseProvider):
     # ------------------------------------------------------------------
     # Response Extraction
     # ------------------------------------------------------------------
+
+    def assistant_replay_metadata(self, response: dict[str, Any]) -> dict[str, Any]:
+        """Metadata to attach to the next assistant ``Message`` for a faithful replay.
+
+        Thinking blocks (with signatures), redacted thinking and server-tool
+        blocks have to go back complete and in order within a tool loop. Put
+        the returned dict in the assistant message's ``metadata`` and the turn
+        is replayed verbatim. For a stream, pass the last chunk.
+        """
+        try:
+            choice = (response.get("choices") or [{}])[0]
+        except (AttributeError, IndexError, TypeError):
+            return {}
+        source = choice.get("message") or choice.get("delta") or {}
+        blocks = source.get("anthropic_content")
+        return {"anthropic_content": list(blocks)} if blocks else {}
+
+    def supports_native_search(self, model: str | None = None) -> bool:
+        """Anthropic's web-search server tool is available on current models."""
+        return True
 
     def extract_response_content(self, response: dict[str, Any]) -> str:
         """Extract text content from a non-streaming response.

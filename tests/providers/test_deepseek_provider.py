@@ -99,8 +99,8 @@ class TestInitialization:
             assert p._default_reasoning_effort == "max"
 
     def test_init_effort_normalization(self):
-        """low/medium → high, xhigh → max."""
-        for raw, expected in [("low", "high"), ("medium", "high"), ("xhigh", "max")]:
+        """DeepSeek's own mapping (guides/thinking_mode): levels are low/high/max."""
+        for raw, expected in [("low", "low"), ("minimal", "low"), ("medium", "high"), ("xhigh", "high"), ("max", "max")]:
             cfg = MINIMAL_CONFIG.copy()
             cfg["reasoning_effort"] = raw
             with patch("llmcore.providers.deepseek_provider.AsyncOpenAI"):
@@ -194,7 +194,11 @@ class TestThinkingResolution:
     def test_effort_normalization_xhigh(self, provider):
         kwargs: dict[str, Any] = {"reasoning_effort": "xhigh"}
         _, effort = provider._resolve_thinking_params(kwargs)
-        assert effort == "max"
+        assert effort == "high"  # DeepSeek maps xhigh -> high server-side too
+
+    def test_effort_none_turns_thinking_off(self, provider):
+        thinking, effort = provider._resolve_thinking_params({"effort": "none"})
+        assert thinking == {"type": "disabled"} and effort is None
 
 
 # ---------------------------------------------------------------------------
@@ -412,25 +416,27 @@ class TestStreamingDelta:
 class TestContextLength:
     """Test get_max_context_length."""
 
-    def test_v4_flash(self, provider):
-        assert provider.get_max_context_length("deepseek-v4-flash") == 1_000_000
+    # GET /models (2026-11-16): context_window 1048576 for both models.
+    def test_flash(self, provider):
+        assert provider.get_max_context_length("deepseek-flash") == 1_048_576
 
     def test_v4_pro(self, provider):
-        assert provider.get_max_context_length("deepseek-v4-pro") == 1_000_000
+        assert provider.get_max_context_length("deepseek-v4-pro") == 1_048_576
 
-    def test_legacy_chat(self, provider):
-        assert provider.get_max_context_length("deepseek-chat") == 131_072
-
-    def test_legacy_reasoner(self, provider):
-        assert provider.get_max_context_length("deepseek-reasoner") == 131_072
+    def test_retired_v4_flash_alias(self, provider):
+        # Retired 2026-09-10, still accepted and served by V4.1-Flash.
+        assert provider.get_max_context_length("deepseek-v4-flash") == 1_048_576
 
     def test_default_model(self, provider):
-        # default_model = deepseek-v4-pro → 1M
-        assert provider.get_max_context_length() == 1_000_000
+        assert provider.get_max_context_length() == 1_048_576
+
+    def test_packaged_default_is_v41_flash(self):
+        from llmcore.providers.deepseek_provider import _DEFAULT_MODEL
+
+        assert _DEFAULT_MODEL == "deepseek-flash"
 
     def test_unknown_v4_model(self, provider):
-        # Any model with "v4" should get 1M
-        assert provider.get_max_context_length("deepseek-v4-something") == 1_000_000
+        assert provider.get_max_context_length("deepseek-v4-something") == 1_048_576
 
     def test_completely_unknown_model(self, provider):
         # Should fall back to 131072

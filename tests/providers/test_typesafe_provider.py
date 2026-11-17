@@ -704,22 +704,22 @@ class TestModelCards:
     async def test_get_models_details_from_registry_includes_aliases(self, provider):
         details = await provider.get_models_details()
         ids = {d.id for d in details}
-        assert {"jev-1.13.0", "jev-latest", "jev-preview"} <= ids
+        assert {"jev-1.14.0", "jev-1.13.0", "jev-latest", "jev-preview"} <= ids
         by_id = {d.id: d for d in details}
-        card = by_id["jev-1.13.0"]
+        card = by_id["jev-1.14.0"]
         assert card.model_type == "decision"
         assert card.context_length == 65536
         assert card.supports_streaming is False and card.supports_tools is False
         assert card.provider_name == "typesafe"
-        assert card.metadata["question_types"] == ["choice", "noul", "score"]
-        assert by_id["jev-latest"].metadata["alias_of"] == "jev-1.13.0"
+        assert card.metadata["question_types"] == ["box", "choice", "noul", "score"]
+        assert by_id["jev-latest"].metadata["alias_of"] == "jev-1.14.0"
 
     async def test_get_models_details_static_fallback(self, provider):
         with patch(
             "llmcore.model_cards.registry.get_model_card_registry", side_effect=RuntimeError("boom")
         ):
             details = await provider.get_models_details()
-        assert [d.id for d in details] == ["jev-1.13.0", "jev-latest", "jev-preview"]
+        assert [d.id for d in details] == ["jev-1.14.0", "jev-1.13.0", "jev-latest", "jev-preview"]
         assert all(d.model_type == "decision" for d in details)
 
     def test_get_max_context_length_resolves_aliases(self, provider):

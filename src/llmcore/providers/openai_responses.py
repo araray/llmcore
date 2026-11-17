@@ -30,7 +30,7 @@ Conventions it adds on top of the Chat Completions shape:
 from __future__ import annotations
 
 import json
-from collections.abc import Iterable, Mapping
+from collections.abc import AsyncGenerator, Iterable, Mapping
 from typing import Any
 
 from ..models import Message, Tool
@@ -288,7 +288,14 @@ def build_responses_request(
     for key in PASSTHROUGH_PARAMS:
         if key in params:
             body[key] = params.pop(key)
+    # extra_body is the SDK's "merge into the JSON body" channel. A raw HTTP
+    # body has no such field, so flatten it; posted as-is it was ignored, and
+    # servers that tolerate unknown fields (vLLM) answered 200 without the
+    # vendor parameters inside it (structured_outputs, chat_template_kwargs).
+    extra_body = params.pop("extra_body", None)
     body.update(params)  # anything else is the caller's business
+    if isinstance(extra_body, Mapping):
+        body.update(extra_body)
 
     body.setdefault("store", False)
     if body.get("store") is False and "reasoning" in body:
@@ -523,3 +530,51 @@ class ResponsesStreamNormalizer:
                 partial="".join(self._text) or None,
             )
         return []
+
+
+# ---------------------------------------------------------------------------
+# Calling /responses through an OpenAI-SDK client (OpenAI, DeepSeek, Kimi)
+# ---------------------------------------------------------------------------
+
+#: ``responses.create`` keywords the OpenAI SDK knows; anything else rides in
+#: ``extra_body`` (an unknown keyword is a TypeError in the SDK).
+SDK_RESPONSES_KWARGS: frozenset[str] = frozenset(
+    {
+        "model", "input", "instructions", "tools", "tool_choice", "stream",
+        "max_output_tokens", "temperature", "top_p", "reasoning", "text", "include",
+        "store", "metadata", "user", "service_tier", "truncation",
+        "parallel_tool_calls", "previous_response_id", "prompt_cache_key",
+        "prompt_cache_retention", "max_tool_calls", "top_logprobs",
+        "safety_identifier", "background", "stream_options", "conversation",
+    }
+)
+
+
+def sdk_kwargs(body: Mapping[str, Any]) -> dict[str, Any]:
+    """A wire body as ``responses.create`` keywords (+ ``extra_body``)."""
+    kwargs = {k: v for k, v in body.items() if k in SDK_RESPONSES_KWARGS}
+    extra = {k: v for k, v in body.items() if k not in SDK_RESPONSES_KWARGS}
+    if extra:
+        kwargs["extra_body"] = extra
+    return kwargs
+
+
+async def sdk_create(
+    client: Any, body: Mapping[str, Any], *, stream: bool
+) -> dict[str, Any] | AsyncGenerator[dict[str, Any], None]:
+    """``client.responses.create`` normalised to the Chat Completions shape.
+
+    SDK exceptions propagate (callers map them), as does
+    :class:`ResponsesFailed` for a failed response or stream event.
+    """
+    result = await client.responses.create(**sdk_kwargs(body))
+    if not stream:
+        return normalize_response(result.model_dump(exclude_none=True))
+
+    async def _chunks() -> AsyncGenerator[dict[str, Any], None]:
+        normalizer = ResponsesStreamNormalizer()
+        async for event in result:
+            for chunk in normalizer.feed(event.model_dump(exclude_none=True)):
+                yield chunk
+
+    return _chunks()

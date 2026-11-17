@@ -14,7 +14,6 @@ Requires: ``pip install huggingface_hub httpx``
 from __future__ import annotations
 
 import logging
-import os
 from typing import Any
 
 import httpx
@@ -211,12 +210,16 @@ class HuggingFaceAdapter(BaseAdapter):
                 or text_config.get("n_positions")
             )
 
+        # A TTS/STT/image model's config.json describes its backbone (Orpheus:
+        # Llama-3.2-3B's 131072 RoPE limit), not a token input window.
+        if model_type in ("stt", "tts", "audio", "image-generation", "video-generation", "media"):
+            ctx_len = None
+
         # Detect parameter count from tags/safetensors
         param_count = self._detect_param_count(m, hf_tags)
 
         # Lifecycle
         is_deprecated = "deprecated" in hf_tags
-        created_at = m.get("createdAt") or m.get("created_at")
 
         normalized = NormalizedModel(
             model_id=model_id,

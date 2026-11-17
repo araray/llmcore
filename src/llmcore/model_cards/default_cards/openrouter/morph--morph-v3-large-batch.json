@@ -1,0 +1,65 @@
+{
+  "model_id": "morph/morph-v3-large:batch",
+  "display_name": "Morph: Morph V3 Large (batch)",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 262144,
+    "max_output_tokens": 131072
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": true,
+    "structured_output": true,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false,
+    "image_generation": false,
+    "image_edit": false,
+    "image_upscale": false,
+    "video_generation": false,
+    "video_interpolation": false,
+    "speech_synthesis": false,
+    "transcription": false,
+    "music_generation": false,
+    "sfx_generation": false,
+    "voice_design": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.45,
+      "output": 0.95
+    }
+  },
+  "lifecycle": {
+    "status": "active",
+    "release_date": "2025-07-07"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Morph's high-accuracy apply model for complex code edits. ~4,500 tokens/sec with 98% accuracy for precise code transformations. The model requires the prompt to be in the following format: <instruction>{instruction}</instruction> <code>{initial_code}</code>...",
+  "tags": [],
+  "source": "generated",
+  "x_pricewatch": {
+    "feed": "openrouter",
+    "method": "api",
+    "url": "https://openrouter.ai/api/v1/models",
+    "matched_key": "openrouter/morph/morph-v3-large:batch",
+    "match": "exact key match",
+    "fetched_at": "2026-11-16T09:04:54+00:00",
+    "capabilities": {
+      "feed": "caps:openrouter",
+      "method": "api",
+      "url": "https://openrouter.ai/api/v1/models",
+      "matched_key": "openrouter/morph/morph-v3-large:batch",
+      "fetched_at": "2026-11-16T09:06:07+00:00"
+    }
+  }
+}

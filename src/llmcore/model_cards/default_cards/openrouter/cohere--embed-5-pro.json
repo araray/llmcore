@@ -1,0 +1,50 @@
+{
+  "model_id": "cohere/embed-5-pro",
+  "display_name": "Cohere: Embed 5 Pro",
+  "provider": "openrouter",
+  "model_type": "embedding",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 128000,
+    "max_output_tokens": 115200
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false,
+    "image_generation": false,
+    "image_edit": false,
+    "image_upscale": false,
+    "video_generation": false,
+    "video_interpolation": false,
+    "speech_synthesis": false,
+    "transcription": false,
+    "music_generation": false,
+    "sfx_generation": false,
+    "voice_design": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.12,
+      "output": 0.0
+    }
+  },
+  "lifecycle": {
+    "status": "active",
+    "release_date": "2026-11-03"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Embed 5 Pro is the higher-accuracy tier of Cohere's Embed 5 family of multimodal embedding models (about 2.4B parameters). It embeds text, images, and interleaved text and image content into...",
+  "tags": [],
+  "source": "generated"
+}

@@ -20,7 +20,7 @@
     "reasoning": false
   },
   "lifecycle": {
-    "status": "deprecated",
+    "status": "retired",
     "deprecation_date": "2026-05-25",
     "successor_model": "kimi-k2.6"
   },

@@ -7,6 +7,935 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Fixed — review findings on PR #60
+
+- **Anthropic cards lost their new capability fields on load.**
+  `AnthropicExtension` didn't declare `thinking_types`, `effort_levels`,
+  `batch_api`, `citations`, `pdf_input`, `code_execution`,
+  `context_management`, `server_tools` or `lifecycle`, so pydantic dropped them
+  when a card was loaded. They are now declared, and a `*search*` server tool
+  marks the card as supporting native search.
+- **Z.ai catalogue fetch crashed on GLM-5.3 Flash** with `KeyError:
+  'context_length'`. The narrow `glm-5.3-flash` metadata entry has no context
+  window. Entries now inherit from the family entry they extend at a `-`
+  boundary (Flash takes 1M from `glm-5.3`). `glm-5v-turbo` and `glm-4.6v`
+  still don't inherit from `glm-5` or `glm-4.6`.
+
+### Verified — vLLM against a live server (Colab L4, Qwen3-4B-Instruct-2507)
+
+- **Both transports:**
+  - model discovery and context (8192 from the served `max_model_len`);
+  - plain and streaming chat;
+  - `structured_outputs` with a JSON schema;
+  - the legacy `guided_json` / `guided_choice`, translated to
+    `structured_outputs` and enforced (exact JSON, and "yes"), with the
+    deprecation warning;
+  - token counting.
+- **Tool calls** need the server started with
+  `--enable-auto-tool-choice --tool-call-parser <name>`. Without them vLLM
+  answers 400 even for `required` and named tool choices. Its message
+  states the flags, and llmcore passes it through as a `ProviderError`.
+  A second session started with `--tool-call-parser hermes` verified the
+  following on both transports:
+  - `auto`, `required` and named tool choices each return
+    `get_weather({"city": "Lisbon"})`;
+  - the follow-up turn with the tool result answers from it ("22°C");
+  - a streamed `required` call arrives as tool-call deltas (9 across 11
+    chunks).
+
+### Fixed — Gemini on Vertex, verified live (project `araray-org`)
+
+- **Imagen is gone from Vertex:** no `imagen-*` model is listed on `global`
+  or `us-central1`, so the Vertex default (`imagen-4.0-generate-001`)
+  answered 404.
+  - Generation and editing now go through the Gemini image models in both
+    modes: `gemini-3.1-flash-image` on Vertex, `gemini-nano-banana-2.1` on
+    the Developer API. Editing passes the input image with the prompt.
+  - The Developer API gains `image_edit` this way.
+  - `image_upscale` is no longer declared. The Imagen paths remain for an
+    explicitly named `imagen-*` model.
+- **`asr`, `asr_stream` and `voice_agent`** are declared on Vertex too, after
+  live checks. Transcription sessions now request text output, because
+  Vertex refuses audio-capable ASR sessions ("Only text modality is
+  supported for Vertex ASR"). Model availability differs by Vertex location:
+  the transcribe models were found on `global`, the Live agent model on
+  `us-central1`.
+- **Vertex-unavailable features** stay Developer-API only:
+  - music: `lyria-3.5` and `lyria-3-clip-preview` answer 404 and
+    `lyria-002` has zero quota;
+  - decisions: `createDecision` is "Method not found" on Vertex.
+- **Verified live on Vertex:** chat on Gemini 3.8 Flash and Gemini 4
+  Hydrogen, transcription, Live transcription, the Live voice agent, Veo
+  3.1 Fast (a 4 s MP4 through the job poller), and image generation and
+  editing. Generation and editing were also re-verified on the Developer
+  API.
+
+### Added — Together: media capabilities, vendor TTS defaults; verified live
+
+- The Together profile declared no media, yet Together serves `tts`, `asr`
+  and `image_generate` in OpenAI's shape. These are now declared, with
+  Together defaults: Kokoro-82M with voice `af_alloy`, whisper-large-v3, and
+  FLUX.2-dev.
+- Vendor profiles can set a default TTS model and voice. `generate_speech`
+  and `stream_speech_media` used to send OpenAI's `tts-1` and `alloy` to
+  every vendor.
+- **Verified live, both transports:**
+  - chat and streaming on gpt-oss-120b, GLM-5.3 and DeepSeek-V4.1-Flash,
+    with reasoning replay;
+  - the tool loop; effort with `top_k`; the Responses route;
+  - Kokoro and Cartesia Sonic TTS, and TTS → ASR with the exact text.
+- **Images:** every model answers 403 until the organisation enables
+  third-party data sharing in Together's settings.
+
+### Fixed — live re-verification after top-ups (DeepSeek, Friendli)
+
+- **Streaming replay survives a trailing usage chunk.** With usage reporting
+  on, OpenAI-compatible servers end a stream with a usage-only chunk, and
+  `assistant_replay_metadata(chunks[-1])` found nothing. Friendli GLM-5.3 hit
+  this live. The replay keys now ride on that chunk too, via
+  `carry_replay_to_tail`, in the shared OpenAI-compatible wrapper and the
+  DeepSeek, Friendli, Kimi, Z.ai and Hugging Face streams.
+- **Friendli:**
+  - `effort="none"` disabled thinking even on GLM-5.3, which has no toggle,
+    so its reasoning leaked into the answer. It now maps to the lowest level
+    on models without a toggle.
+  - The SDK backend's listing failed validation (friendli 0.16.6 requires
+    fields the live API omits); it now falls back to reading `/models` over
+    HTTP.
+  - `DeepSeek-V3.2` and `MiniMax-M2.5` are retired; they are no longer
+    served.
+- **Verified live:**
+  - DeepSeek: chat and streaming with reasoning replay; the tool loop; effort
+    none/low/high/max; native search; the Responses lane; TTS → ASR (exact
+    text); OCR (15 pages).
+  - Friendli, both backends: chat, streaming, tool loop, and effort on
+    GLM-5.3, GLM-5.2 and Gemma 4.
+
+### Added — DeepSeek: speech, transcription and OCR tool APIs
+
+- `/v1/tools/tts` (voices `stella` and `tide`; WAV or 24 kHz PCM, streamed),
+  `/v1/tools/asr` (WAV or Ogg Opus, at most 120 s) and `/v1/tools/ocr` (PDF,
+  Office documents and images, by page) are now media capabilities: `tts`,
+  `tts_stream`, `asr` and `ocr`.
+- Errors are mapped to their documented causes (balance, size, concurrency,
+  timeouts).
+- Live: all three authenticate and stop on this account's 402 (insufficient
+  balance).
+
+### Added — Mistral realtime transcription; cards for live models the bundle lacked
+
+- **Mistral `asr_stream`** via the official SDK's realtime client
+  (`/v1/audio/transcriptions/realtime`, `voxtral-mini-transcribe-realtime-3`),
+  with the shared session surface. Live, this account's plan has no quota for
+  the model (HTTP 429); that rejection now surfaces as a non-retryable
+  `ProviderError`.
+- **`cardctl diff` against every keyed provider** found live models with no
+  card: OpenAI 3, Mistral 8, OpenRouter 322, DeepInfra 17 and gpu.ai 3.
+  - Only new cards were added. Existing cards keep the provenance and
+    cached-input prices that pricewatch writes into them.
+  - OpenRouter's image-output models are typed `multimodal`.
+
+### Added — Gemini: Gemini 4, Gemma 4, Lyria music, typed decisions; 27 missing cards
+
+- **27 live models had no card.** cardctl's Google adapter kept only
+  `gemini-*` ids served on generateContent or embedContent, so it dropped
+  Gemini 4, Gemma 4, Lyria, the Live, decision and deep-research models. It
+  also read streaming from a method the listing no longer names, so every
+  card said no streaming, and it ignored the API's `thinking` flag. The
+  adapter now classifies models from what the API states.
+  - **Types:** Live, image and music models are `multimodal`, since their
+    windows are real token budgets; transcription models are `stt`, TTS
+    models `tts`, and `gemini-decision-1` is `decision`.
+  - **Flags:** streaming follows from `generateContent`, and reasoning from
+    `thinking`.
+- **Enrichment prices** no longer reach variants. Longest-prefix matching
+  gave `gemini-2.5-pro-preview-tts` the chat price ($1.25/$10 instead of the
+  TTS model's $1/$20). Only exact keys and dated or versioned snapshots
+  inherit a price now; this affects every provider.
+- **`max_tokens` / `stop` / `n`** were passed to `GenerateContentConfig`
+  untranslated, and `chat(max_tokens=...)` raised a validation error. They
+  now map to `max_output_tokens` / `stop_sequences` / `candidate_count`.
+- **Music (Lyria 3.5)** via `generate_music_media` on the Developer API.
+- **`create_decision()`** for `gemini-decision-1` (`createDecision`), with
+  `system_one()` as an alias. It uses the same `Noul`/`Choice`/`Score` types
+  and `SystemOneResult` as TypeSafe. Box questions are refused because
+  Gemini has none.
+- **Verified live:**
+  - `gemini-4-hydrogen` and `gemini-4-carbon`: plain and streaming chat;
+    the tool loop with thought-signature replay; effort none/low/high.
+  - Lyria 3.5 music.
+  - A decision with all three question types.
+
+### Added — Gemini Live: realtime transcription and a voice agent
+
+- `open_transcription_session()` (`asr_stream`, `gemini-3.5-transcribe-live`)
+  and `open_voice_agent()` (`voice_agent`, `gemini-3.8-live`) over the Live
+  API, with the same session surfaces as Deepgram and OpenAI. Live fixes the
+  system instruction at connect time, so `update_prompt` raises.
+- Both are declared on the Developer API, where they were verified live:
+  exact transcription, and a full tool loop with a spoken answer.
+
+### Added — OpenAI: Realtime voice agent (`voice_agent`)
+
+- `open_voice_agent()` opens a Realtime speech-to-speech session with
+  Deepgram's agent surface: `send_audio`, `inject_user_message`,
+  `inject_agent_message`, `update_prompt`, `respond_to_function_call`, plus
+  `interrupt` for barge-in. It emits `VoiceAgentEvent`s (audio, both sides'
+  transcripts, function calls, speaking markers, errors), and takes tools,
+  a greeting, a voice and `settings` overrides.
+- Verified live on `gpt-realtime-2.1-mini`. A full tool loop ran
+  (preamble → `get_weather({"city": "Lisbon"})` → result → spoken answer),
+  with about 8 s of 24 kHz audio.
+
+### Added — OpenAI: realtime transcription (`asr_stream`)
+
+- `open_transcription_session()` uses the Realtime API in transcription mode
+  (`wss …/v1/realtime?intent=transcription`), with the same session shape
+  as Deepgram and ElevenLabs. Events:
+  - deltas → `interim` (the text so far);
+  - completed → `final`;
+  - VAD → `speech_started` / `utterance_end`.
+
+  Options: `language`, `prompt`, `keywords`, `delay`, `noise_reduction`,
+  `turn_detection`, logprobs.
+- The default `gpt-4o-transcribe` runs with server VAD.
+  `gpt-live-transcribe` rejects turn detection, so it runs on manual
+  commits.
+- Verified live: both models returned the exact sentence.
+
+### Added — Mistral, Z.ai and Gemini media reachable through `llm.media`
+
+- **Mistral** (TTS, ASR, OCR) and **Z.ai** (TTS, ASR, OCR, images, video)
+  had working legacy methods that the media manager never routed to, because
+  neither provider was a media adapter. A shared bridge
+  (`providers/_media_bridge.py`) now exposes them through the media
+  protocols. Z.ai video is a polled `MediaJob` on `/async-result/{id}`, and
+  its cancel refuses honestly because Z.ai has no cancel endpoint.
+- **Mistral speech** sent no model unless one was given, and the API now
+  answers 422 "No model provided for speech". It defaults to
+  `voxtral-mini-tts-3` (configurable as `tts_model`).
+- **Gemini `asr`** via `gemini-3.5-transcribe` on the Developer API
+  (`generateContent`). It answers with an `audio_transcription` part, which
+  `response.text` ignores.
+- Verified live: Mistral and Gemini transcription returned the exact text.
+  Mistral OCR and TTS, and Z.ai video, reach the API and stop only on those
+  accounts' quota or balance.
+- README: a table of which provider serves which media capability.
+
+### Fixed — agents `ModelRouter` defaults named only retired models
+
+- `DEFAULT_MODELS` listed gpt-3.5-turbo, o1-preview, Claude 3, Gemini 1.5 and
+  deepseek-chat/-reasoner, with 2024 prices typed by hand. It is now built
+  lazily from the bundled model cards. Prices, windows and capabilities are
+  read from each card.
+- The tiers are:
+  - **FAST:** Haiku 5.5, GPT-5.4 nano/mini, Gemini 2.5 Flash(-Lite), qwen3.5:4b;
+  - **BALANCED:** Sonnet 5.5, GPT-5.4, Gemini 2.5 Pro, DeepSeek V4 Pro,
+    qwen3.5:35b;
+  - **CAPABLE:** Opus 5.5.
+- A model whose card has no price is left out instead of being treated as
+  free; Gemini 3.x and GPT-5.5+ cards are unpriced today.
+
+### Fixed — model cards: one file per model, Ollama windows from the registry
+
+- **Duplicates removed.** 80 Ollama ids and 7 Hugging Face ids each had two
+  card files (cardctl's `a--b-c.json` next to an older `a__b_c.json`), and
+  the registry picked a winner by origin. For Ollama that meant, for example,
+  qwen3:32b reporting 262,144 tokens instead of 40,960. Each pair is now one
+  card at cardctl's filename:
+  - curated fields come from the hand-written copy;
+  - server facts come from the generated copy;
+  - the HF placeholders (128,000) are dropped.
+
+  Two cards filed under the wrong provider directory were removed, including
+  an `openai/` copy of Google's retired `text-embedding-004` that still said
+  active. A test now fails on any same-id duplicate.
+- **Every Ollama context window checked** against the GGUF header of its
+  current registry tag (a range read of the model blob, no download).
+  `qwen3:4b` is 262,144 (the 2507 retag). The `ministral-3-*` cards had ids
+  that cannot be pulled; they are now `ministral-3:{3b,8b,14b}`, with the old
+  ids as aliases and 262,144-token windows.
+
+### Added — Deepgram: Flux TTS over the WebSocket
+
+- Incremental text into `stream_speech()` and `open_speech_socket()` with a
+  Flux voice used to raise "not supported yet". These calls now use
+  `speak.v2` (Speak / Flush / Interrupt / Close; `expressivity`,
+  `normalize_volume`, `tag`). Aura stays on `speak.v1`.
+- `clear()` sends `Interrupt` on Flux.
+- In-band `Error` frames raise `ProviderError`, with the Deepgram code.
+- Verified live: `flux-haley-en` over v2 and Aura over v1 each returned
+  their own audio.
+
+### Added — ElevenLabs: realtime transcription (`asr_stream`)
+
+- **`open_transcription_session()`** speaks Realtime Scribe
+  (`scribe_v2_realtime`) over the direct WebSocket
+  `/v1/speech-to-text/realtime`, with the same session shape as Deepgram's
+  (`send_audio`, `finalize`, `close`, async iteration). Mapped events:
+  - partial → `interim`;
+  - committed → `final` (words, start and end with `include_timestamps`);
+  - typed errors → `error`.
+
+  Every documented query option passes through, including single-use
+  `token` auth. Verified live: a TTS sentence streamed as `pcm_16000` came
+  back verbatim, with 17 word timings.
+- `websockets>=13` added to the `elevenlabs` extra. The usage guide's stale
+  defaults (`scribe_v1`, SFX v2, `cloud_storage_url`) are corrected.
+
+### Fixed — Command Code: gateway Jev is text only
+
+Re-checked after the lane providers changed (2026-11-16). Messages
+(`claude-haiku-5-5`), Chat (`deepseek/deepseek-v4-flash`) and Responses
+(`gpt-5.4-mini`) all answer live, plain and streaming.
+
+- **`system_one` refuses image `assets` and Box questions.** The gateway
+  rejects Box with a 400. Worse, it accepts an image request and answers
+  without the image: a red-square Noul came back 0.25, against 0.99 on the
+  direct `typesafe` provider. The error points to the `typesafe` provider.
+
+### Fixed — Higgsfield: live parameter enums, first_frame, SDK errors, request deletion
+
+Audited against openapi.json 2.0.0, the live API and higgsfield-client 0.2.0
+(the latest) on 2026-11-16. A Soul image with `size="1024x768"` completed
+live on both backends.
+
+- **Soul image `size`** was sent as `resolution`, a 422. The live API takes
+  `720p`/`1080p` and seven aspect ratios, while the published openapi.json
+  still lists 2K/4K and ten ratios. A `"WxH"` size now picks the resolution
+  and the nearest accepted ratio.
+- **Video**:
+  - The media protocol's `first_frame` was ignored, which put a `MediaRef`
+    into the JSON body. It now selects the image-to-video endpoint.
+  - `duration_seconds` snaps to the integer enums the API enforces (Hailuo
+    6/10, Kling 5/10).
+  - Portable arguments a model does not declare are dropped with a warning.
+- **SDK backend**: `HiggsfieldClientError` (status only on `__cause__`) used
+  to escape raw. It now maps to `ProviderError` with the HTTP status (live:
+  422, non-retryable).
+- **`delete_request_data(request_id)`** wraps `DELETE /requests/{id}`
+  (stored inputs and outputs). An unknown id returns `False`, verified live.
+
+### Fixed — Replicate: SDK backend, Cancel-After, enum-aware inputs, Hailuo 2.3
+
+Audited against the HTTP API reference and replicate 1.0.7 (the latest) on
+2026-11-16. Every default model was checked live. Kokoro on the SDK backend,
+FLUX on the direct backend with `Cancel-After`, and the 422 and 429 mappings
+were verified live.
+
+- **SDK backend**:
+  - It always ran by `model=`, so community models (whisper, kokoro,
+    musicgen) got a 404. It now runs by the resolved version, like the
+    direct path.
+  - It forwards `webhook_events_filter`.
+  - `ReplicateError` maps to `ProviderError` with its status: a 402 is
+    explained and a 422 is non-retryable.
+- **`cancel_after`** (config or per call) sends the documented
+  `Cancel-After` header, so a stuck prediction stops billing. It only works
+  on the direct backend; the SDK takes no headers.
+- **Enum-aware inputs**: Cog enums behind `allOf`/`$ref` are resolved, and
+  portable numeric arguments snap to the nearest allowed value. Hailuo's
+  `duration` is `[6, 10]`, so 8.5 becomes 10.
+- **Default video model**: `minimax/hailuo-2.3` (official, text- or
+  image-to-video) replaces `minimax/video-01`. The card, cardctl, config and
+  docs are updated to match.
+
+### Fixed — fal: retired default endpoints, image size, SDK backend parity
+
+Audited against fal's Platform API, the per-endpoint OpenAPI schemas and
+fal-client 1.0.3 (the latest) on 2026-11-16. Image, TTS, text-to-SFX and
+error paths were verified live.
+
+- **Default video endpoint** `fal-ai/minimax-video` was gone (404). It is
+  now `fal-ai/minimax/hailuo-2.3/standard/text-to-video`. A `first_frame`
+  goes to the image-to-video sibling, and `duration_seconds` maps onto
+  Hailuo's `"6"`/`"10"` enum.
+- **SFX**: `fal-ai/mmaudio-v2` requires a video, so a text-only request now
+  goes to `fal-ai/mmaudio-v2/text-to-audio`.
+- **TTS** defaults to `fal-ai/kokoro/american-english`; the bare id has no
+  schema.
+- **Image size**: `size="1024x768"` is sent as `image_size={"width",
+  "height"}`. The raw string used to be sent, which FLUX does not accept.
+  Presets still pass through.
+- **SDK backend**:
+  - The per-job webhook URL is forwarded.
+  - A `Completed` status that carries an error fails the job.
+  - `FalClientHTTPError` maps to `ProviderError` with fal's status, so a
+    422 is non-retryable, as on the direct backend.
+- **Cards**: the minimax-video and bare kokoro cards were removed. Hailuo
+  2.3 (t2v/i2v), MMAudio text-to-audio and Kokoro American English were
+  added.
+
+### Added — TypeSafe: Jev 1.14, Box questions, image assets, long context
+
+Audited against typesafe-sdk 0.7.5 and the live API on 2026-11-16. Text,
+image and Box questions were verified live on both transports.
+
+- **Jev 1.14**: `jev-latest` and `jev-preview` point to `jev-1.14.0` (the
+  API answers with that id). There is a new card, cardctl maps the aliases
+  there, and 1.13 keeps its own card. Both take images.
+- **Box questions** locate things in an image (`Box`, `BoxAnswer`,
+  `result.boxes`). Box answers used to be discarded as an unknown type.
+- **Image assets**: `system_one(..., assets={"ref": png_or_jpeg_bytes |
+  path | dict})` with the `TypeSafe-Danger-Zone-Images` header added
+  automatically. `long_context = true` sends the Long-Context header and
+  budgets 262k tokens.
+- **SDK backend**: every failure was `retryable=True`, a 400/401/422
+  included. Failures are now classified by type and status. Headers,
+  timeouts and assets are forwarded.
+  `typesafe-sdk>=0.7.5,<0.8`.
+
+### Changed — Deepgram: Flux TTS, SDK transcription parameters, newer fields
+
+Audited against deepgram-sdk 7.19 and the live API on 2026-11-16. Flux TTS
+and transcription were verified live on both transports.
+
+- **Flux TTS** (`flux-<voice>-<lang>`, GA 2026-08-12) goes to `/v2/speak`
+  (`speak.v2`) for synthesis and REST streaming, with `expressivity`,
+  `normalize_volume` and `priority`. Aura stays on `/v1/speak`. WebSocket
+  input with a Flux voice raises a clear error; it uses a different protocol
+  (follow-up).
+- **SDK transcription** forwarded `channels` and `sample_rate`, which the
+  SDK's `transcribe_file`/`transcribe_url` don't take, so it raised
+  `TypeError`. They are now sent on the direct transport only.
+- New fields: `language_hint` (nova-3 `multi` now serves 55 languages),
+  `redact_usage`, `diarize_model` on streaming, and `numerals`,
+  `profanity_filter`, `redact`, `redact_usage` on Flux STT.
+  `deepgram-sdk>=7.19,<8`. Note that 7.18 stopped retrying
+  `RemoteProtocolError`.
+
+### Changed — ElevenLabs: scribe_v3, SFX v3, SDK backend fidelity, STT list fields
+
+Audited against the live API and elevenlabs 2.78 on 2026-11-16. Verified
+live on both backends: TTS, scribe_v3 transcription, streaming and SFX v3.
+
+- **Defaults**: ASR `scribe_v3` (GA 2026-11-09; `scribe_v1` is
+  deprecated), SFX `eleven_text_to_sound_v3` (v2 is removed on 2027-03-01),
+  streaming TTS `eleven_v4_turbo`.
+- **STT list fields** such as `secondary_language_codes` and `keyterms` were
+  sent as Python's `str(list)`. They now go as JSON strings; repeated form
+  fields return 500 (measured). Remote audio goes as `source_url`
+  (`cloud_storage_url` is deprecated). Results carry the duration and the
+  `edited_transcript`.
+- **SDK backend**: TTS, streaming TTS, SFX and music sent only text, model
+  and format. `voice_settings`, `seed`, `audio_effects`, `loop`,
+  `prompt_influence`, `force_instrumental` and the rest were dropped. Every
+  field the SDK has a keyword for is now forwarded, and the rest are named in
+  a warning.
+- WAV output is labelled `audio/wav`; it was `audio/mpeg`.
+  `elevenlabs>=2.78,<3`.
+
+### Fixed — FriendliAI: SDK 0.16 streaming, per-model effort, reasoning replay, retired models
+
+Audited against friendli 0.16.6 (released 2026-11-04) and the live catalogue
+on 2026-11-16. The team account has no credits (inference returns 403), so
+streaming was verified with the real SDK over a mocked transport.
+
+- **friendli 0.16 removed `chat.stream`.** Streaming is now
+  `chat.complete(stream=True)`, so `backend = "sdk"` streaming raised
+  `AttributeError`; the extra's open pin allowed 0.16. Both are handled now.
+  The pin is `friendli>=0.16.6,<0.17` (pre-1.0 SDKs break across minor
+  versions).
+- **effort= follows each model's catalogue `reasoning_options`**: GLM-5.3
+  low/high/max, GLM-5.2 toggle plus high/max, GLM-5.1 and gemma-4 toggle
+  only. "none" turns the toggle off.
+- **Reasoning replay**: `assistant_replay_metadata()` returns
+  `reasoning_content`. GLM-5.3 on Friendli preserves thinking by default, so
+  it has to come back. Streams accumulate it on the direct and openai
+  backends; the SDK's models drop it.
+- DeepSeek-V3.2 and MiniMax-M2.5 (deprecated 2026-10) are gone from the
+  tables and docs, and their cards are marked deprecated.
+
+### Fixed — Z.ai: streaming on the default backend, GLM-5.3 rules, preserved thinking
+
+Audited on 2026-11-16 against docs.z.ai and the real zai-sdk 0.2.3
+signature. The account was out of balance. The GLM-5.3 rules below were
+confirmed by the API's own validation, and the error mapping was checked live
+on every transport.
+
+- **Streaming was broken on the default `sdk` backend.** zai-sdk's
+  `create()` has a fixed signature without `stream_options` or `user`, so
+  every stream raised `TypeError`. The old tests mocked `create()` with a
+  bare MagicMock. Unknown keys now go in `extra_body`; verified to reach the
+  server.
+- **GLM-5.3** always thinks: `thinking: "disabled"` is a 400 (code 1210)
+  and is kept enabled with a warning. Its effort levels are low/high/max
+  (`medium` is a 400); other values move to the nearest.
+  Default `glm-5.3`. Flash/FlashX are marked vision, the
+  release dates are corrected, and a `glm-5.3-flashx-legal` card was added.
+- **Preserved thinking**: `clear_thinking` (config or kwarg) and
+  `assistant_replay_metadata()`. Streams accumulate `reasoning_content` onto
+  the finish chunk.
+- **Errors**: the out-of-balance 429 (code 1113) is non-retryable and says
+  so. The direct stream read no error body. `_raw_post` shares the mapping.
+  `model_context_window_exceeded` is reported as `length`.
+- `effort=` (none → thinking off where allowed). `temperature=0` is sent
+  as `do_sample=false`; it used to be clamped to 0.01, so sampling stayed
+  on. `native_search=True` adds the built-in web_search tool, and the search
+  default is `search-prime`. `responses_api = "always"` uses
+  `/api/v1/responses`.
+
+### Fixed — Ollama: silent context truncation, tool-loop replay, direct-backend listing
+
+Audited against a live server (0.32.14) and ollama-python 0.6.3 on
+2026-11-16. Verified live on both backends.
+
+- **Silent truncation.** The server loads models with its own default
+  context: 4096 on the test GPU (`/api/ps`), while llmcore assumed the
+  trained 262,144. A new `num_ctx` setting is sent with every request.
+  Without it, the effective window is read from `/api/ps` and reported by
+  `get_max_context_length()`, with a one-time warning. The server's own
+  figures now come before the static table, which had qwen3 at 262,144
+  instead of 40,960.
+- **Tool loops.** Assistant turns were sent without their `tool_calls` and
+  `thinking`. Both are replayed now, with arguments as objects. Tool results
+  get `tool_name`, resolved from the call id or by position, since the SDK
+  drops ids. Tool calls keep the server's `id`. `assistant_replay_metadata()`
+  returns the thinking, and the final stream chunk carries all of it.
+- **Direct backend**: model listing crashed (a dict read as an object); it
+  now uses the tags' own capabilities and windows. It honours `OLLAMA_HOST`
+  and sends `api_key` / `OLLAMA_API_KEY` (ollama.com cloud).
+- `effort=` maps to `think` ("none" turns it off). Usage reports cached
+  tokens and the finish reason when the server sends them.
+- Default `qwen3.5:4b` (tools, thinking, vision); config and code used to
+  disagree, on `llama3` and `gemma3:4b`, neither of which has tools. cardctl
+  takes types and capabilities from the server instead of guessing from the
+  family, so embedding models stop being carded as chat models.
+
+### Changed — Hugging Face: router catalogue, reasoning replay, broken config section, hub 2.4
+
+Audited against the live router and huggingface_hub 2.4 on 2026-11-16.
+Verified live through llmcore: discovery and context, effort, tool loops
+with replay (plain and streamed), and batched embeddings.
+
+- **The packaged config section was broken.** Its scalar keys followed the
+  `[providers.huggingface.endpoints]` subtable, so TOML put
+  `api_key_env_var`, `default_model` and `timeout` inside `endpoints`. They
+  never applied, and the provider saw three bogus "dedicated endpoints". The
+  keys now come first.
+- **Discovery** reads the router's own `/v1/models`: the 132 chat models
+  actually served, with each live provider's context window, tools and
+  pricing. Model cards cover the rest. Context follows the route: the
+  smallest live provider's window, or the pinned one's. Llama-3.3-70B is
+  12,288 on one of its providers; the table said 131,072.
+- **Tool loops**: first-class `Message.tool_calls` were ignored (only the
+  legacy metadata channel was read). Reasoning (`message.reasoning`) is
+  extracted, streamed, and replayed as `reasoning`. The router rejects
+  `reasoning_content` on its default route (400), so that spelling is
+  avoided.
+- **Parameters**: `effort` / `reasoning_effort`, `top_k` (advertised but
+  silently dropped), `min_p`, `repetition_penalty` and
+  `chat_template_kwargs` travel in `extra_body`. `logprobs`, `n`,
+  `tool_prompt` and `stream_options` are forwarded. Streams request usage.
+- **Media and embeddings**: the legacy `generate_speech` default
+  `facebook/mms-tts-eng` has no inference provider any more; the served media
+  defaults are used instead. Every SDK failure is wrapped as `ProviderError`
+  (hub 2.x raises httpx2 errors, and even `StopIteration` for an unserved
+  model). Embeddings go out as one batched request with `dimensions`; they
+  used to be one request per text.
+- Default `openai/gpt-oss-120b` (7 live providers, tools, reasoning).
+  `huggingface-hub>=2.4,<3`. The Orpheus TTS cards no longer claim their
+  backbone's 131,072-token window, and cardctl no longer reads a window from
+  a TTS/STT/image model's config.
+
+### Fixed — vLLM: guided decoding silently ignored, discovery behind tunnels, newer parameters
+
+Audited against the vLLM source (v0.34.0rc0, `c02ebf136e`). No live server
+was available, so this follows the source.
+
+- **`guided_json` / `guided_regex` / `guided_choice` / `guided_grammar` were
+  removed in vLLM 0.12**, and the server now treats them as unknown extras:
+  HTTP 200 with unconstrained output. llmcore forwarded them as-is. They are
+  now translated into `structured_outputs`, with a deprecation warning.
+- **Discovery** used its own HTTP client without the configured
+  `default_headers`, so behind an authenticated tunnel (the gpu.ai runtime's
+  Basic auth) it failed and the context fell back to 4096. It uses the
+  provider's client now. Without a configured `default_model`, the first
+  served model becomes the default.
+- **Embeddings** default to `default_embedding_model` or the served model.
+  The inherited default was OpenAI's `text-embedding-3-small`.
+- The newer chat fields are accepted: `thinking_token_budget`,
+  `include_reasoning`, `stop_token_ids`, `truncate_prompt_tokens`,
+  `bad_words`, `allowed_token_ids`, `cache_salt`, `priority`,
+  `media_io_kwargs`, `documents`, `vllm_xargs`, `repetition_detection`,
+  `return_token_ids`.
+- Reasoning replay works through the shared OpenAI-compatible layer (vLLM
+  renames `reasoning_content` to `reasoning` on input).
+
+### Fixed — gpu.ai: streaming flags, refused parameters, embeddings contract
+
+Audited against the live API on 2026-11-16 (verified on both transports).
+
+- 12 of 15 chat models list no `supported_parameters` (null or empty) yet
+  stream; they were all reported as non-streaming. Only a non-empty list
+  without `stream` counts as a negative now, in the provider and in cardctl.
+- The endpoint answers 400 to `tools`, `response_format` and array content.
+  Tools now raise a clear error before the request, text content parts are
+  joined into a string, images raise, models report no tools or vision, and
+  `responses_api` is forced to "never" (`/v1/responses` returns 404).
+- `create_embeddings` follows the base contract (`input_texts`, an
+  OpenAI-shaped dict); it took `texts` and returned bare lists. `dimensions`
+  works (64 → 64).
+- Discovery skips models whose `status` is not active. cardctl prefers the
+  exact microcents prices over rounded cents for cached input.
+
+### Fixed — DeepInfra: dead STT default, model types, schema-2.4 cards, effort levels, dimensions
+
+Audited against the live API on 2026-11-16. Verified live through llmcore:
+discovery, embeddings with `dimensions`, the TTS→STT round trip, tool loops
+with reasoning replay (plain and streamed), and the Responses route.
+
+- **STT default** `openai/whisper-large` returned 404 and has left the
+  catalogue. It is now `openai/whisper-large-v3-turbo`.
+- **Model types**: the live tags are short (`embed`, `tts`, `stt`,
+  `image-gen`, `video-gen`, `vlm`). None matched, so all 178 models were "chat
+  with tools". The classifier now recognises them and reports `reasoning`.
+- **cardctl**: the `/openrouter/models` feed moved to schema 2.4, which nests
+  modalities, context, parameters and prices. Every model parsed with no
+  context, tools, reasoning or price, and 210 cards carried stringified dicts
+  as tags. The adapter now reads 2.4 (and still reads the flat shape) and
+  dedupes the feed (519 rows, 352 ids); the 210 card tags are repaired.
+- **Parameters**: `reasoning_effort` takes none through max (all verified),
+  `service_tier` takes `flex`, and the newer body fields are accepted
+  (`chat_template_kwargs`, `prompt_cache_options`, `cache_salt`, `fail_fast`,
+  `models`, `stop_token_ids`, `media_io_kwargs`, `continue_final_message`,
+  `ignore_eos`).
+- **Embeddings** keep `dimensions`, live-verified; it was dropped after older
+  docs. `input_type` and `task` pass through.
+- Default chat model `deepseek-ai/DeepSeek-V4-Flash`.
+
+### Changed — Poe: effort per bot, live context windows, working native backend, retired bots
+
+Audited against the live API and fastapi_poe 0.0.83 on 2026-11-16. Verified
+live through llmcore: effort on GPT, Gemini and Claude bots, search, a tool
+loop, native history and stream, the 413, and balance.
+
+- **`effort=` follows each bot.** `/v1/models` declares each bot's custom
+  parameters with schemas, and reasoning is spelled differently per bot.
+  Effort now maps onto `reasoning_effort` / `output_effort` /
+  `thinking_level` (nearest enum value), `thinking_budget` (scaled within its
+  range) or `enable_thinking`. Measured: gpt-5.4-nano 0 vs 51 reasoning
+  tokens, gemini-3-flash 0 vs 472. `native_search=True` sets `web_search` on
+  bots that declare it.
+- **Discovery** reads the API's own context windows, max output, tools and
+  reasoning flags, and display names; `created` is converted from
+  milliseconds. Context lookups use them. A failed listing raises; it used to
+  return "no bots". cardctl gets the same fields and types video, image and
+  audio bots (it used to call them all chat with tools).
+- **Native backend**: assistant turns are sent as `bot`. The protocol has no
+  `assistant` role, so any history failed validation outside the fallback.
+  Custom parameters and `stop` are forwarded, and streams are primed so the
+  fallback can engage.
+- A 413 ("Your message is too long") is a `ContextLengthError`. `store`,
+  `metadata` and `prediction` join the stripped parameters.
+  `get_balance_details()` returns the full balance.
+- Default `gpt-5.4-mini` (ids are lowercase now). 216 cards for bots the API
+  no longer serves (they answer 500) are marked retired. `fastapi-poe` joins
+  the `poe` extra.
+
+### Changed — OpenRouter and OpenAI-compatible vendors: reasoning replay, in-band errors, full catalogue, working SDK backend
+
+Audited against the live API and openrouter SDK 1.3.179 on 2026-11-16. All
+of it was verified live on the openai, httpx and openrouter-SDK backends.
+
+- **Reasoning replay for every OpenAI-compatible vendor** (OpenAIProvider):
+  `assistant_replay_metadata()` returns `reasoning_details` and the reasoning
+  text, and the next assistant turn sends them back. The text goes under the
+  vendor's field: `reasoning` for OpenRouter and vLLM, `reasoning_content`
+  elsewhere. Streams accumulate both onto the finish chunk. Gemini 3 through
+  OpenRouter returns its reasoning only as an encrypted `reasoning_details`
+  item, which OpenRouter requires to be sent back unmodified and in order.
+  OpenAI itself is unaffected.
+- **In-band errors**: an OpenRouter failure inside an HTTP 200 (an `error`
+  body, or a stream chunk with `finish_reason: "error"`) now raises
+  `ProviderError`. It used to come back as empty content.
+- **OpenRouter vendor profile**: provider routing, `models` fallbacks,
+  plugins, `session_id`, caching and sampling extensions are accepted
+  parameters. `native_search=True` adds the `web` plugin, and
+  `provider_preferences` in config are merged into every request (e.g.
+  `zdr`, `data_collection`). Usage includes `cost`, `cost_details` and
+  `is_byok`.
+- **Catalogue**: `/models` is paginated and lists only text-output models
+  unless asked; discovery now loads all 724 models (not 468), raises on
+  failure, and clamps `effort=` to each model's `supported_efforts`. In
+  cardctl, `supports_tools` checked `"tool_use"`, which no live model reports;
+  it now checks `"tools"` (405 models). It also maps reasoning, vision and
+  non-chat model types.
+- **SDK backend** (`backend = "sdk"`): it used to drop tool calls, images and
+  names from history, yield text-only stream chunks, ignore `base_url` and
+  `timeout`, and fall back by raising `ValueError` on routing kwargs. It now
+  sends the same body as the default path and returns the same shapes.
+  `openrouter>=1.3,<2` is part of the `openrouter` extra.
+- Default `openai/gpt-5.4-mini`. `X-OpenRouter-Title` and
+  `X-OpenRouter-Categories` headers. "not a valid model ID" is recognised as
+  model-not-found. tiktoken is looked up without the `vendor/` prefix.
+
+### Changed — Kimi: K3 family, reasoning replay, learned fixed values, dynamic tools, Responses
+
+Audited against the live Moonshot API on 2026-11-16 (funded account; every
+item below verified live through llmcore).
+
+- **K3** (`kimi-k3`, `kimi-k3.1-pro`, `-highspeed`; 1M context) is
+  supported. It always reasons, and its depth is `reasoning_effort`
+  (low/high/max). `effort=` maps onto it, and "none" turns reasoning off.
+  `kimi-k2.7-code` refuses `thinking: disabled` (a 400); llmcore warns and
+  keeps it enabled. Fixed sampling values (temperature 1, top_p 0.95) are
+  stripped for K3 and k2.7. A new "invalid X: only Y is allowed" rejection is
+  dropped, retried and remembered.
+- **Reasoning replay**: `assistant_replay_metadata()` returns
+  `reasoning_content`, and for streams the finish chunk carries all of it.
+  Measured: without it, a K3 tool loop stops reasoning after the first call.
+- **Default `kimi-k3.1-pro`**. The moonshot-v1 series, kimi-k2.5 and the k2
+  previews now return 404; their cards are marked retired, and K3.1 Pro
+  cards were added.
+- **Responses API**: `responses_api = "always"` routes chat through
+  `/v1/responses` (plain, tool loop and stream verified).
+- **Dynamic tools** (K3): a system message with `metadata["tools"]` becomes
+  `{"role": "system", "tools": [...]}`.
+- `max_tokens` is sent as `max_completion_tokens` (the former is deprecated).
+  New parameters: `prompt_cache_options`, `prediction`, `logprobs`.
+- Usage reads `prompt_tokens_details.cached_tokens` and `cache_write_tokens`.
+- Kimi Code: with `base_url = "https://api.kimi.com/coding/v1"`, the key
+  defaults to `KIMI_API_KEY`.
+- DeepSeek, Kimi and OpenAI share one SDK `/responses` helper
+  (`openai_responses.sdk_create`).
+
+### Changed — DeepSeek: V4.1-Flash, low effort, reasoning replay in streams, built-in tools, Responses
+
+Audited against api-docs.deepseek.com and the live `GET /models` on 2026-11-16.
+The test account had no balance (every chat call returned 402), so chat
+behaviour follows the documentation; discovery, balance and the 402 mapping
+were checked live.
+
+- **Default `deepseek-flash`** (DeepSeek-V4.1-Flash: image input, 1M
+  context). V4 Flash was retired on 2026-09-10; `deepseek-v4-flash` is still
+  accepted and served by V4.1-Flash. `deepseek-chat` and `deepseek-reasoner`
+  were retired on 2026-07-24, and their cards say so.
+- **Effort**: the levels are now low/high/max. `low` used to be folded into
+  `high`. llmcore's `effort=` maps as DeepSeek documents (minimal/low → low,
+  medium/high/xhigh → high, max → max), and `effort="none"` turns thinking off.
+- **Tool loops while streaming**: DeepSeek returns a 400 unless every earlier
+  assistant turn carries its `reasoning_content`, which a stream only sends in
+  pieces. The finish chunk now carries the whole of it, and
+  `assistant_replay_metadata()` returns it. A 400 about it explains the fix.
+- **Built-in tools** on `deepseek-flash`: `native_search=True` adds
+  `deepseek_web_search`, `extra_tools` passes `deepseek_read_url`, and
+  `safety_check` is supported.
+- **`responses_api = "always"`** uses DeepSeek's native `/responses`.
+- Discovery reads the listing's context window, image input and effort
+  levels. A 402 is not retryable. `get_balance()` was added.
+
+### Changed — Mistral: reasoning chunks and replay, per-model effort, learned parameters, Responses, fixed streaming
+
+Audited against the live API and mistralai 3.7 on 2026-11-16. On the test
+plan, Small, Medium and TTS-3 have a quota of 0 requests per minute, so
+reasoning follows docs.mistral.ai. Everything else was verified live on both
+transports.
+
+- **Streaming was broken.** `chat_completion(stream=True)` and
+  `fim_completion(stream=True)` returned an un-awaited coroutine instead of an
+  iterator. Streams are now primed, so HTTP errors raise from the call, with
+  the server's message instead of only the status code.
+- **Reasoning** (Small 4, Medium 3.5, Large 4): `content` arrives as thinking
+  and text chunks. It is flattened to `content` plus `reasoning_content`, and
+  the raw chunks are kept as `mistral_content`, which
+  `assistant_replay_metadata()` returns. Mistral requires the thinking chunk
+  to be replayed. Reasoning support comes from `/v1/models` capabilities, not
+  from the `magistral` name (Small and Medium reason now; `magistral-*` are
+  their aliases). `effort=` maps per family: none/high on Small and Medium,
+  low/medium/high on Large 4.
+- **New parameters**: `top_k`, `min_tokens`, `repetition_penalty`,
+  `logprobs`, `prompt_cache_key`, `service_tier`. Mistral rejects some per
+  model ("… is not enabled for this model"). Such a parameter is dropped, the
+  request retried, and the rejection remembered.
+- **Errors**: a plan without access to a model gets a 429 with a 0 req/min
+  limit. That is now reported as "no quota" and is not retryable. SDK errors
+  map exactly like REST errors.
+- **`responses_api = "always"`** routes chat through Mistral's stateless
+  `/v1/responses`, with tool loops and streaming (verified live).
+- **Media**: TTS no longer sends OpenAI's "alloy" voice; it requires `voice`
+  or `ref_audio`, and new options pass through. STT forwards extra fields,
+  sends the right MIME type, and no longer leaks the file handle. SDK
+  embeddings keep `output_dimension` and friends.
+- Default `mistral-small-latest`; `mistral-large-latest` is not offered to
+  every plan. The context table comes from the live listing. The cardctl
+  adapter reads `reasoning` from the API, and 13 cards were corrected.
+  `mistralai>=3.7,<4`.
+
+### Fixed — shared Responses builder posted `extra_body` verbatim
+
+`build_responses_request` sent a caller's `extra_body` as a literal field.
+Servers that ignore unknown fields, such as vLLM, answered 200 without the
+vendor parameters. It is now merged into the body. `OpenAIProvider` also
+implements `assistant_replay_metadata()` (Responses reasoning items).
+
+### Fixed — Gemini: tool calling, thought signatures, SDK 3.x, retired models
+
+Audited against the live Developer API and `google-genai` 3.3 (2026-11-16).
+Tool use was unusable:
+
+- **Every call with tools raised `AttributeError`.** It used
+  `types.FunctionDeclaration.from_dict`, which google-genai has never had.
+  Declarations now use `parameters_json_schema`.
+- **Tool loops could not continue.** Assistant tool calls were never replayed
+  (so the model re-issued them), and Gemini 3+ rejects a replayed function call
+  without its thought signature ("Function call is missing a
+  thought_signature"). Signatures are now captured: per call in
+  `tool_calls[i].extra_content.google.thought_signature` (Google's own
+  convention), and the whole turn as `message["gemini_parts"]`, returned by
+  `assistant_replay_metadata()`. Turns are replayed with them. Hand-built or
+  foreign history gets Google's documented placeholder. Tool results carry the
+  call `id` and the function name (the id was used as the name).
+- **Streaming** now emits tool calls, the finish reason and usage, and the
+  final chunk carries the parts to replay. All three were dropped.
+- **google-genai 3.x** (`>=3.3,<4`): the Developer API is pinned to `v1beta`
+  (`api_version`), because the SDK's new `v1` default has no TTS ("Unknown name
+  speechConfig"), no explicit caching and no `-latest` aliases. The extra
+  declares `httpx` (3.x installs httpx2 only) and no longer requires
+  `google-api-core`, which made the provider unavailable without it.
+- **Video**: the Developer API shut its Veo previews down on 2026-10-22, and
+  SDK 3.x refuses `generate_videos` outside Vertex. `video_generate` is now
+  declared on Vertex only (`veo-3.1-generate-001`).
+- **Embeddings**: `gemini-embedding-2` returned one aggregated vector for a
+  list of texts. Each text is now its own input. The default is
+  `gemini-embedding-2`.
+- `effort=` maps to `thinking_level` (Gemini 4 and 3.8 have no `minimal`;
+  `xhigh` only on Hydrogen), and to a budget on 2.5. `thinking_display` returns
+  thought summaries. Thinking tokens count as completion tokens; they are
+  billed as output and were left out.
+- `ContextLengthError` only for the input-too-long error. Any message
+  mentioning "token" used to qualify. SDK errors carry status codes.
+- Defaults: `gemini-3.5-flash-lite` (`gemini-3.1-flash-lite-preview` is shut
+  down), TTS `gemini-3.8-flash-tts`, images `gemini-nano-banana-2.1`. The token
+  table is refreshed from the API's own limits. cardctl sends the key in a
+  header instead of the URL.
+
+### Changed — Anthropic: SDK 2.x / API 2026-10-21, per-model rules, thinking round trip
+
+Audited against the live API and `anthropic` 2.8 (2026-11-16):
+
+- **SDK 2.x and API version 2026-10-21** (`anthropic>=2.8,<3`). That version
+  removes `temperature`, `top_p` and `top_k`, which Claude 5.x already
+  rejected. They are dropped with a one-time warning; on SDK 1.x they used to
+  crash the SDK path with a `TypeError`.
+- **"No thinking" is per model, not per generation.** llmcore sent
+  `between_tools` to every 4.7+ model, which is a 400 everywhere except Sonnet
+  5.5. Per-model capabilities are now read from the Models API once per
+  process, with a measured snapshot as fallback. `effort="none"` becomes
+  `disabled` (Haiku 5.5, Opus 4.7/4.8, Sonnet 5, 4.6), `between_tools` (Sonnet
+  5.5) or the lowest effort (Opus 5.5 and Fable, which have no off switch).
+  `xhigh` is kept on models that have it instead of being folded to `high`.
+- **Forced `tool_choice`** (`any` or a tool name) on Opus 5.5, Sonnet 5.5 and
+  Fable is sent as `auto` with a warning instead of failing.
+- **Thinking round trip.** Thinking blocks (with signatures), redacted
+  thinking and server-tool blocks come back as `message["anthropic_content"]`
+  (streamed calls: on the final chunk) and are replayed verbatim.
+  `assistant_replay_metadata(response)` is a new `BaseProvider` method that
+  returns what to attach to the next assistant message, for any provider.
+- `native_search=True` adds the web-search server tool, and `extra_tools=[...]`
+  passes raw server tools. `thinking_display="summarized"` returns readable
+  thinking.
+- API 2026-10-21 rules are applied: documents are dropped from assistant
+  turns, and citations are stripped from user text.
+- `ContextLengthError` only for "prompt is too long". Any 400 mentioning
+  tokens used to qualify. `model_context_window_exceeded` stops are reported as
+  `length`. SDK-path errors carry status codes and the original exception.
+- Default model `claude-sonnet-5-5` (`claude-sonnet-4-5-20250929` retires
+  2026-11-30). Context windows come from the Models API: 1M for every current
+  model, 200K for the 4.5 line.
+- Fixed: `_model_generation` read `claude-sonnet-4-20250514` as generation
+  (4, 20250514), and `supports_thinking` was true for every model.
+- cardctl: the adapter read capability keys that do not exist (`tool_use`,
+  `vision`, `extended_thinking`), so every Anthropic card claimed no tools,
+  vision or reasoning. It now reads `image_input`, `structured_outputs`,
+  `thinking.types` and `effort`, plus windows and lifecycle. 13 cards were
+  repaired in place, and cards were added for `claude-haiku-5-5` (with its
+  >100K context tier) and `claude-fable-5-2`. The enrichment prices were 2024
+  family prefixes (`claude-opus-4` = $15/$75 would have priced Opus 4.8 at
+  three times its $5/$25 on regeneration); they are rebuilt from the
+  vendor-scraped cards.
+
+### Fixed — xAI, Groq, Together: retired search, retired defaults, vendor profiles
+
+No keys were available for these three, so this follows their API docs and
+unauthenticated endpoint checks (2026-11-16), not live calls.
+
+- **xAI search was dead.** `search_parameters` (Live Search) answers HTTP 410,
+  and xAI replaced it with the server-side `web_search` and `x_search` tools,
+  which exist only on its Responses API. `native_search=True` now routes there
+  with those tools. Plain chat stays on Chat Completions; `responses_api =
+  "always"` opts in to xAI's recommended route for everything.
+- **Groq:** `native_search=True` adds the built-in `browser_search` tool on the
+  gpt-oss models, which are the only ones that have it.
+- **Together:** base URL `https://api.together.ai/v1`. The old
+  `api.together.xyz` serves chat but answers 404 on `/responses`.
+- **Retired defaults replaced:** xAI `grok-4.1-20251117` → `grok-4.7`; Groq
+  `llama-3.3-70b-versatile` (shut down for free/dev tiers 2026-08-16) and
+  Together `Llama-3.3-70B-Instruct-Turbo` (left serverless 2026-10-22) →
+  `openai/gpt-oss-120b`.
+- **Vendor profiles.** These vendors are instances of `OpenAIProvider`, so
+  they inherited OpenAI's media endpoints and default media models. Routing
+  could then send them TTS, image-edit or Whisper calls they do not serve.
+  Each now declares only what it serves in OpenAI's shape: xAI image
+  generation (`grok-imagine-image`), Groq ASR (`whisper-large-v3-turbo`),
+  Together none yet. Their documented chat extensions are accepted and sent in
+  `extra_body`: Groq `reasoning_format`, `include_reasoning` and
+  `search_settings`; Together `reasoning`, `chat_template_kwargs`, `top_k` and
+  `min_p`. They used to raise `ValueError`.
+- `extra_body` is accepted on every OpenAI-compatible instance.
+
+### Changed — OpenAI: Responses API, per-model parameter rules, current models
+
+Audited against the live API and `openai` 3.51 (2026-11-16). Several things
+were broken for every current model:
+
+- **Responses API.** `responses_api = "auto"` (the default against OpenAI)
+  sends the o-series and GPT-5+ to `/responses` and keeps gpt-4.x, search and
+  audio models on Chat Completions. `gpt-5-pro`, `gpt-5.x-pro` and
+  `gpt-5.3-codex` exist only on `/responses` and answered 404 before. A
+  Chat-only parameter (`n`, `logprobs`, `seed`, `stop`, …) keeps a call on
+  Chat Completions, a Responses-only one (`reasoning`, `text`, `include`, …)
+  moves it, and `responses=True|False` decides per call. Both routes return the
+  same shape. Encrypted reasoning comes back as `reasoning_items`
+  (`extract_reasoning_items()`) and goes out again from
+  `metadata["reasoning_items"]`, so reasoning survives tool loops.
+- **Parameters are learned per model.** OpenAI models no longer share one
+  parameter set: gpt-6-luna rejects `temperature` unless effort is `none`,
+  gpt-5 takes effort `minimal` but not `none`, o3 rejects `top_p`. With
+  `param_policy = "adapt"` (the default against OpenAI) a rejected parameter is
+  renamed, dropped or moved to the nearest supported effort level, the call is
+  retried once, and the rule is remembered for that model. `strict` fails
+  instead.
+- `max_tokens` is sent as `max_completion_tokens` to OpenAI. GPT-5+ rejected
+  it. Compatible endpoints keep `max_tokens`.
+- `effort=` (llmcore's canonical knob) is accepted, and `reasoning_effort`
+  takes `none` through `max`.
+- `native_search=True` uses the Responses `web_search` tool, which every model
+  has. Chat Completions search works only on `*-search-api` models.
+- Context windows are the **input** limits OpenAI enforces, measured from its
+  own overflow errors: 272K for gpt-5/5.1/5.2/5.4-mini/5.4-nano, 922K for
+  gpt-5.4/5.5/5.6/6.x, and 1,047,576 for gpt-4.1. gpt-4.1 used to resolve to
+  8,192.
+- `ContextLengthError` is raised by error code on both routes and every
+  wording. It had stopped matching from SDK 3.38, whose error text no longer
+  carries the body.
+- Chat streams ask for usage, so streamed calls now have token counts and
+  cost. Errors raised mid-stream are `ProviderError`, not raw SDK exceptions.
+- Direct transport: `extra_body` is merged into the body instead of being sent
+  as a literal field, and the `OpenAI-Project` header is sent.
+- Images default to `gpt-image-2` (`gpt-image-1` no longer exists), and
+  `response_format` is sent only to DALL-E models (GPT image models reject it).
+- Defaults: `gpt-6-luna` (`gpt-4o` shuts down 2027-01-14). `openai>=3.38`.
+- Reasoning text is extracted from every OpenAI-compatible server
+  (`reasoning` or `reasoning_content`). Cache-write tokens are reported.
+- cardctl: GPT-5+ cards were all-false placeholders (no tools, vision or
+  reasoning) because the adapter knew only `o1`/`o3`/`o4` as reasoning models.
+  The inference is fixed, and 59 existing cards were repaired in place
+  (capabilities only where the block was the placeholder; windows to the
+  measured limits; prices untouched).
+- Command Code's `/responses` lane now uses OpenAIProvider's Responses code
+  instead of its own copy.
+
 ### Added — Command Code provider
 
 `commandcode` (aliases `command_code`, `command-code`) reaches Command Code's

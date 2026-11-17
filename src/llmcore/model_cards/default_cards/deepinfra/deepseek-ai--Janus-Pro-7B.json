@@ -38,8 +38,8 @@
   "aliases": [],
   "description": "Janus-Pro is a novel autoregressive framework that unifies multimodal understanding and generation. It addresses the limitations of previous approaches by decoupling visual encoding into separate pathways, while still utilizing a single, unified transformer architecture for processing. The decoupling not only alleviates the conflict between the visual encoder’s roles in understanding and generation, but also enhances the framework’s flexibility. Janus-Pro surpasses previous unified model and matches or exceeds the performance of task-specific models. The simplicity, high flexibility, and effectiveness of Janus-Pro make it a strong candidate for next-generation unified multimodal models.",
   "tags": [
-    "{'type': 'text', 'supported_inputs': {}, 'pricing': []}",
-    "output:{'type': 'image', 'supported_parameters': {'width': {'type': 'integer', 'min': 64, 'max': 2048, 'unit': 'pixel'}, 'height': {'type': 'integer', 'min': 64, 'max': 2048, 'unit': 'pixel'}, 'num_inference_steps': {'type': 'integer', 'min': 1, 'max': 50}, 'guidance_scale': {'type': 'range', 'min': 0, 'max': 20}, 'n': {'type': 'integer', 'min': 1, 'max': 4}, 'seed': {'type': 'boolean'}}, 'streaming': false, 'pricing': [{'type': 'completion', 'unit': 'image', 'cost_usd': '0.0020000000'}]}"
+    "text",
+    "output:image"
   ],
   "source": "generated",
   "provider_extension": {

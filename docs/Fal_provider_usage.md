@@ -12,11 +12,11 @@ It is the broadest single media adapter llmcore has, covering nine capabilities:
 | `image_generate` | `fal-ai/flux/schnell` | `llm.media.images.generate(...)` |
 | `image_edit` | `fal-ai/flux-pro/kontext` | `llm.media.images.edit(...)` |
 | `image_upscale` | `fal-ai/clarity-upscaler` | `llm.media.images.upscale(...)` |
-| `video_generate` | `fal-ai/minimax-video` | `llm.media.video.generate(...)` |
+| `video_generate` | `fal-ai/minimax/hailuo-2.3/standard/text-to-video` (`.../image-to-video` with a first frame) | `llm.media.video.generate(...)` |
 | `video_interpolate` | `fal-ai/film` | `llm.media.video.interpolate(...)` |
-| `sfx` | `fal-ai/mmaudio-v2` | `llm.media.audio.sfx(...)` |
+| `sfx` | `fal-ai/mmaudio-v2` (foley; `.../text-to-audio` without a video) | `llm.media.audio.sfx(...)` |
 | `music` | `fal-ai/stable-audio` | `llm.media.audio.music(...)` |
-| `tts` | `fal-ai/kokoro` | `llm.media.audio.speak(...)` |
+| `tts` | `fal-ai/kokoro/american-english` | `llm.media.audio.speak(...)` |
 | `asr` | `fal-ai/whisper` | `llm.media.audio.transcribe(...)` |
 
 ---
@@ -170,7 +170,8 @@ routes and storage backends that the SDK version in the venv may not know about.
 Set `backend = "sdk"` if you would rather track the vendor client.
 
 Both backends are functionally equivalent for submit, poll, result, cancel and
-upload.
+upload, including the per-job webhook URL, and both raise `ProviderError`
+with fal's status (a `422` validation error is non-retryable).
 
 ---
 
@@ -198,6 +199,16 @@ await llm.media.images.generate(
 )
 ```
 
+A few portable arguments are translated for the defaults:
+
+- `size="1024x768"` becomes `image_size={"width": 1024, "height": 768}`; a
+  preset name (`square_hd`, `landscape_4_3`, ...) passes through.
+- `duration_seconds` on a Hailuo endpoint becomes `"6"` or `"10"`.
+- A video request with a `first_frame` goes to Hailuo's image-to-video
+  endpoint, and a sound-effects request without a video goes to
+  `fal-ai/mmaudio-v2/text-to-audio`. This only happens when you have not
+  pinned a model for that capability.
+
 Output shapes vary too, and llmcore's extractor walks the common keys
 (`images`, `image`, `video`, `audio`, `audio_url`, `audio_file`, `text`). A
 model returning something unrecognised yields no artifacts rather than an
@@ -214,6 +225,7 @@ error — the full payload is always kept in `job.provider_metadata["result"]`.
 | `422 Field required` | The model wants a field this capability does not send. Pass it as a keyword argument — it is forwarded verbatim |
 | `400 Invalid storage type` on upload | Should not happen: llmcore tries CDN v3 first, then the older signed-URL flow, because accounts differ in which they offer |
 | Job never leaves `QUEUED` | Concurrency limit for your plan; check the fal dashboard |
+| First request to an endpoint takes ~40 s | Cold start: Kokoro measured 37 s of inference on its first call on 2026-11-16; later calls are fast |
 
 ---
 

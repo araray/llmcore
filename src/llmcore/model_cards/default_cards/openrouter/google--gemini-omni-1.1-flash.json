@@ -1,0 +1,65 @@
+{
+  "model_id": "google/gemini-omni-1.1-flash",
+  "display_name": "Google: Gemini Omni 1.1 Flash",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 131072,
+    "max_output_tokens": 65536
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": true,
+    "reasoning": true,
+    "image_generation": false,
+    "image_edit": false,
+    "image_upscale": false,
+    "video_generation": false,
+    "video_interpolation": false,
+    "speech_synthesis": false,
+    "transcription": false,
+    "music_generation": false,
+    "sfx_generation": false,
+    "voice_design": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 1.5,
+      "output": 9.0
+    }
+  },
+  "lifecycle": {
+    "status": "active",
+    "release_date": "2026-11-04"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Gemini Omni 1.1 Flash is Google's native multimodal video generation and editing model, the generally available successor to Gemini Omni Flash Preview. It is suited for text-to-video, image-to-video, first and...",
+  "tags": [],
+  "source": "generated",
+  "x_pricewatch": {
+    "feed": "openrouter",
+    "method": "api",
+    "url": "https://openrouter.ai/api/v1/models",
+    "matched_key": "openrouter/google/gemini-omni-1.1-flash",
+    "match": "exact key match",
+    "fetched_at": "2026-11-16T09:04:54+00:00",
+    "capabilities": {
+      "feed": "caps:openrouter",
+      "method": "api",
+      "url": "https://openrouter.ai/api/v1/models",
+      "matched_key": "openrouter/google/gemini-omni-1.1-flash",
+      "fetched_at": "2026-11-16T09:06:07+00:00"
+    }
+  }
+}

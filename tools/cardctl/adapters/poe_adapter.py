@@ -7,10 +7,12 @@ model listing mechanism.
 
 Context Length Resolution
 ~~~~~~~~~~~~~~~~~~~~~~~~~
-Poe's ``/v1/models`` endpoint does **not** expose context window sizes.
-We resolve context length through a multi-layer strategy:
+``/v1/models`` now reports ``context_window.context_length`` and
+``max_output_tokens`` (live, 2026-11-16), plus ``reasoning``,
+``parameters``, ``supported_features`` and ``supported_endpoints``. Older
+fallbacks remain for bots without them:
 
-1. API field ``context_length`` (currently absent, future-proofing).
+1. API field ``context_window.context_length`` / ``context_length``.
 2. Parse the model description for ``Context window: Nk`` patterns.
 3. Model family heuristic (maps known model families to upstream limits).
 4. Conservative fallback: 128,000 tokens.
@@ -27,8 +29,6 @@ import httpx
 from .base import BaseAdapter, NormalizedModel
 
 logger = logging.getLogger(__name__)
-
-_POE_MODELS_URL = "https://api.poe.com/v2/bots"
 
 # ---------------------------------------------------------------------------
 # Context length: description parsing
@@ -257,7 +257,7 @@ def _guess_context_length(model_id: str) -> int | None:
 class PoeAdapter(BaseAdapter):
     provider_name = "poe"
     api_key_env_var = "POE_API_KEY"
-    base_url = _POE_MODELS_URL
+    base_url = "https://api.poe.com/v1/models"
 
     async def fetch_models(self) -> list[NormalizedModel]:
         self.check_api_key()
@@ -266,12 +266,9 @@ class PoeAdapter(BaseAdapter):
         headers = {"Authorization": f"Bearer {api_key}"}
         result: list[NormalizedModel] = []
 
-        # Poe also supports OpenAI-compatible /v1/models
-        compat_url = "https://api.poe.com/v1/models"
-
         async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
             try:
-                resp = await client.get(compat_url, headers=headers)
+                resp = await client.get(self.base_url, headers=headers)
                 resp.raise_for_status()
                 data = resp.json()
                 models_list = data.get("data", [])
@@ -294,29 +291,48 @@ class PoeAdapter(BaseAdapter):
 
         description = m.get("description", "") or ""
         architecture = m.get("architecture", {}) or {}
-        input_mods = architecture.get("input_modalities", [])
+        input_mods = architecture.get("input_modalities", []) or []
+        output_mods = architecture.get("output_modalities", []) or []
+        window = m.get("context_window") or {}
+        features = m.get("supported_features") or []
+        endpoints = m.get("supported_endpoints") or []
+
+        # Video/image/audio bots are bots too; type them by what they output.
+        model_type = "chat"
+        if "text" not in output_mods and output_mods:
+            if "video" in output_mods or "/v1/videos" in endpoints:
+                model_type = "video-generation"
+            elif "image" in output_mods:
+                model_type = "image-generation"
+            elif "audio" in output_mods:
+                model_type = "tts"
 
         # Resolve context length: API → description → heuristic
-        context_length = m.get("context_length")
+        context_length = window.get("context_length") or m.get("context_length")
         if not context_length:
             context_length = _parse_context_from_description(description)
         if not context_length:
             context_length = _guess_context_length(model_id)
 
+        created = m.get("created")
+        if isinstance(created, (int, float)) and created > 10**11:
+            created = int(created) // 1000  # Poe reports milliseconds
         normalized = NormalizedModel(
             model_id=model_id,
             provider="poe",
-            display_name=m.get("name") or model_id,
+            display_name=(m.get("metadata") or {}).get("display_name") or m.get("name") or model_id,
             description=description,
-            model_type="chat",
-            context_length=context_length,
+            model_type=model_type,
+            context_length=context_length if model_type == "chat" else None,
+            max_output_tokens=window.get("max_output_tokens"),
             supports_streaming=True,
             supports_vision="image" in input_mods,
             supports_audio_input="audio" in input_mods,
-            supports_tools=True,  # Poe passes tools through
+            supports_tools="tools" in features,
+            supports_reasoning=bool(m.get("reasoning")),
             owned_by=m.get("owned_by"),
             architecture_family=m.get("owned_by"),
-            created_timestamp=m.get("created"),
+            created_timestamp=created,
             raw_api_data=m,
         )
 

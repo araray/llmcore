@@ -1,0 +1,56 @@
+{
+  "model_id": "kimi-k3.1-pro",
+  "display_name": "Kimi K3.1 Pro",
+  "provider": "kimi",
+  "model_type": "chat",
+  "architecture": {
+    "family": "kimi",
+    "architecture_type": "transformer"
+  },
+  "context": {
+    "max_input_tokens": 1048576
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": true,
+    "structured_output": true,
+    "vision": true,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": true,
+    "reasoning": true,
+    "image_generation": false,
+    "image_edit": false,
+    "image_upscale": false,
+    "video_generation": false,
+    "video_interpolation": false,
+    "speech_synthesis": false,
+    "transcription": false,
+    "music_generation": false,
+    "sfx_generation": false,
+    "voice_design": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Kimi model: kimi-k3.1-pro",
+  "tags": [],
+  "source": "generated",
+  "provider_extension": {
+    "supports_video_in": true,
+    "thinking_mode": false,
+    "reasoning_type": "only",
+    "reasoning_efforts": [
+      "low",
+      "high",
+      "max"
+    ],
+    "dynamic_tools": true
+  }
+}

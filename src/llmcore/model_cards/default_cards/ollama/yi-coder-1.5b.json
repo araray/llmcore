@@ -1,6 +1,6 @@
 {
   "model_id": "yi-coder:1.5b",
-  "display_name": "YI Coder:1.5b",
+  "display_name": "Yi Coder 1.5B",
   "provider": "ollama",
   "model_type": "chat",
   "architecture": {
@@ -9,7 +9,8 @@
     "architecture_type": "dense"
   },
   "context": {
-    "max_input_tokens": 131072
+    "max_input_tokens": 131072,
+    "max_output_tokens": 4096
   },
   "capabilities": {
     "streaming": true,
@@ -20,21 +21,23 @@
     "vision": false,
     "audio_input": false,
     "audio_output": false,
-    "video_input": false,
     "reasoning": false
   },
   "pricing": null,
   "lifecycle": {
     "status": "active"
   },
-  "license": null,
+  "license": "apache-2.0",
   "open_weights": true,
   "aliases": [],
-  "description": "Ollama model: yi-coder:1.5b",
+  "description": "01.AI Yi Coder 1.5B — compact code model.",
   "tags": [
-    "local",
     "open-source",
+    "local",
+    "code",
+    "01ai",
+    "compact",
     "quant:Q4_0"
   ],
-  "source": "generated"
+  "source": "builtin"
 }

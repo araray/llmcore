@@ -1,0 +1,66 @@
+{
+  "model_id": "motif-technologies/motif-3",
+  "display_name": "Motif Technologies: Motif 3",
+  "provider": "openrouter",
+  "model_type": "chat",
+  "architecture": null,
+  "context": {
+    "max_input_tokens": 262144,
+    "max_output_tokens": 235929
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": true,
+    "structured_output": true,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": true,
+    "image_generation": false,
+    "image_edit": false,
+    "image_upscale": false,
+    "video_generation": false,
+    "video_interpolation": false,
+    "speech_synthesis": false,
+    "transcription": false,
+    "music_generation": false,
+    "sfx_generation": false,
+    "voice_design": false
+  },
+  "pricing": {
+    "currency": "USD",
+    "per_million_tokens": {
+      "input": 0.3,
+      "output": 1.2,
+      "cached_input": 0.06
+    }
+  },
+  "lifecycle": {
+    "status": "active",
+    "release_date": "2026-11-02"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Motif 3 is a Mixture-of-Experts language model from Motif Technologies, with 314B total and 13.2B active parameters. It is a general-purpose multilingual model for English and Korean, particularly strong at...",
+  "tags": [],
+  "source": "generated",
+  "x_pricewatch": {
+    "feed": "openrouter",
+    "method": "api",
+    "url": "https://openrouter.ai/api/v1/models",
+    "matched_key": "openrouter/motif-technologies/motif-3",
+    "match": "exact key match",
+    "fetched_at": "2026-11-16T09:04:54+00:00",
+    "capabilities": {
+      "feed": "caps:openrouter",
+      "method": "api",
+      "url": "https://openrouter.ai/api/v1/models",
+      "matched_key": "openrouter/motif-technologies/motif-3",
+      "fetched_at": "2026-11-16T09:06:07+00:00"
+    }
+  }
+}

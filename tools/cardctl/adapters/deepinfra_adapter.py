@@ -63,6 +63,52 @@ def _has_feature(features: list[str], *needles: str) -> bool:
     return any(needle in feat for feat in lowered for needle in needles)
 
 
+def _flatten_v24(m: dict[str, Any]) -> dict[str, Any]:
+    """A schema-2.4 entry in the flat shape :meth:`_parse_model` reads.
+
+    Since schema 2.4 (live 2026-11-16) modalities are objects: the context
+    window sits in ``input_modalities[text].supported_inputs.max_context_length``,
+    the parameters (``tools``, ``structured_outputs``, ``reasoning``, ...) and
+    the max output in ``output_modalities[text]``, and prices are per-modality
+    lists. Read flat, every model came out with no context, no tools, no
+    reasoning and no price. Flat (pre-2.4) entries pass through unchanged.
+    """
+    inputs = m.get("input_modalities") or []
+    outputs = m.get("output_modalities") or []
+    if not any(isinstance(x, dict) for x in [*inputs, *outputs]):
+        return m
+    flat = dict(m)
+    flat["input_modalities"] = [x.get("type") if isinstance(x, dict) else x for x in inputs]
+    flat["output_modalities"] = [x.get("type") if isinstance(x, dict) else x for x in outputs]
+    pricing: dict[str, Any] = {}
+    features: list[str] = []
+    for modality in inputs:
+        if not isinstance(modality, dict):
+            continue
+        window = ((modality.get("supported_inputs") or {}).get("max_context_length") or {}).get("value")
+        if modality.get("type") == "text" and window:
+            flat.setdefault("context_length", int(window))
+        for price in modality.get("pricing") or []:
+            kind = {"prompt": "prompt", "cached_prompt": "input_cache_read"}.get(price.get("type"))
+            if kind and modality.get("type") == "text":
+                pricing.setdefault(kind, price.get("cost_usd"))
+    for modality in outputs:
+        if not isinstance(modality, dict):
+            continue
+        params = modality.get("supported_parameters") or {}
+        features.extend(name for name, spec in params.items() if spec)
+        if modality.get("type") == "text":
+            if (modality.get("max_length") or {}).get("value"):
+                flat.setdefault("max_output_length", int(modality["max_length"]["value"]))
+            for price in modality.get("pricing") or []:
+                if price.get("type") == "completion":
+                    pricing.setdefault("completion", price.get("cost_usd"))
+    flat["supported_features"] = list(dict.fromkeys([*(m.get("supported_features") or []), *features]))
+    if pricing and not isinstance(m.get("pricing"), dict):
+        flat["pricing"] = pricing
+    return flat
+
+
 class DeepInfraAdapter(BaseAdapter):
     """Adapter that discovers DeepInfra models via ``/openrouter/models``."""
 
@@ -106,7 +152,13 @@ class DeepInfraAdapter(BaseAdapter):
             data = resp.json()
 
         result: list[NormalizedModel] = []
+        seen: set[str] = set()
         for m in data.get("data", []):
+            # The feed repeats models (519 rows, 352 ids on 2026-11-16):
+            # one card per id, from its first row.
+            if m.get("id") in seen:
+                continue
+            seen.add(m.get("id"))
             normalized = self._parse_model(m)
             if normalized:
                 result.append(normalized)
@@ -126,6 +178,7 @@ class DeepInfraAdapter(BaseAdapter):
         model_id = m.get("id", "")
         if not model_id:
             return None
+        m = _flatten_v24(m)
 
         input_mods = [str(x).lower() for x in (m.get("input_modalities") or [])]
         output_mods = [str(x).lower() for x in (m.get("output_modalities") or [])]
@@ -137,7 +190,8 @@ class DeepInfraAdapter(BaseAdapter):
         supports_audio_input = "audio" in input_mods
         supports_video_input = "video" in input_mods
         supports_audio_output = "audio" in output_mods
-        supports_tools = _has_feature(features, "tool", "function")
+        # "tool_choice" alone does not mean tools (2.4 lists it as "unknown").
+        supports_tools = "tools" in features or _has_feature(features, "function")
         supports_json = _has_feature(features, "json", "response_format")
         supports_structured = _has_feature(features, "structured", "json_schema", "response_format")
         supports_reasoning = _has_feature(features, "reasoning", "thinking")

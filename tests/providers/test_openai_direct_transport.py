@@ -143,8 +143,23 @@ class TestDirectRequests:
         assert body["model"] == "gpt-4o-mini"
         assert body["messages"] == [{"role": "user", "content": "hello"}]
         assert body["stream"] is False
-        assert body["temperature"] == 0.5 and body["max_tokens"] == 64
+        # OpenAI deprecated max_tokens and the GPT-5+/o-series reject it, so
+        # against OpenAI itself it goes out as max_completion_tokens.
+        assert body["temperature"] == 0.5 and body["max_completion_tokens"] == 64
+        assert "max_tokens" not in body
         assert route.calls[0].request.headers["authorization"] == "Bearer sk-test"
+        await p.close()
+
+    @respx.mock
+    async def test_compatible_endpoints_keep_max_tokens(self):
+        """The rename is for OpenAI itself; compatible servers may not know
+        max_completion_tokens."""
+        route = respx.post("https://compat.example/v1/chat/completions").mock(
+            return_value=httpx.Response(200, json=_completion())
+        )
+        p = _direct(base_url="https://compat.example/v1")
+        await p.chat_completion(CTX, model="gpt-4o-mini", max_tokens=64)
+        assert json.loads(route.calls[0].request.content)["max_tokens"] == 64
         await p.close()
 
     @respx.mock
@@ -171,7 +186,7 @@ class TestDirectRequests:
         route = respx.post(f"{BASE_URL}/chat/completions").mock(
             return_value=httpx.Response(200, json=_completion())
         )
-        p = _direct(default_model="o1-mini")
+        p = _direct(default_model="o1-mini", responses_api="never")
         await p.chat_completion(CTX, model="o1-mini", max_completion_tokens=100)
         body = json.loads(route.calls[0].request.content)
         assert body["max_completion_tokens"] == 100
@@ -180,15 +195,19 @@ class TestDirectRequests:
 
     @respx.mock
     async def test_unsupported_parameters_are_rejected_before_any_request(self):
-        """Validation is shared, so the direct transport rejects the same
-        parameters the SDK path does — and sends nothing."""
-        route = respx.post(f"{BASE_URL}/chat/completions").mock(
+        """Validation runs before routing, so neither route sends anything for
+        a parameter the provider does not know."""
+        chat = respx.post(f"{BASE_URL}/chat/completions").mock(
             return_value=httpx.Response(200, json=_completion())
         )
+        responses = respx.post(f"{BASE_URL}/responses").mock(
+            return_value=httpx.Response(200, json={})
+        )
         p = _direct(default_model="o1-mini")
-        with pytest.raises(ValueError, match="Unsupported parameter"):
-            await p.chat_completion(CTX, model="o1-mini", max_tokens=100)
-        assert route.call_count == 0
+        for model in ("o1-mini", "gpt-4o-mini"):  # Responses- and Chat-routed
+            with pytest.raises(ValueError, match="Unsupported parameter"):
+                await p.chat_completion(CTX, model=model, bogus_param=1)
+        assert chat.call_count == 0 and responses.call_count == 0
         await p.close()
 
     @respx.mock
@@ -273,8 +292,10 @@ class TestDirectStreaming:
             return_value=httpx.Response(401, text="bad key")
         )
         p = _direct()
-        gen = await p.chat_completion(CTX, model="gpt-4o-mini", stream=True)
+        # The stream is primed, so the failure surfaces at the call itself:
+        # before any chunk, where routing can still fail over.
         with pytest.raises(ProviderError, match="API Error"):
+            gen = await p.chat_completion(CTX, model="gpt-4o-mini", stream=True)
             [c async for c in gen]
         await p.close()
 
@@ -483,4 +504,5 @@ class TestSubclassInheritance:
             {"api_key": "k", "_instance_name": "openrouter",
              "app_url": "https://ex.com", "app_title": "llmcore", "transport": "httpx"}
         )
-        assert p._direct_headers == {"HTTP-Referer": "https://ex.com", "X-Title": "llmcore"}
+        assert p._direct_headers == {"HTTP-Referer": "https://ex.com", "X-Title": "llmcore",
+                                     "X-OpenRouter-Title": "llmcore"}

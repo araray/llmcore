@@ -1,12 +1,15 @@
 {
   "model_id": "openai/whisper-large-v3-turbo",
-  "display_name": "whisper-large-v3-turbo",
+  "display_name": "Whisper Large v3 Turbo",
   "provider": "huggingface",
   "model_type": "stt",
   "architecture": {
-    "family": "whisper"
+    "family": "whisper",
+    "architecture_type": "encoder-decoder"
   },
-  "context": null,
+  "context": {
+    "max_input_tokens": 448
+  },
   "capabilities": {
     "streaming": false,
     "function_calling": false,
@@ -16,31 +19,16 @@
     "vision": false,
     "audio_input": true,
     "audio_output": false,
-    "video_input": false,
-    "reasoning": false,
-    "image_generation": false,
-    "image_edit": false,
-    "image_upscale": false,
-    "video_generation": false,
-    "video_interpolation": false,
-    "speech_synthesis": false,
-    "transcription": false,
-    "music_generation": false,
-    "sfx_generation": false,
-    "voice_design": false
+    "reasoning": false
   },
-  "pricing": null,
   "lifecycle": {
+    "release_date": "2024-10-01",
     "status": "active"
   },
-  "license": null,
+  "license": "apache-2.0",
   "open_weights": true,
   "aliases": [],
-  "description": "Huggingface model: openai/whisper-large-v3-turbo",
-  "tags": [
-    "open-weights",
-    "audio",
-    "stt"
-  ],
-  "source": "generated"
+  "description": "Whisper Large v3 Turbo: fast, accurate multilingual automatic speech recognition.",
+  "tags": ["open-weights", "stt", "asr", "multilingual"],
+  "source": "builtin"
 }

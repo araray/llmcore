@@ -1,0 +1,48 @@
+{
+  "model_id": "gemini-3.5-live-translate-preview",
+  "display_name": "Gemini 3.5 Live Translate Preview",
+  "provider": "google",
+  "model_type": "multimodal",
+  "architecture": {
+    "family": "gemini",
+    "architecture_type": "transformer"
+  },
+  "context": {
+    "max_input_tokens": 16384,
+    "max_output_tokens": 32768
+  },
+  "capabilities": {
+    "streaming": true,
+    "function_calling": false,
+    "tool_use": false,
+    "json_mode": false,
+    "structured_output": false,
+    "vision": false,
+    "audio_input": false,
+    "audio_output": false,
+    "video_input": false,
+    "reasoning": false,
+    "image_generation": false,
+    "image_edit": false,
+    "image_upscale": false,
+    "video_generation": false,
+    "video_interpolation": false,
+    "speech_synthesis": false,
+    "transcription": false,
+    "music_generation": false,
+    "sfx_generation": false,
+    "voice_design": false
+  },
+  "pricing": null,
+  "lifecycle": {
+    "status": "active"
+  },
+  "license": null,
+  "open_weights": false,
+  "aliases": [],
+  "description": "Gemini 3.5 Live Translate Preview",
+  "tags": [
+    "live"
+  ],
+  "source": "generated"
+}

@@ -142,8 +142,10 @@ class TestIsMistralReasoningModel:
     def test_non_magistral_is_not_reasoning(self):
         from llmcore.providers.mistral_provider import _is_mistral_reasoning_model
 
-        assert _is_mistral_reasoning_model("mistral-large-latest") is False
-        assert _is_mistral_reasoning_model("mistral-small-2506") is False
+        # Mistral Small 4 / Medium 3.5 reason now (live /v1/models, 2026-11-16);
+        # code and ministral models do not.
+        assert _is_mistral_reasoning_model("mistral-small-2603") is True
+        assert _is_mistral_reasoning_model("ministral-8b-latest") is False
         assert _is_mistral_reasoning_model("codestral-latest") is False
         assert _is_mistral_reasoning_model("devstral-2-latest") is False
 
@@ -212,8 +214,8 @@ class TestContextLengthResolution:
             side_effect=Exception("no registry"),
         ):
             assert provider.get_max_context_length("mistral-large-latest") == 262144
-            assert provider.get_max_context_length("mistral-small-latest") == 131072
-            assert provider.get_max_context_length("voxtral-mini-latest") == 32768
+            assert provider.get_max_context_length("mistral-small-latest") == 262144
+            assert provider.get_max_context_length("voxtral-mini-latest") == 16384
             assert provider.get_max_context_length("mistral-embed") == 8192
 
     def test_prefix_heuristic(self):
@@ -333,19 +335,20 @@ class TestSupportedParameters:
 
     def test_standard_model_params(self):
         provider = _make_provider()
-        params = provider.get_supported_parameters("mistral-large-latest")
+        params = provider.get_supported_parameters("ministral-8b-latest")
         assert "temperature" in params
         assert "random_seed" in params
         assert "safe_prompt" in params
         assert "parallel_tool_calls" in params
-        assert "reasoning_effort" not in params
+        assert "prompt_mode" not in params  # reasoning models only
 
     def test_reasoning_model_params(self):
         provider = _make_provider()
         params = provider.get_supported_parameters("magistral-medium-latest")
         assert "reasoning_effort" in params
         assert "prompt_mode" in params
-        assert params["reasoning_effort"]["enum"] == ["low", "medium", "high"]
+        # Values differ per model; effort= maps onto the accepted ones.
+        assert "effort" in params
 
 
 # ===============================================================

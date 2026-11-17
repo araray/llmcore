@@ -10,8 +10,8 @@
     "architecture_type": "moe"
   },
   "context": {
-    "max_input_tokens": 1000000,
-    "max_output_tokens": 65536,
+    "max_input_tokens": 1048576,
+    "max_output_tokens": 393216,
     "default_output_tokens": 8192
   },
   "capabilities": {

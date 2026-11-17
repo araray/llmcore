@@ -82,8 +82,9 @@ class TestConfyParameterNames:
 
         # WRONG (old bug): config_file_path= — silently ignored
         cfg_wrong = Config(defaults=defaults, config_file_path=user_config)
-        # The file is NOT loaded, so the default "llama3" remains
-        assert cfg_wrong.get("providers.ollama.default_model") == "llama3"
+        # The file is NOT loaded, so the packaged default remains
+        expected = defaults["providers"]["ollama"]["default_model"]
+        assert cfg_wrong.get("providers.ollama.default_model") == expected
 
     def test_overrides_dict_is_used_not_overrides(self, tmp_path):
         """Override dict values must override everything when overrides_dict is correct."""
@@ -218,7 +219,9 @@ class TestConfigFileMerging:
         # Ollama model overridden
         assert cfg.get("providers.ollama.default_model") == "custom-model"
         # OpenAI model kept from defaults
-        assert cfg.get("providers.openai.default_model") == "gpt-4o"
+        # The packaged default, whatever it currently is.
+        expected = defaults["providers"]["openai"]["default_model"]
+        assert cfg.get("providers.openai.default_model") == expected
 
     def test_override_dict_takes_highest_precedence(self, tmp_path):
         """overrides_dict must beat both defaults and config file."""

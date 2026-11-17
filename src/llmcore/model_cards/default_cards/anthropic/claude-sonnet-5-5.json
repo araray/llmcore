@@ -13,15 +13,15 @@
   },
   "capabilities": {
     "streaming": true,
-    "function_calling": false,
-    "tool_use": false,
-    "json_mode": false,
-    "structured_output": false,
-    "vision": false,
+    "function_calling": true,
+    "tool_use": true,
+    "json_mode": true,
+    "structured_output": true,
+    "vision": true,
     "audio_input": false,
     "audio_output": false,
     "video_input": false,
-    "reasoning": false,
+    "reasoning": true,
     "image_generation": false,
     "image_edit": false,
     "image_upscale": false,
@@ -56,7 +56,25 @@
   "provider_anthropic": {
     "batch_api": true,
     "citations": true,
-    "pdf_input": true
+    "pdf_input": true,
+    "thinking_types": [
+      "adaptive",
+      "between_tools"
+    ],
+    "effort_levels": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+    ],
+    "code_execution": true,
+    "context_management": true,
+    "server_tools": [
+      "code_execution",
+      "web_search"
+    ],
+    "lifecycle": "active"
   },
   "x_pricewatch": {
     "feed": "scrape:anthropic",

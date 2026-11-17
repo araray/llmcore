@@ -6,9 +6,7 @@
   "architecture": {
     "parameter_count": "3B"
   },
-  "context": {
-    "max_input_tokens": 131072
-  },
+  "context": null,
   "capabilities": {
     "streaming": false,
     "function_calling": false,
@@ -34,12 +32,5 @@
     "audio",
     "tts"
   ],
-  "source": "generated",
-  "x_pricewatch": {
-    "feed": "specs:huggingface",
-    "method": "api",
-    "url": "https://huggingface.co/<repo>/config.json",
-    "matched_key": "canopylabs/orpheus-3b-0.1-pretrained",
-    "fetched_at": "2026-10-12T01:52:17+00:00"
-  }
+  "source": "generated"
 }

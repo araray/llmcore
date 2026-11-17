@@ -20,9 +20,6 @@ All tests use mocking — no live API calls.
 
 from __future__ import annotations
 
-import os
-import sys
-from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -45,7 +42,7 @@ import pytest
 # ``OpenAIProvider`` in this repo. If either becomes optional again, a
 # cleaner approach is a conftest fixture that runs before collection.
 from llmcore.exceptions import ConfigError, ProviderError
-from llmcore.models import Message, ModelDetails, Tool
+from llmcore.models import Message, Tool
 from llmcore.models import Role as LLMCoreRole
 from llmcore.providers.vllm_provider import (
     _OPENAI_ONLY_KEYS,
@@ -364,12 +361,11 @@ def _patch_httpx_client(async_client_mock: MagicMock):
     ``MagicMock`` by default does this, but its ``return_value`` would
     need to be the CM. Using a small factory keeps the intent explicit.
     """
-    cm = _AsyncClientCM(async_client_mock)
-    factory = MagicMock(return_value=cm)
-    return patch(
-        "llmcore.providers.vllm_provider.httpx.AsyncClient",
-        factory,
-    )
+    # Discovery goes through the provider's shared direct client now (so it
+    # carries default_headers, e.g. a tunnel's Basic auth).
+    from llmcore.providers.vllm_provider import VLLMProvider
+
+    return patch.object(VLLMProvider, "_get_http", return_value=async_client_mock)
 
 
 class TestGetModelsDetails:
@@ -449,7 +445,6 @@ class TestGetModelsDetails:
 
     @pytest.mark.asyncio
     async def test_http_status_error_wraps_as_provider_error(self, provider_no_init):
-        from llmcore.exceptions import ProviderError
 
         mock_client = MagicMock()
         mock_client.get = AsyncMock(return_value=_mock_httpx_response({}, status_code=500))
@@ -462,7 +457,6 @@ class TestGetModelsDetails:
     async def test_transport_error_wraps_as_provider_error(self, provider_no_init):
         import httpx
 
-        from llmcore.exceptions import ProviderError
 
         mock_client = MagicMock()
         mock_client.get = AsyncMock(side_effect=httpx.ConnectError("connection refused"))
@@ -472,8 +466,9 @@ class TestGetModelsDetails:
                 await provider_no_init.get_models_details()
 
     @pytest.mark.asyncio
-    async def test_authorization_header_set_when_api_key_real(self, provider_no_init):
-        provider_no_init.api_key = "sk-real-token"
+    async def test_discovery_uses_the_shared_client(self, provider_no_init):
+        # Headers live on the provider's direct client (bearer token and any
+        # default_headers such as a tunnel's Basic auth), not per call.
         payload = {"data": []}
         mock_client = MagicMock()
         mock_client.get = AsyncMock(return_value=_mock_httpx_response(payload))
@@ -481,21 +476,15 @@ class TestGetModelsDetails:
         with _patch_httpx_client(mock_client):
             await provider_no_init.get_models_details()
 
-        call_kwargs = mock_client.get.await_args.kwargs
-        assert call_kwargs["headers"]["Authorization"] == "Bearer sk-real-token"
+        assert mock_client.get.await_args.args == ("/models",)
 
-    @pytest.mark.asyncio
-    async def test_authorization_header_omitted_when_empty(self, provider_no_init):
-        assert provider_no_init.api_key == "EMPTY"
-        payload = {"data": []}
-        mock_client = MagicMock()
-        mock_client.get = AsyncMock(return_value=_mock_httpx_response(payload))
+    def test_default_headers_reach_discovery(self):
+        from llmcore.providers.vllm_provider import VLLMProvider
 
-        with _patch_httpx_client(mock_client):
-            await provider_no_init.get_models_details()
-
-        call_kwargs = mock_client.get.await_args.kwargs
-        assert "Authorization" not in call_kwargs["headers"]
+        p = VLLMProvider({"base_url": "http://tunnel:8000/v1", "api_key": "sk-real",
+                          "default_headers": {"Authorization": "Basic dXNlcjpwdw=="}})
+        headers = p._get_http().headers
+        assert headers["Authorization"] == "Basic dXNlcjpwdw=="
 
     @pytest.mark.asyncio
     async def test_empty_data_list(self, provider_no_init):
@@ -684,7 +673,6 @@ class TestChatCompletionRepackaging:
 
     @pytest.mark.asyncio
     async def test_tools_and_tool_choice_pass_through_cleanly(self, provider_no_init):
-        from llmcore.models import Tool
 
         parent_mock = AsyncMock(return_value={"choices": []})
         messages = [Message(role=LLMCoreRole.USER, content="hi")]
@@ -777,3 +765,27 @@ class TestManagerRegistration:
         from llmcore.providers.manager import _OPENAI_COMPATIBLE_DEFAULTS
 
         assert "vllm" not in _OPENAI_COMPATIBLE_DEFAULTS
+
+
+class TestGuidedTranslation:
+    """vLLM removed guided_* in v0.12; sent as-is they were ignored (200)."""
+
+    @pytest.mark.asyncio
+    async def test_guided_fields_become_structured_outputs(self, provider_no_init):
+        parent_mock = AsyncMock(return_value={"choices": []})
+        with patch("llmcore.providers.vllm_provider.OpenAIProvider.chat_completion", new=parent_mock):
+            await provider_no_init.chat_completion(
+                [Message(role=LLMCoreRole.USER, content="pick")],
+                guided_choice=["a", "b"], guided_decoding_backend="xgrammar",
+            )
+        extra = parent_mock.await_args.kwargs["extra_body"]
+        assert extra == {"structured_outputs": {"choice": ["a", "b"]}}
+
+    @pytest.mark.asyncio
+    async def test_embeddings_default_to_the_served_model(self, provider_no_init):
+        provider_no_init.config = {}
+        provider_no_init.default_model = "Qwen/Qwen3-Embedding-0.6B"
+        with patch("llmcore.providers.vllm_provider.OpenAIProvider.create_embeddings",
+                   new=AsyncMock(return_value={"data": []})) as parent:
+            await provider_no_init.create_embeddings(["x"])
+        assert parent.await_args.kwargs["model"] == "Qwen/Qwen3-Embedding-0.6B"

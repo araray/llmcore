@@ -63,42 +63,45 @@ dependencies = [
 # `openai`. httpx2 also verifies TLS against the OS trust store rather than
 # certifi; see docs/CONFIG_REFERENCE.md if you deploy into minimal containers
 # or behind a TLS-inspecting proxy.
-openai = ["openai>=3.0.0,<4"]
-anthropic = ["anthropic>=1,<2"]
-gemini = ["google-genai>=2,<3", "google-api-core>=2.30.0"]
+openai = ["openai>=3.38,<4"]
+anthropic = ["anthropic>=2.8,<3"]
+# google-genai 3.x installs httpx2 only; the direct transport needs httpx.
+# google-api-core is no longer needed (google-genai raises its own errors).
+gemini = ["google-genai>=3.3,<4", "httpx>=0.27.0"]
 ollama = ["ollama>=0.6.3"]
 # DeepInfra reuses the OpenAI SDK (OpenAI-compatible API) plus httpx for the
 # native audio (/v1/audio/*) and model-discovery (/v1/models) endpoints.
-deepinfra = ["openai>=3.0.0,<4", "httpx>=0.27.0"]
-# Mistral: the provider talks to the REST API over httpx directly (no vendor
-# SDK today — `mistralai` v3.x is a candidate second backend, see
-# the provider modernization plan).
-mistral = ["httpx>=0.27.0", "mistralai>=3.0.0"]
+deepinfra = ["openai>=3.38,<4", "httpx>=0.27.0"]
+# Mistral: direct REST over httpx by default; `mistralai` 3.x is the optional
+# second transport (backend = "sdk") for chat, models and embeddings.
+mistral = ["httpx>=0.27.0", "mistralai>=3.7,<4"]
 # Kimi (Moonshot AI): OpenAI-compatible chat plus httpx for the Moonshot-only
 # REST endpoints (token estimate, balance, file upload) and tiktoken for the
 # local token-count fallback. Moonshot publishes no Python SDK.
-kimi = ["openai>=3.0.0,<4", "httpx>=0.27.0", "tiktoken>=0.9.0"]
-# Poe: OpenAI-compatible gateway plus httpx; `fastapi-poe` enables the optional
-# native SSE backend (backend = "native").
-poe = ["openai>=3.0.0,<4", "httpx>=0.27.0"]
-# OpenRouter: OpenAI-compatible gateway plus httpx; the `openrouter` SDK
-# enables the optional native backend (backend = "sdk").
-openrouter = ["openai>=3.0.0,<4", "httpx>=0.27.0"]
+kimi = ["openai>=3.38,<4", "httpx>=0.27.0", "tiktoken>=0.9.0"]
+# Poe: OpenAI-compatible gateway plus httpx; the official `fastapi-poe` client
+# backs the optional native SSE backend (backend = "native").
+poe = ["openai>=3.38,<4", "httpx>=0.27.0", "fastapi-poe>=0.0.83"]
+# OpenRouter: OpenAI-compatible gateway plus httpx; the official `openrouter`
+# SDK (1.x) backs the optional native backend (backend = "sdk").
+openrouter = ["openai>=3.38,<4", "httpx>=0.27.0", "openrouter>=1.3,<2"]
 # vLLM (self-hosted server): OpenAI-compatible surface plus httpx for
 # /v1/models discovery of max_model_len. The `vllm` server itself is not a
 # client dependency.
-vllm = ["openai>=3.0.0,<4", "httpx>=0.27.0"]
+vllm = ["openai>=3.38,<4", "httpx>=0.27.0"]
 # Hugging Face Inference API / Inference Providers routing.
-huggingface = ["huggingface-hub>=1.12.0"]
+# huggingface-hub 2.x moved to httpx2; 2.4 adds the router policies.
+huggingface = ["huggingface-hub>=2.4,<3"]
 # Deepgram is a real-time voice/audio provider.  The official deepgram-sdk is
 # WebSocket-native and pulls in the `websockets` library for streaming STT/TTS
 # and the Voice Agent.  Install with: pip install llmcore[deepgram]
-deepgram = ["deepgram-sdk>=7.11.0", "websockets>=12.0"]
+# deepgram-sdk 7.18 stopped retrying httpx RemoteProtocolError by default.
+deepgram = ["deepgram-sdk>=7.19,<8", "websockets>=12.0"]
 # Z.ai (Zhipu AI / GLM). The provider prefers the official 'zai-sdk' (SDK
 # backend, default), and falls back to the 'openai' SDK (OpenAI-compatibility
 # mode) and/or direct 'httpx' calls (native media endpoints: image/audio/OCR/
 # video generation, web search). Install with: pip install llmcore[zai]
-zai = ["zai-sdk>=0.2.3", "openai>=3.0.0,<4", "httpx>=0.27.0"]
+zai = ["zai-sdk>=0.2.3", "openai>=3.38,<4", "httpx>=0.27.0"]
 # FriendliAI (Model APIs / Dedicated Endpoints / Container). The provider
 # prefers direct transports — the 'openai' SDK in OpenAI-compatibility mode
 # (default) or raw 'httpx' — because the official 'friendli' SDK's generated
@@ -107,7 +110,9 @@ zai = ["zai-sdk>=0.2.3", "openai>=3.0.0,<4", "httpx>=0.27.0"]
 # Install with: pip install llmcore[friendli]
 # NOTE: the friendli-python repo's pyproject reads 0.15.2 but the newest
 # release on PyPI is 0.15.1 — keep the pin at what is installable.
-friendli = ["openai>=3.0.0,<4", "httpx>=0.27.0", "friendli>=0.15.1"]
+# friendli 0.16 removed chat.stream (streaming is complete(stream=True)); the
+# SDK is pre-1.0 and breaks across minors, so pin the minor.
+friendli = ["openai>=3.38,<4", "httpx>=0.27.0", "friendli>=0.16.6,<0.17"]
 # fal.ai — generative-media marketplace (image/video/audio) behind one durable
 # queue. The provider talks to queue.fal.run over httpx directly (default); the
 # official 'fal-client' SDK is an optional second backend (backend = "sdk").
@@ -117,7 +122,8 @@ fal = ["httpx>=0.27.0", "fal-client>=1.0.0"]
 # The provider talks to api.elevenlabs.io over httpx directly (default); the
 # official 'elevenlabs' SDK is an optional second backend (backend = "sdk").
 # Install with: pip install llmcore[elevenlabs]
-elevenlabs = ["httpx>=0.27.0", "elevenlabs>=2.70.0"]
+# websockets: realtime Scribe (asr_stream) over the direct WebSocket.
+elevenlabs = ["httpx>=0.27.0", "elevenlabs>=2.78,<3", "websockets>=13"]
 # Replicate — one generic prediction adapter for the whole catalog, driven by
 # each model's published OpenAPI schema rather than a class per model.
 # Install with: pip install llmcore[replicate]
@@ -132,11 +138,12 @@ higgsfield = ["httpx>=0.27.0", "higgsfield-client>=0.2.0"]
 # calibrated probabilities). NOT a chat API. The provider talks to the two REST
 # endpoints (/v1/systemone, /v1/models) directly over httpx — no vendor SDK is
 # required. Install with: pip install llmcore[typesafe]
-typesafe = ["httpx>=0.27.0", "typesafe-sdk>=0.7.2"]
+# typesafe-sdk 0.7.5: Box, image assets; request bodies zstd-compressed by default.
+typesafe = ["httpx>=0.27.0", "typesafe-sdk>=0.7.5,<0.8"]
 # Command Code: a multi-protocol gateway. Claude goes over the Anthropic wire,
 # the other chat models over the OpenAI wire, and Jev over System One (httpx).
 # Direct HTTP is the default; the OpenAI / Anthropic SDKs are the "sdk" transport.
-commandcode = ["openai>=3.0.0,<4", "anthropic>=1,<2", "httpx>=0.27.0", "tiktoken>=0.9.0"]
+commandcode = ["openai>=3.38,<4", "anthropic>=2.8,<3", "httpx>=0.27.0", "tiktoken>=0.9.0"]
 
 # ----------------------------------------------------------------------------
 # Search providers (web / data search — optional, parallel to LLM providers)

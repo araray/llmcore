@@ -1,8 +1,8 @@
 {
   "model_id": "qwen3-embedding:8b",
-  "display_name": "Qwen3 Embedding:8b",
+  "display_name": "Qwen 3 Embedding 8B",
   "provider": "ollama",
-  "model_type": "chat",
+  "model_type": "embedding",
   "architecture": {
     "family": "qwen3",
     "parameter_count": "7.6B",
@@ -12,29 +12,36 @@
     "max_input_tokens": 40960
   },
   "capabilities": {
-    "streaming": true,
-    "function_calling": true,
-    "tool_use": true,
-    "json_mode": false,
-    "structured_output": false,
-    "vision": false,
-    "audio_input": false,
-    "audio_output": false,
-    "video_input": false,
-    "reasoning": false
+    "streaming": false
   },
   "pricing": null,
   "lifecycle": {
     "status": "active"
   },
-  "license": null,
+  "license": "apache-2.0",
   "open_weights": true,
   "aliases": [],
-  "description": "Ollama model: qwen3-embedding:8b",
+  "description": "Alibaba Qwen 3 Embedding 8B — high-quality multilingual embedding model.",
   "tags": [
-    "local",
     "open-source",
+    "local",
+    "embedding",
+    "alibaba",
     "quant:Q4_K_M"
   ],
-  "source": "generated"
+  "source": "builtin",
+  "embedding_config": {
+    "dimensions_default": 4096,
+    "supports_matryoshka": true,
+    "similarity_metrics": [
+      "cosine",
+      "dot_product"
+    ],
+    "task_types": [
+      "retrieval_query",
+      "retrieval_document",
+      "classification",
+      "clustering"
+    ]
+  }
 }

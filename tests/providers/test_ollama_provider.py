@@ -20,10 +20,9 @@ All tests use mocking — no live Ollama server required.
 """
 
 import asyncio
-import json
 from types import SimpleNamespace
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -83,7 +82,7 @@ def ollama_provider_with_keep_alive():
 # ---------------------------------------------------------------------------
 
 
-def _make_message(role: str, content: str, **metadata_kw) -> "Message":
+def _make_message(role: str, content: str, **metadata_kw):
     """Create an llmcore Message for testing."""
     from llmcore.models import Message, Role
 
@@ -773,13 +772,13 @@ class TestContextLength:
     """Context length resolution chain tests (extends existing test file)."""
 
     def test_hardcoded_model(self, ollama_provider):
-        assert ollama_provider.get_max_context_length("llama3") == 8000
+        assert ollama_provider.get_max_context_length("llama3") == 8192
 
     def test_hardcoded_model_with_tag(self, ollama_provider):
-        assert ollama_provider.get_max_context_length("qwen3:4b") == 262144
+        assert ollama_provider.get_max_context_length("qwen3:4b") == 262144  # its card
 
     def test_base_name_fallback(self, ollama_provider):
-        assert ollama_provider.get_max_context_length("gemma3:4b") == 128000
+        assert ollama_provider.get_max_context_length("gemma3:4b") == 131072
 
     def test_new_models_in_dict(self, ollama_provider):
         """deepseek-r1 and phi4 added to token limits."""

@@ -103,6 +103,19 @@ class BaseProvider(abc.ABC):
         """
         pass
 
+    def assistant_replay_metadata(self, response: dict[str, Any]) -> dict[str, Any]:
+        """Metadata to attach to the next assistant ``Message`` built from ``response``.
+
+        Several providers need more than the text and tool calls to continue a
+        tool loop correctly. Anthropic needs its thinking blocks with their
+        signatures, OpenAI's Responses API its encrypted reasoning items, and
+        DeepSeek/Kimi their ``reasoning_content``. Put what this returns into
+        that assistant message's ``metadata`` and the provider replays the turn
+        faithfully on the next request. The default is ``{}``: nothing beyond
+        text and tool calls is needed.
+        """
+        return {}
+
     async def warm_up(self) -> None:
         """Optionally prepare provider resources before the first real request.
 
@@ -591,3 +604,26 @@ class BaseProvider(abc.ABC):
                             "llm.success": error is None,
                         },
                     )
+
+
+def carry_replay_to_tail(chunk: dict[str, Any], state: dict[str, Any]) -> None:
+    """Keep stream replay data on the last chunk a caller sees.
+
+    Stream wrappers put the turn's reasoning (``replay_*`` keys) on the delta
+    of the chunk with the finish reason. With usage reporting on, OpenAI-
+    compatible servers send one more chunk after it, usage only and no
+    choices, so ``assistant_replay_metadata(chunks[-1])`` found nothing
+    (Friendli GLM-5.3, live 2026-11-16). Call this on every chunk before
+    yielding it: it remembers the replay keys and copies them into a trailing
+    choice-less chunk (no content, no second finish reason).
+    """
+    choices = chunk.get("choices") or []
+    for choice in choices:
+        delta = choice.get("delta") or {}
+        found = {k: v for k, v in delta.items() if k.startswith("replay_")}
+        if found:
+            state.clear()
+            state.update(found)
+            return
+    if not choices and state:
+        chunk["choices"] = [{"index": 0, "delta": dict(state), "finish_reason": None}]

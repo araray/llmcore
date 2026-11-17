@@ -38,8 +38,8 @@
   "aliases": [],
   "description": "Design-native, open-weight text-to-image (6B) — ranked #1 among open-weight models on Artificial Analysis's UI/UX Design leaderboard. Renders legible UI and poster text plus cohesive graphics, illustration and photography in ~1.7s. MIT-licensed.",
   "tags": [
-    "{'type': 'text', 'supported_inputs': {}, 'pricing': []}",
-    "output:{'type': 'image', 'supported_parameters': {'aspect_ratio': {'type': 'enum', 'default': '1:1', 'values': ['1:1', '16:9', '4:3', '2:3']}, 'n': {'type': 'integer', 'min': 1, 'max': 1}, 'seed': {'type': 'boolean'}}, 'passthrough_parameters': {'guidance_scale': {'type': 'range', 'min': 0, 'max': 20, 'default': 1.0}}, 'streaming': false, 'pricing': [{'type': 'completion', 'unit': 'image', 'cost_usd': '0.0400000000', 'overrides': [{'when': {'aspect_ratio': {'equals': '16:9'}}, 'cost_usd': '0.0351500000'}, {'when': {'aspect_ratio': {'equals': '4:3'}}, 'cost_usd': '0.0423000000'}, {'when': {'aspect_ratio': {'equals': '2:3'}}, 'cost_usd': '0.0396000000'}]}]}"
+    "text",
+    "output:image"
   ],
   "source": "generated",
   "provider_extension": {

@@ -33,12 +33,28 @@ logger = logging.getLogger(__name__)
 #: Alias -> versioned id, as documented at https://docs.typesafe.ai/models.
 #: ``/v1/systemone`` responses echo the versioned id in ``model``.
 _ALIAS_TO_VERSION: dict[str, str] = {
-    "jev-latest": "jev-1.13.0",
-    "jev-preview": "jev-1.13.0",
+    # Both point at 1.14.0 since 2026-10-14 (docs.typesafe.ai/models; a live
+    # jev-latest call answers "jev-1.14.0", 2026-11-16).
+    "jev-latest": "jev-1.14.0",
+    "jev-preview": "jev-1.14.0",
 }
 
-#: Static facts per versioned id (docs.typesafe.ai/models, 2026-09).
+#: Static facts per versioned id (docs.typesafe.ai/models, 2026-11-16).
 _MODEL_FACTS: dict[str, dict[str, Any]] = {
+    "jev-1.14.0": {
+        "display_name": "Jev 1.14",
+        "context_length": 65_536,
+        "pricing": {"input": 0.042, "output": 0.0},
+        "extension": {
+            "endpoint": "/v1/systemone",
+            "question_types": ["noul", "choice", "score", "box"],
+            "state_plus_longest_question_max_tokens": 32_768,
+            "long_context_max_tokens": 262_144,
+            "input_modalities": ["text", "image"],
+            "primary_language": "en",
+            "output_tokens_billed": False,
+        },
+    },
     "jev-1.13.0": {
         "display_name": "Jev 1.13",
         "context_length": 65_536,
@@ -49,7 +65,7 @@ _MODEL_FACTS: dict[str, dict[str, Any]] = {
             "state_plus_longest_question_max_tokens": 32_768,
             "tokens_per_second_limit": 250_000,
             "requests_per_minute_limit": 1_200,
-            "input_modalities": ["text"],
+            "input_modalities": ["text", "image"],
             "primary_language": "en",
             "output_tokens_billed": False,
         },
