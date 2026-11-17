@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Fixed — review findings on PR #60
+
+- **Anthropic cards lost their new capability fields on load.**
+  `AnthropicExtension` didn't declare `thinking_types`, `effort_levels`,
+  `batch_api`, `citations`, `pdf_input`, `code_execution`,
+  `context_management`, `server_tools` or `lifecycle`, so pydantic dropped them
+  when a card was loaded. They are now declared, and a `*search*` server tool
+  marks the card as supporting native search.
+- **Z.ai catalogue fetch crashed on GLM-5.3 Flash** with `KeyError:
+  'context_length'`. The narrow `glm-5.3-flash` metadata entry has no context
+  window. Entries now inherit from the family entry they extend at a `-`
+  boundary (Flash takes 1M from `glm-5.3`). `glm-5v-turbo` and `glm-4.6v`
+  still don't inherit from `glm-5` or `glm-4.6`.
+
 ### Verified — vLLM against a live server (Colab L4, Qwen3-4B-Instruct-2507)
 
 - **Both transports:**
