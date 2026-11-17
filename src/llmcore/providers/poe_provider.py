@@ -120,6 +120,30 @@ _POE_IGNORED_PARAMS = frozenset(
 )
 
 
+DEFAULT_NO_SYSTEM_BOTS = ("mistral-medium",)
+
+
+def fold_system_into_user(context: list[Any]) -> list[Any]:
+    """Move system messages' text into the first user turn (for bots that reject system).
+
+    The system text keeps its precedence by leading that turn, clearly labelled; nothing
+    else in the conversation changes. With no user turn, the system text becomes one.
+    """
+    def role_of(msg):
+        return msg.role if isinstance(msg.role, str) else msg.role.value
+
+    system = [m for m in context if role_of(m) == "system"]
+    if not system:
+        return context
+    instructions = "\n\n".join(m.content for m in system if m.content)
+    rest = [m for m in context if role_of(m) != "system"]
+    for i, m in enumerate(rest):
+        if role_of(m) == "user":
+            rest[i] = m.model_copy(update={"content": f"Instructions:\n{instructions}\n\n---\n\n{m.content}"})
+            return rest
+    return [system[0].model_copy(update={"role": "user", "content": f"Instructions:\n{instructions}"}), *rest]
+
+
 class PoeProvider(OpenAIProvider):
     """LLMCore provider for the Poe API.
 
@@ -183,6 +207,11 @@ class PoeProvider(OpenAIProvider):
 
         self._poe_api_key = api_key
         self._backend = config.get("backend", "openai")
+        # Bots that reject any request containing a system message (Poe's mistral-medium
+        # answers HTTP 500); their system text is folded into the first user turn instead.
+        self._no_system_bots = {
+            str(b).lower() for b in config.get("system_message_bots", DEFAULT_NO_SYSTEM_BOTS)
+        }
 
         # -- Build config for the OpenAI-compatible base --------------------
         openai_config = {
@@ -477,6 +506,9 @@ class PoeProvider(OpenAIProvider):
             if p in _POE_IGNORED_PARAMS:
                 kwargs.pop(p)
         kwargs = self._bot_parameters(model or self.default_model, kwargs)
+        no_system = getattr(self, "_no_system_bots", None) or set(DEFAULT_NO_SYSTEM_BOTS)
+        if (model or self.default_model or "").lower() in no_system:
+            context = fold_system_into_user(list(context))
 
         if self._backend == "native" and _fastapi_poe_available:
             return await self._chat_completion_native(
