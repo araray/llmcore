@@ -17,8 +17,8 @@
     "json_mode": false,
     "structured_output": false,
     "vision": false,
-    "audio_input": false,
-    "audio_output": false,
+    "audio_input": true,
+    "audio_output": true,
     "video_input": false,
     "reasoning": false,
     "image_generation": false,
@@ -40,7 +40,7 @@
   "license": null,
   "open_weights": false,
   "aliases": [],
-  "description": "Openai model: gpt-audio-2025-08-28",
+  "description": "OpenAI GPT Audio model: chat completions with audio input and audio output modalities. Capabilities corrected by hand (the generated card had no audio); gpt-audio-mini audio input was verified with a live request on 2026-11-16.",
   "tags": [],
-  "source": "generated"
+  "source": "builtin"
 }
