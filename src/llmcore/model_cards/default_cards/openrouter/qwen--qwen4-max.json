@@ -6,7 +6,7 @@
   "architecture": null,
   "context": {
     "max_input_tokens": 1000000,
-    "max_output_tokens": 393216
+    "max_output_tokens": 131072
   },
   "capabilities": {
     "streaming": true,
@@ -33,10 +33,10 @@
   "pricing": {
     "currency": "USD",
     "per_million_tokens": {
-      "input": 1.5,
-      "output": 4.5,
-      "cached_input": 0.075,
-      "cache_write": 1.875
+      "input": 1.425,
+      "output": 4.275,
+      "cached_input": 0.07125,
+      "cache_write": 1.78125
     }
   },
   "lifecycle": {
@@ -55,13 +55,13 @@
     "url": "https://openrouter.ai/api/v1/models",
     "matched_key": "openrouter/qwen/qwen4-max",
     "match": "exact key match",
-    "fetched_at": "2026-11-16T09:04:54+00:00",
+    "fetched_at": "2026-11-17T07:17:00+00:00",
     "capabilities": {
       "feed": "caps:openrouter",
       "method": "api",
       "url": "https://openrouter.ai/api/v1/models",
       "matched_key": "openrouter/qwen/qwen4-max",
-      "fetched_at": "2026-11-16T09:06:07+00:00"
+      "fetched_at": "2026-11-17T07:17:08+00:00"
     }
   }
 }
