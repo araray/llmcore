@@ -5,8 +5,8 @@
   "model_type": "chat",
   "architecture": null,
   "context": {
-    "max_input_tokens": 1024000,
-    "max_output_tokens": 131072
+    "max_input_tokens": 262144,
+    "max_output_tokens": 235929
   },
   "capabilities": {
     "streaming": true,
@@ -54,13 +54,13 @@
     "url": "https://openrouter.ai/api/v1/models",
     "matched_key": "openrouter/xiaomi/mimo-v2.5-pro",
     "match": "exact key match",
-    "fetched_at": "2026-11-17T15:17:00+00:00",
+    "fetched_at": "2026-11-18T07:17:00+00:00",
     "capabilities": {
       "feed": "caps:openrouter",
       "method": "api",
       "url": "https://openrouter.ai/api/v1/models",
       "matched_key": "openrouter/xiaomi/mimo-v2.5-pro",
-      "fetched_at": "2026-11-17T15:17:40+00:00"
+      "fetched_at": "2026-11-18T11:19:15+00:00"
     }
   }
 }
