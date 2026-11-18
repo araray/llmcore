@@ -8,7 +8,7 @@
   },
   "context": {
     "max_input_tokens": 262144,
-    "max_output_tokens": 81920
+    "max_output_tokens": 65536
   },
   "capabilities": {
     "streaming": true,
@@ -37,8 +37,8 @@
   "pricing": {
     "currency": "USD",
     "per_million_tokens": {
-      "input": 0.26,
-      "output": 2.6
+      "input": 0.3,
+      "output": 2.4
     }
   },
   "provider_extension": {
@@ -82,13 +82,13 @@
     "url": "https://openrouter.ai/api/v1/models",
     "matched_key": "openrouter/qwen/qwen3.5-27b",
     "match": "exact key match",
-    "fetched_at": "2026-11-17T15:17:00+00:00",
+    "fetched_at": "2026-11-18T03:17:00+00:00",
     "capabilities": {
       "feed": "caps:openrouter",
       "method": "api",
       "url": "https://openrouter.ai/api/v1/models",
       "matched_key": "openrouter/qwen/qwen3.5-27b",
-      "fetched_at": "2026-11-17T15:17:40+00:00"
+      "fetched_at": "2026-11-18T03:17:08+00:00"
     }
   }
 }
