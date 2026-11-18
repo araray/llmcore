@@ -8,7 +8,7 @@
   },
   "context": {
     "max_input_tokens": 204800,
-    "max_output_tokens": 182476
+    "max_output_tokens": 131072
   },
   "capabilities": {
     "streaming": true,
@@ -81,13 +81,13 @@
     "url": "https://openrouter.ai/api/v1/models",
     "matched_key": "openrouter/z-ai/glm-5.1",
     "match": "exact key match",
-    "fetched_at": "2026-11-17T15:17:00+00:00",
+    "fetched_at": "2026-11-18T23:17:00+00:00",
     "capabilities": {
       "feed": "caps:openrouter",
       "method": "api",
       "url": "https://openrouter.ai/api/v1/models",
       "matched_key": "openrouter/z-ai/glm-5.1",
-      "fetched_at": "2026-11-17T15:17:40+00:00"
+      "fetched_at": "2026-11-18T23:17:22+00:00"
     }
   }
 }
