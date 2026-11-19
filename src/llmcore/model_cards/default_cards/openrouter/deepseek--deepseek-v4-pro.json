@@ -35,7 +35,7 @@
     "per_million_tokens": {
       "input": 0.9,
       "output": 1.5,
-      "cached_input": 0.25
+      "cached_input": 0.2
     }
   },
   "lifecycle": {
@@ -54,13 +54,13 @@
     "url": "https://openrouter.ai/api/v1/models",
     "matched_key": "openrouter/deepseek/deepseek-v4-pro",
     "match": "exact key match",
-    "fetched_at": "2026-11-17T15:17:00+00:00",
+    "fetched_at": "2026-11-19T23:17:00+00:00",
     "capabilities": {
       "feed": "caps:openrouter",
       "method": "api",
       "url": "https://openrouter.ai/api/v1/models",
       "matched_key": "openrouter/deepseek/deepseek-v4-pro",
-      "fetched_at": "2026-11-17T15:17:40+00:00"
+      "fetched_at": "2026-11-19T23:17:07+00:00"
     }
   }
 }
