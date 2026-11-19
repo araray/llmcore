@@ -6,7 +6,7 @@
   "architecture": null,
   "context": {
     "max_input_tokens": 1048576,
-    "max_output_tokens": 943718
+    "max_output_tokens": 131072
   },
   "capabilities": {
     "streaming": true,
@@ -33,9 +33,9 @@
   "pricing": {
     "currency": "USD",
     "per_million_tokens": {
-      "input": 0.3,
+      "input": 0.25,
       "output": 1.0,
-      "cached_input": 0.04
+      "cached_input": 0.05
     }
   },
   "lifecycle": {
@@ -54,13 +54,13 @@
     "url": "https://openrouter.ai/api/v1/models",
     "matched_key": "openrouter/reflection/beam-1.0-501b-a23b",
     "match": "exact key match",
-    "fetched_at": "2026-11-19T15:17:00+00:00",
+    "fetched_at": "2026-11-19T19:17:00+00:00",
     "capabilities": {
       "feed": "caps:openrouter",
       "method": "api",
       "url": "https://openrouter.ai/api/v1/models",
       "matched_key": "openrouter/reflection/beam-1.0-501b-a23b",
-      "fetched_at": "2026-11-19T15:17:10+00:00"
+      "fetched_at": "2026-11-19T19:17:47+00:00"
     }
   }
 }
