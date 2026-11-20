@@ -6,7 +6,7 @@
   "architecture": null,
   "context": {
     "max_input_tokens": 1048576,
-    "max_output_tokens": 943717
+    "max_output_tokens": 262144
   },
   "capabilities": {
     "streaming": true,
@@ -33,9 +33,9 @@
   "pricing": {
     "currency": "USD",
     "per_million_tokens": {
-      "input": 0.44,
-      "output": 1.32,
-      "cached_input": 0.014
+      "input": 0.2156,
+      "output": 0.6468,
+      "cached_input": 0.00686
     }
   },
   "lifecycle": {
@@ -54,13 +54,13 @@
     "url": "https://openrouter.ai/api/v1/models",
     "matched_key": "openrouter/deepseek/deepseek-v4-flash-vision-exp",
     "match": "exact key match",
-    "fetched_at": "2026-11-17T15:17:00+00:00",
+    "fetched_at": "2026-11-20T23:17:00+00:00",
     "capabilities": {
       "feed": "caps:openrouter",
       "method": "api",
       "url": "https://openrouter.ai/api/v1/models",
       "matched_key": "openrouter/deepseek/deepseek-v4-flash-vision-exp",
-      "fetched_at": "2026-11-17T15:17:40+00:00"
+      "fetched_at": "2026-11-20T23:17:09+00:00"
     }
   }
 }

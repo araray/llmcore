@@ -8,7 +8,7 @@
   },
   "context": {
     "max_input_tokens": 163840,
-    "max_output_tokens": 115200
+    "max_output_tokens": 147456
   },
   "capabilities": {
     "streaming": true,
@@ -38,9 +38,8 @@
   "pricing": {
     "currency": "USD",
     "per_million_tokens": {
-      "input": 0.29,
-      "output": 1.14,
-      "cached_input": 0.11
+      "input": 0.25,
+      "output": 1.0
     }
   },
   "provider_extension": {
@@ -81,13 +80,13 @@
     "url": "https://openrouter.ai/api/v1/models",
     "matched_key": "openrouter/deepseek/deepseek-chat-v3-0324",
     "match": "exact key match",
-    "fetched_at": "2026-11-17T15:17:00+00:00",
+    "fetched_at": "2026-11-20T23:17:00+00:00",
     "capabilities": {
       "feed": "caps:openrouter",
       "method": "api",
       "url": "https://openrouter.ai/api/v1/models",
       "matched_key": "openrouter/deepseek/deepseek-chat-v3-0324",
-      "fetched_at": "2026-11-17T15:17:40+00:00"
+      "fetched_at": "2026-11-20T23:17:09+00:00"
     }
   }
 }
