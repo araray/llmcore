@@ -76,6 +76,13 @@
     "url": "https://openrouter.ai/api/v1/models",
     "matched_key": "openrouter/anthropic/claude-opus-4.5",
     "match": "exact key match",
-    "fetched_at": "2026-11-21T03:17:07+00:00"
+    "fetched_at": "2026-11-21T07:17:00+00:00",
+    "capabilities": {
+      "feed": "caps:openrouter",
+      "method": "api",
+      "url": "https://openrouter.ai/api/v1/models",
+      "matched_key": "openrouter/anthropic/claude-opus-4.5",
+      "fetched_at": "2026-11-21T07:19:13+00:00"
+    }
   }
 }
