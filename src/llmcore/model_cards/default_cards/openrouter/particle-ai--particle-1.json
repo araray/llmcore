@@ -35,7 +35,7 @@
     "per_million_tokens": {
       "input": 0.07,
       "output": 0.5,
-      "cached_input": 0.006
+      "cached_input": 0.03
     }
   },
   "lifecycle": {
@@ -54,13 +54,13 @@
     "url": "https://openrouter.ai/api/v1/models",
     "matched_key": "openrouter/particle-ai/particle-1",
     "match": "exact key match",
-    "fetched_at": "2026-11-21T07:17:00+00:00",
+    "fetched_at": "2026-11-22T11:17:00+00:00",
     "capabilities": {
       "feed": "caps:openrouter",
       "method": "api",
       "url": "https://openrouter.ai/api/v1/models",
       "matched_key": "openrouter/particle-ai/particle-1",
-      "fetched_at": "2026-11-21T07:19:13+00:00"
+      "fetched_at": "2026-11-22T11:17:09+00:00"
     }
   }
 }
