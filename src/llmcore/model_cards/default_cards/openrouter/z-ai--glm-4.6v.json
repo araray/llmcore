@@ -14,7 +14,7 @@
     "streaming": true,
     "function_calling": true,
     "tool_use": true,
-    "json_mode": true,
+    "json_mode": false,
     "structured_output": false,
     "vision": true,
     "audio_input": false,
@@ -39,7 +39,7 @@
     "per_million_tokens": {
       "input": 0.3,
       "output": 0.9,
-      "cached_input": 0.055
+      "cached_input": 0.05
     }
   },
   "provider_extension": {
@@ -80,13 +80,13 @@
     "url": "https://openrouter.ai/api/v1/models",
     "matched_key": "openrouter/z-ai/glm-4.6v",
     "match": "exact key match",
-    "fetched_at": "2026-11-21T07:17:00+00:00",
+    "fetched_at": "2026-11-25T11:17:00+00:00",
     "capabilities": {
       "feed": "caps:openrouter",
       "method": "api",
       "url": "https://openrouter.ai/api/v1/models",
       "matched_key": "openrouter/z-ai/glm-4.6v",
-      "fetched_at": "2026-11-21T07:19:13+00:00"
+      "fetched_at": "2026-11-25T11:17:09+00:00"
     }
   }
 }

@@ -37,7 +37,7 @@
   "pricing": {
     "currency": "USD",
     "per_million_tokens": {
-      "input": 0.17,
+      "input": 0.1,
       "output": 0.25
     }
   },
@@ -81,13 +81,13 @@
     "url": "https://openrouter.ai/api/v1/models",
     "matched_key": "openrouter/qwen/qwen3.5-9b",
     "match": "exact key match",
-    "fetched_at": "2026-11-21T07:17:00+00:00",
+    "fetched_at": "2026-11-25T11:17:00+00:00",
     "capabilities": {
       "feed": "caps:openrouter",
       "method": "api",
       "url": "https://openrouter.ai/api/v1/models",
       "matched_key": "openrouter/qwen/qwen3.5-9b",
-      "fetched_at": "2026-11-21T07:19:13+00:00"
+      "fetched_at": "2026-11-25T11:17:09+00:00"
     }
   }
 }
