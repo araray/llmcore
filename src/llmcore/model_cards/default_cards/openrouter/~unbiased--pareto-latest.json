@@ -5,13 +5,13 @@
   "model_type": "chat",
   "architecture": null,
   "context": {
-    "max_input_tokens": 1048576,
+    "max_input_tokens": 262144,
     "max_output_tokens": 131072
   },
   "capabilities": {
     "streaming": true,
-    "function_calling": true,
-    "tool_use": true,
+    "function_calling": false,
+    "tool_use": false,
     "json_mode": false,
     "structured_output": false,
     "vision": true,
@@ -49,18 +49,13 @@
   "tags": [],
   "source": "generated",
   "x_pricewatch": {
-    "feed": "openrouter",
+    "feed": "caps:openrouter",
     "method": "api",
     "url": "https://openrouter.ai/api/v1/models",
     "matched_key": "openrouter/~unbiased/pareto-latest",
-    "match": "exact key match",
-    "fetched_at": "2026-11-21T07:17:00+00:00",
-    "capabilities": {
-      "feed": "caps:openrouter",
-      "method": "api",
-      "url": "https://openrouter.ai/api/v1/models",
-      "matched_key": "openrouter/~unbiased/pareto-latest",
-      "fetched_at": "2026-11-21T07:19:13+00:00"
-    }
+    "fetched_at": "2026-11-25T19:17:40+00:00",
+    "preserved_context_fields": [
+      "max_output_tokens"
+    ]
   }
 }

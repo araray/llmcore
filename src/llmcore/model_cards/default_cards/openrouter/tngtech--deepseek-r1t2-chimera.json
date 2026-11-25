@@ -7,13 +7,13 @@
     "family": "Tngtech"
   },
   "context": {
-    "max_input_tokens": 163840,
-    "max_output_tokens": 163840
+    "max_input_tokens": 131072,
+    "max_output_tokens": 32768
   },
   "capabilities": {
     "streaming": true,
-    "function_calling": true,
-    "tool_use": true,
+    "function_calling": false,
+    "tool_use": false,
     "json_mode": true,
     "structured_output": true,
     "vision": false,
@@ -32,15 +32,15 @@
   "license": null,
   "open_weights": false,
   "aliases": [],
-  "description": "DeepSeek-TNG-R1T2-Chimera is the second-generation Chimera model from TNG Tech. It is a 671 B-parameter mixture-of-experts text-generation model assembled from DeepSeek-AI\u2019s R1-0528, R1, and V3-0324 checkpoints with an Assembly-of-Experts merge. The...",
+  "description": "DeepSeek-TNG-R1T2-Chimera is the second-generation Chimera model from TNG Tech. It is a 671 B-parameter mixture-of-experts text-generation model assembled from DeepSeek-AI’s R1-0528, R1, and V3-0324 checkpoints with an Assembly-of-Experts merge. The...",
   "tags": [],
   "source": "builtin",
   "pricing": {
     "currency": "USD",
     "per_million_tokens": {
-      "input": 0.3,
-      "output": 1.1,
-      "cached_input": 0.15
+      "input": 1.0,
+      "output": 2.625,
+      "cached_input": 0.02
     }
   },
   "provider_extension": {
@@ -71,5 +71,20 @@
     "is_moderated": false,
     "instruct_type": null,
     "tokenizer": "DeepSeek"
+  },
+  "x_pricewatch": {
+    "feed": "openrouter",
+    "method": "api",
+    "url": "https://openrouter.ai/api/v1/models",
+    "matched_key": "openrouter/tngtech/deepseek-r1t2-chimera",
+    "match": "exact key match",
+    "fetched_at": "2026-11-25T19:17:00+00:00",
+    "capabilities": {
+      "feed": "caps:openrouter",
+      "method": "api",
+      "url": "https://openrouter.ai/api/v1/models",
+      "matched_key": "openrouter/tngtech/deepseek-r1t2-chimera",
+      "fetched_at": "2026-11-25T19:17:40+00:00"
+    }
   }
 }
