@@ -6,7 +6,7 @@
   "architecture": null,
   "context": {
     "max_input_tokens": 1048576,
-    "max_output_tokens": 131072
+    "max_output_tokens": 943718
   },
   "capabilities": {
     "streaming": true,
@@ -46,6 +46,6 @@
     "method": "api",
     "url": "https://openrouter.ai/api/v1/models",
     "matched_key": "openrouter/particle-ai/particle-1:free",
-    "fetched_at": "2026-11-16T09:06:07+00:00"
+    "fetched_at": "2026-11-26T15:17:07+00:00"
   }
 }
