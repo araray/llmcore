@@ -54,6 +54,13 @@
     "url": "https://openrouter.ai/api/v1/models",
     "matched_key": "openrouter/liquid/lfm-3-1.7b",
     "match": "exact key match",
-    "fetched_at": "2026-11-27T19:17:00+00:00"
+    "fetched_at": "2026-11-28T03:17:01+00:00",
+    "capabilities": {
+      "feed": "caps:openrouter",
+      "method": "api",
+      "url": "https://openrouter.ai/api/v1/models",
+      "matched_key": "openrouter/liquid/lfm-3-1.7b",
+      "fetched_at": "2026-11-28T03:17:09+00:00"
+    }
   }
 }
